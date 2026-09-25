@@ -1,0 +1,26 @@
+# Thư mục chứa hàng trăm/nghìn ảnh sinh ra từ Augmentation (không cần đưa lên Git)
+dataset_augmented/
+
+# Thư mục tạm và file nháp
+scratch/
+*.tmp
+
+# Python & Môi trường thực thi
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Model AI xuất ra từ Teachable Machine / TensorFlow (nếu tải về)
+*.h5
+*.tflite
+*.pt
+*.onnx
+model_export/
+
+# Cấu hình IDE & Hệ điều hành
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

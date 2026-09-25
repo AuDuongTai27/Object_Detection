@@ -40,11 +40,11 @@ Bạn chỉ cần từ 1 đến 5 tấm ảnh cho mỗi loại cube/vật thể.
   # Xem danh sách các camera đang cắm vào máy:
   python capture_from_camera.py --list
   ```
-  - **Phím tắt khi cửa sổ Camera mở:**
-    - Bấm `SPACE`: Chụp 1 ảnh.
-    - Bấm `C`: Chụp liên tiếp 5 ảnh (burst mode).
-    - Bấm `S` hoặc `TAB`: **Đổi qua lại ngay lập tức giữa Camera laptop và Camera USB**.
-    - Bấm `Q`: Thoát.
+  - **Các nút điều khiển trên màn hình Camera (Dùng chuột click hoặc phím tắt):**
+    - 🔴 **[LUU LIEN TUC] (Phím 'R')**: Nhấp 1 lần để **BẮT ĐẦU lưu liên tục** (khoảng ~7 ảnh/giây). Trong lúc này bạn chỉ cần cầm vật thể di chuyển khắp các góc, mép bàn, xoay lật. **Bấm lại lần nữa để DỪNG LƯU**.
+    - 📸 **[CHUP 1 ANH] (Phím SPACE)**: Chụp 1 ảnh tĩnh đơn lẻ.
+    - 🔄 **[DOI CAMERA] (Phím S hoặc TAB)**: Đổi qua lại giữa Camera laptop và Camera USB cắm ngoài.
+    - ❌ **[THOAT] (Phím Q hoặc ESC)**: Đóng camera an toàn.
 - **Cách B (Chụp bằng điện thoại/máy ảnh rồi chép vào):**
   - Chép ảnh vào các thư mục tương ứng trong `dataset_raw/<tên_class>/`.
 
@@ -60,14 +60,16 @@ python augment_images.py --count 60
 
 > **Giải thích:** Lệnh trên sẽ quét toàn bộ các thư mục con trong `dataset_raw/` và sinh ra `60` ảnh biến thể mới cho mỗi class vào thư mục `dataset_augmented/`.
 
-#### Các Kỹ Thuật Biến Đổi Tự Động Trong Script:
-1. **Xoay ngẫu nhiên (Rotation):** Từ -35° đến +35° mô phỏng vật thể đặt theo nhiều hướng.
-2. **Thu phóng (Zoom) & Dịch chuyển (Translation):** Giúp mô hình nhận diện vật thể ở gần hoặc ở xa, lệch tâm camera.
-3. **Phối cảnh (Perspective warp):** Mô phỏng góc nhìn nghiêng của camera.
-4. **Lật ảnh (Horizontal Flip):** Đối xứng hình ảnh.
-5. **Biến thiên ánh sáng (Brightness & Contrast):** Mô phỏng phòng sáng, phòng tối, bóng râm.
-6. **Mờ nét & Nhiễu cảm biến (Blur & Gaussian Noise):** Mô phỏng rung lắc hoặc camera mất nét.
-7. **Bảo toàn màu sắc (Hue Preservation):** Mặc định **không** làm lệch màu sắc chính, đảm bảo cube đỏ không bị đổi thành màu xanh làm sai nhãn.
+#### Các Kỹ Thuật Siêu Augmentation (YOLO & Deep Learning) Tự Động:
+1. **YOLO Mosaic 4-in-1 (20% dữ liệu):** Ghép 4 ảnh tại tâm giao ngẫu nhiên, giúp mô hình học nhận diện vật thể ở 4 góc phần tư khác nhau với tỉ lệ đa dạng.
+2. **YOLO Mosaic 9-in-1 (10% dữ liệu):** Ghép 9 ảnh vào lưới 3x3 mô phỏng phát hiện các vật thể nhỏ ở khoảng cách xa.
+3. **CutMix (10% dữ liệu):** Cắt một vùng hình chữ nhật từ ảnh này dán đè lên ảnh kia, giúp mô hình nhận diện tốt khi vật thể bị che khuất một phần.
+4. **MixUp (10% dữ liệu):** Hòa trộn tuyến tính giữa 2 ảnh để làm trơn tru đường biên phân loại.
+5. **Random Shadows (Bóng râm ngẫu nhiên):** Mô phỏng bóng tay người, bóng đèn trần hoặc vật thể khác đổ bóng lên bàn.
+6. **Multi-Scale & Corner Shift:** Thu nhỏ vật thể đa tỉ lệ (0.4x - 1.25x) và dịch chuyển khắp 4 góc viền mép bàn.
+7. **Biến dạng không gian 3D:** Perspective Warp (góc nhìn nghiêng camera), Xoay (Rotation), Lật (Flip).
+8. **Mô phỏng camera thực tế:** Brightness, Contrast, Saturation, Sensor Noise, Motion Blur.
+9. **Bảo toàn tông màu (Hue Preservation):** Đảm bảo giữ nguyên sắc độ màu của cube để không bao giờ bị nhầm lẫn giữa cube xanh, đỏ, vàng, tím.
 
 #### Các Tùy Chọn Bổ Sung Khi Chạy:
 - **Tăng số lượng ảnh sinh ra (ví dụ 100 ảnh):**
