@@ -1,6 +1,6 @@
 # Hệ Thống Thu Thập Dữ Liệu & Nhận Diện Đa Vật Thể (Object Detection) - FabLab
 
-Dự án cung cấp giải pháp toàn diện từ khâu thu thập dữ liệu bằng Camera/Webcam, tăng cường dữ liệu nâng cao (Data Augmentation), cho đến nhận diện đa vật thể (Multi-Object Detection) vẽ khung Bounding Box theo thời gian thực bằng **YOLOv8** hoặc **OpenCV**.
+Dự án cung cấp giải pháp toàn diện từ khâu thu thập dữ liệu bằng Camera/Webcam, tăng cường dữ liệu nâng cao (Data Augmentation), cho đến nhận diện đa vật thể (Multi-Object Detection) vẽ khung Bounding Box theo thời gian thực đạt FPS cực cao bằng **YOLOv5 Nano (`yolov5nu`)** hoặc **OpenCV**.
 
 ---
 
@@ -13,11 +13,11 @@ ObjectDetection/
 ├── augment_images.py            # Siêu Augmentation (YOLO Mosaic, CutMix, MixUp, Shadows, Multi-scale)
 ├── generate_yolo_dataset.py     # Tự động ghép nhiều cube và tạo nhãn Bounding Box chuẩn YOLO (.txt)
 ├── zip_dataset.py               # Nén nhanh yolo_dataset.zip để sẵn sàng tải lên Google Colab
-├── train_on_colab.ipynb         # File Google Colab Notebook huấn luyện YOLOv8 bằng GPU T4 miễn phí
+├── train_on_colab.ipynb         # File Google Colab Notebook huấn luyện YOLOv5n bằng GPU T4 miễn phí
 │
 ├── detect_camera_opencv.py      # Nhận diện đa cube real-time bằng OpenCV (Chạy ngay lập tức, 60 FPS)
-├── detect_camera_yolo.py        # Nhận diện đa vật thể camera bằng mô hình YOLOv8 vừa train (best.pt)
-├── train_yolo.py                # Huấn luyện YOLOv8 trực tiếp trên máy tính cá nhân
+├── detect_camera_yolo.py        # Nhận diện đa vật thể camera bằng mô hình YOLOv5 vừa train (best.pt)
+├── train_yolo.py                # Huấn luyện YOLOv5n trực tiếp trên máy tính cá nhân
 │
 ├── dataset_raw/                 # Dữ liệu ảnh gốc chụp từ camera theo từng class (cube_blue,...)
 ├── yolo_dataset/                # Dữ liệu YOLO đã gán nhãn tự động (images/, labels/, data.yaml)

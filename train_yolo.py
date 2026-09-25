@@ -39,15 +39,15 @@ def main():
         return
 
     print("\n" + "=" * 60)
-    print(" BẮT ĐẦU HUẤN LUYỆN YOLOv8 NANO CHO OBJECT DETECTION")
+    print(" BẮT ĐẦU HUẤN LUYỆN YOLOv5 NANO CHO OBJECT DETECTION")
     print(f" - Dataset config: {dataset_yaml}")
-    print(" - Base Model    : yolov8n.pt (Pre-trained weights)")
+    print(" - Base Model    : yolov5nu.pt (FLOPs chỉ ~4.5G, tối ưu FPS cực cao)")
     print(" - Số epoch      : 30")
     print(" - Kích thước ảnh: 640")
     print("=" * 60 + "\n")
 
-    # Tải mô hình nền YOLOv8n
-    model = YOLO("yolov8n.pt")
+    # Tải mô hình nền YOLOv5n siêu nhẹ
+    model = YOLO("yolov5nu.pt")
 
     # Huấn luyện
     model.train(
