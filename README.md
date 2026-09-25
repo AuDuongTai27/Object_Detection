@@ -29,15 +29,22 @@ ObjectDetection/
 
 ### Bước 1: Chuẩn Bị Ảnh Gốc (Ảnh Chụp Thật)
 Bạn chỉ cần từ 1 đến 5 tấm ảnh cho mỗi loại cube/vật thể. Có 2 cách:
-- **Cách A (Dùng camera/webcam trực tiếp):**
+- **Cách A (Dùng camera/webcam trực tiếp - Hỗ trợ cả Camera USB cắm ngoài):**
   ```powershell
-  python capture_from_camera.py --class cube_blue
-  python capture_from_camera.py --class cube_red
+  # Chụp ảnh (Mặc định sẽ tự ưu tiên nhận diện Camera ngoài nếu có cắm USB)
   python capture_from_camera.py --class cube_yellow
+
+  # Hoặc chỉ định rõ camera USB (chỉ số 1)
+  python capture_from_camera.py --class cube_yellow --camera 1
+
+  # Xem danh sách các camera đang cắm vào máy:
+  python capture_from_camera.py --list
   ```
-  - Bấm `SPACE` để chụp từng ảnh.
-  - Bấm `C` để chụp liên tiếp 5 ảnh.
-  - Bấm `Q` để thoát.
+  - **Phím tắt khi cửa sổ Camera mở:**
+    - Bấm `SPACE`: Chụp 1 ảnh.
+    - Bấm `C`: Chụp liên tiếp 5 ảnh (burst mode).
+    - Bấm `S` hoặc `TAB`: **Đổi qua lại ngay lập tức giữa Camera laptop và Camera USB**.
+    - Bấm `Q`: Thoát.
 - **Cách B (Chụp bằng điện thoại/máy ảnh rồi chép vào):**
   - Chép ảnh vào các thư mục tương ứng trong `dataset_raw/<tên_class>/`.
 
