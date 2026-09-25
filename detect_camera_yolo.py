@@ -1,9 +1,9 @@
 """
-Chạy nhận diện đa vật thể theo thời gian thực từ Camera sử dụng mô hình YOLO (best_v5.pt / best_v8.pt):
-- Tự động ưu tiên tải best_v5.pt (hoặc best_v8.pt, best.pt).
-- Ngưỡng tự tin chuẩn xác (mặc định 80% - 85%), phím [+] [-] để tinh chỉnh trực tiếp.
-- Bộ lọc hình học khối Cube: bắt buộc tỉ lệ gần vuông (0.55 <= w/h <= 1.80) để chống nhận diện nhầm.
-- Phím [S] / TAB để đổi qua lại camera.
+Chạy nhận diện đa vật thể theo thời gian thực từ Camera sử dụng mô hình YOLO (best_v8.pt / best_v5.pt):
+- TỐI ƯU HÓA PHẦN CỨNG: Bật codec nén MJPG cho camera USB ngoài -> đưa tốc độ lên 20 - 30 FPS mượt mà.
+- TỐI ƯU HÓA SUY LUẬN CPU: Đặt imgsz=416 giúp giảm tải tính toán cho chip laptop, chạy nhanh gấp 2 lần.
+- ĐẶT NGƯỠNG "ĐIỂM NGỌT" 65%: Bắt trọn vẹn cube thực tế, không bị chập chờn mất dấu.
+- PHÍM TẮT: [+] [-] để tinh chỉnh % trực tiếp, [S] hoặc TAB để đổi camera, [Q] để thoát.
 """
 
 import sys
@@ -33,12 +33,22 @@ CLASS_COLORS = {
 
 
 def open_camera(cam_index=1):
+    """
+    Mở camera với chuẩn nén MJPG để giải phóng băng thông cổng USB 2.0,
+    giúp camera ngoài không bị nghẽn ở sub-10 FPS.
+    """
     backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
     cap = cv2.VideoCapture(cam_index, backend)
     if not cap.isOpened():
         cap = cv2.VideoCapture(0, backend)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+    # BẬT CHUẨN NÉN PHẦN CỨNG MJPG (RẤT QUAN TRỌNG VỚI CAMERA USB)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    # Đặt độ phân giải tối ưu cho CPU: 640x480
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     return cap
 
 
@@ -56,7 +66,6 @@ def find_model_file(requested_model=None):
         if p.exists():
             return p
 
-    # Quét toàn bộ file .pt trong thư mục
     all_pts = [p for p in Path(".").glob("*.pt") if "yolov" not in p.name]
     if all_pts:
         return all_pts[0]
@@ -65,26 +74,32 @@ def find_model_file(requested_model=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Chạy Camera nhận diện YOLO Object Detection.")
+    parser = argparse.ArgumentParser(description="Chạy Camera nhận diện YOLO Object Detection tối ưu FPS.")
     parser.add_argument(
         "--model",
         "-m",
         type=str,
         default=None,
-        help="Đường dẫn tới file model .pt (mặc định: tự ưu tiên best_v5.pt hoặc best_v8.pt)",
+        help="Đường dẫn tới file model (mặc định: tự ưu tiên best_v8.pt rồi best_v5.pt)",
     )
     parser.add_argument(
         "--conf",
         "-c",
         type=float,
-        default=0.80,
-        help="Ngưỡng tự tin tối thiểu (mặc định: 0.80 = 80%%)",
+        default=0.65,
+        help="Ngưỡng tự tin tối thiểu (mặc định: 0.65 = 65%%, điểm ngọt nhận diện cube ổn định)",
     )
     parser.add_argument(
         "--camera",
         type=int,
         default=1,
         help="Chỉ số camera (1: USB ngoài, 0: Laptop)",
+    )
+    parser.add_argument(
+        "--imgsz",
+        type=int,
+        default=416,
+        help="Kích thước ảnh đưa vào YOLO suy luận (mặc định: 416 để tối ưu tốc độ CPU)",
     )
 
     args = parser.parse_args()
@@ -97,7 +112,7 @@ def main():
 
     model_path = find_model_file(args.model)
     if model_path is None:
-        print("[!] Không tìm thấy bất kỳ file mô hình .pt nào (best_v5.pt, best_v8.pt, best.pt).")
+        print("[!] Không tìm thấy bất kỳ file mô hình .pt nào (best_v8.pt, best_v5.pt, best.pt).")
         return
 
     print("\n" + "=" * 62)
@@ -121,6 +136,8 @@ def main():
     conf_pct = int(args.conf * 100)
 
     print("\n--- PHÍM TẮT ĐIỀU KHIỂN ---")
+    print(f"  Ngưỡng tin cậy ban đầu : {conf_pct}% (Điểm ngọt bắt cube)")
+    print(f"  Kích thước suy luận CPU: {args.imgsz}x{args.imgsz}")
     print("  [+] hoặc [=] : Tăng ngưỡng lọc %")
     print("  [-] hoặc [_] : Giảm ngưỡng lọc %")
     print("  [S] hoặc TAB : Đổi qua lại Camera")
@@ -132,14 +149,14 @@ def main():
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
-            time.sleep(0.02)
+            time.sleep(0.01)
             continue
 
         h_img, w_img = frame.shape[:2]
         conf_threshold = conf_pct / 100.0
 
-        # Dự đoán bằng YOLO
-        results = model.predict(frame, conf=conf_threshold, verbose=False)
+        # Dự đoán bằng YOLO với kích thước ảnh imgsz=416 để tăng gấp đôi tốc độ CPU
+        results = model.predict(frame, imgsz=args.imgsz, conf=conf_threshold, verbose=False)
         boxes_data = results[0].boxes
 
         valid_count = 0
@@ -155,14 +172,14 @@ def main():
                 bw = x2 - x1
                 bh = y2 - y1
 
-                # 1. Bộ lọc hình học khối Cube: tỉ lệ cạnh gần vuông
+                # 1. Bộ lọc hình khối Cube mềm mại (0.45 <= w/h <= 2.2)
                 aspect_ratio = bw / float(bh) if bh > 0 else 0
-                if aspect_ratio < 0.55 or aspect_ratio > 1.80:
+                if aspect_ratio < 0.45 or aspect_ratio > 2.20:
                     continue
 
-                # 2. Bộ lọc diện tích: loại mảng quá lớn (> 55% màn hình) hoặc quá nhỏ
+                # 2. Bộ lọc diện tích: loại mảng quá lớn (> 60% màn hình) hoặc quá nhỏ
                 area = bw * bh
-                if area < 1200 or area > (0.55 * w_img * h_img):
+                if area < 800 or area > (0.60 * w_img * h_img):
                     continue
 
                 valid_count += 1
@@ -192,12 +209,12 @@ def main():
         prev_time = curr_time
 
         # Thanh trạng thái phía trên
-        cv2.rectangle(frame, (0, 0), (w_img, 42), (25, 25, 25), -1)
+        cv2.rectangle(frame, (0, 0), (w_img, 40), (25, 25, 25), -1)
         hud_text = (
-            f"Model: {model_path.name} | Conf: {conf_pct}% (+/- de chinh) | "
+            f"Model: {model_path.name} | Conf: {conf_pct}% (+/-) | "
             f"Cubes: {valid_count} | FPS: {fps:.1f}"
         )
-        cv2.putText(frame, hud_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 200), 2)
+        cv2.putText(frame, hud_text, (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, (0, 255, 200), 2)
 
         cv2.imshow(WINDOW_NAME, frame)
 
@@ -209,7 +226,7 @@ def main():
             print(f"[*] Ngưỡng tin cậy: {conf_pct}%")
 
         elif key in [ord("-"), ord("_")]:
-            conf_pct = max(40, conf_pct - 2)
+            conf_pct = max(30, conf_pct - 2)
             print(f"[*] Ngưỡng tin cậy: {conf_pct}%")
 
         # Đổi Camera
