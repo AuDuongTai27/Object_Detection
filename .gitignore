@@ -6,6 +6,7 @@ runs/
 # Thư mục tạm và file nháp
 scratch/
 *.tmp
+*.zip
 
 # Python & Môi trường thực thi
 __pycache__/

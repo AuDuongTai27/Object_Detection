@@ -24,17 +24,17 @@ def main():
         print("[!] Chưa có thư viện ultralytics. Hãy chạy: pip install ultralytics")
         return
 
-    # Đường dẫn mô hình vừa huấn luyện
-    model_path = Path("runs/detect/custom_cubes/weights/best.pt")
-    if not model_path.exists():
-        # Thử tìm các file best.pt khác trong thư mục runs
-        found = list(Path("runs").glob("**/best.pt"))
-        if found:
-            model_path = found[-1]
-        else:
-            print(f"[!] Chưa tìm thấy mô hình đã huấn luyện {model_path}.")
-            print("Hãy chạy lệnh huấn luyện trước: python train_yolo.py")
-            return
+    # Ưu tiên tìm file best.pt ở thư mục gốc hoặc thư mục runs
+    possible_paths = [
+        Path("best.pt"),
+        Path("runs/detect/custom_cubes/weights/best.pt"),
+        *list(Path("runs").glob("**/best.pt")),
+    ]
+    model_path = next((p for p in possible_paths if p.exists()), None)
+    if model_path is None:
+        print("[!] Chưa tìm thấy file mô hình best.pt.")
+        print("-> Nếu bạn vừa train trên Colab: Hãy kéo file best.pt vừa tải về thả vào thư mục dự án này!")
+        return
 
     print(f"[*] Đang tải mô hình: {model_path}...")
     model = YOLO(str(model_path))
