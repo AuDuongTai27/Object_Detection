@@ -74,7 +74,7 @@ Dành cho bài toán: **1 bức ảnh có nhiều cube cùng lúc**, cần vẽ 
 
 #### 3.1. Tự động tạo Dataset đa vật thể + Bounding Box (Không cần vẽ tay)
 ```powershell
-# Tự động trích xuất cube từ dataset_raw, ghép 1-4 cube/ảnh và xuất nhãn YOLO chuẩn xác 100%
+
 python generate_yolo_dataset.py --train-count 400 --val-count 80
 ```
 
