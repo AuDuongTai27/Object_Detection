@@ -1,5 +1,7 @@
 # Thư mục chứa hàng trăm/nghìn ảnh sinh ra từ Augmentation (không cần đưa lên Git)
 dataset_augmented/
+yolo_dataset/
+runs/
 
 # Thư mục tạm và file nháp
 scratch/
