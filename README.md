@@ -1,99 +1,111 @@
-# Hướng Dẫn Thu Thập & Augmentation Ảnh Cho Teachable Machine
+# Hệ Thống Thu Thập Dữ Liệu & Nhận Diện Đa Vật Thể (Object Detection) - FabLab
 
-Dự án hỗ trợ thu thập và nhân bản (data augmentation) hình ảnh vật thể (ví dụ: các khối cube màu đỏ, xanh, vàng, tím,...) phục vụ huấn luyện mô hình phân loại / phát hiện bằng **Google Teachable Machine**.
+Dự án cung cấp giải pháp toàn diện từ khâu thu thập dữ liệu bằng Camera/Webcam, tăng cường dữ liệu nâng cao (Data Augmentation), cho đến nhận diện đa vật thể (Multi-Object Detection) vẽ khung Bounding Box theo thời gian thực bằng **YOLOv8** hoặc **OpenCV**.
 
 ---
 
-## 1. Cấu Trúc Thư Mục
+## 1. Cấu Trúc Dự Án
 
 ```text
 ObjectDetection/
 │
-├── augment_images.py         # Script chính biến đổi & sinh thêm ảnh (Augmentation)
-├── capture_from_camera.py     # Script tiện ích chụp ảnh mẫu nhanh từ Camera/Webcam
+├── capture_from_camera.py       # Thu thập ảnh từ Webcam/Camera USB (hỗ trợ nút chuột & lưu liên tục)
+├── augment_images.py            # Siêu Augmentation (YOLO Mosaic, CutMix, MixUp, Shadows, Multi-scale)
+├── generate_yolo_dataset.py     # Tự động ghép nhiều cube và tạo nhãn Bounding Box chuẩn YOLO (.txt)
+├── zip_dataset.py               # Nén nhanh yolo_dataset.zip để sẵn sàng tải lên Google Colab
+├── train_on_colab.ipynb         # File Google Colab Notebook huấn luyện YOLOv8 bằng GPU T4 miễn phí
 │
-├── dataset_raw/              # Nơi chứa các ảnh gốc chụp thực tế
-│   ├── cube_blue/            # Các ảnh chụp cube màu xanh
-│   ├── cube_red/             # Các ảnh chụp cube màu đỏ
-│   └── cube_yellow/          # Các ảnh chụp cube màu vàng
+├── detect_camera_opencv.py      # Nhận diện đa cube real-time bằng OpenCV (Chạy ngay lập tức, 60 FPS)
+├── detect_camera_yolo.py        # Nhận diện đa vật thể camera bằng mô hình YOLOv8 vừa train (best.pt)
+├── train_yolo.py                # Huấn luyện YOLOv8 trực tiếp trên máy tính cá nhân
 │
-└── dataset_augmented/        # Kết quả sau khi chạy script augment (sẵn sàng upload)
-    ├── cube_blue/            # Hàng chục/trăm ảnh biến thể của cube xanh
-    ├── cube_red/             # Hàng chục/trăm ảnh biến thể của cube đỏ
-    └── cube_yellow/          # Hàng chục/trăm ảnh biến thể của cube vàng
+├── dataset_raw/                 # Dữ liệu ảnh gốc chụp từ camera theo từng class (cube_blue,...)
+├── yolo_dataset/                # Dữ liệu YOLO đã gán nhãn tự động (images/, labels/, data.yaml)
+└── yolo_dataset.zip             # File nén dataset sẵn sàng đẩy lên Colab
 ```
 
 ---
 
-## 2. Các Bước Thực Hiện
+## 2. Tổng Hợp Các Lệnh Để Chạy
 
-### Bước 1: Chuẩn Bị Ảnh Gốc (Ảnh Chụp Thật)
-Bạn chỉ cần từ 1 đến 5 tấm ảnh cho mỗi loại cube/vật thể. Có 2 cách:
-- **Cách A (Dùng camera/webcam trực tiếp - Hỗ trợ cả Camera USB cắm ngoài):**
-  ```powershell
-  # Chụp ảnh (Mặc định sẽ tự ưu tiên nhận diện Camera ngoài nếu có cắm USB)
-  python capture_from_camera.py --class cube_yellow
+### 📸 Bước 1: Thu thập ảnh từ Camera (`capture_from_camera.py`)
 
-  # Hoặc chỉ định rõ camera USB (chỉ số 1)
-  python capture_from_camera.py --class cube_yellow --camera 1
-
-  # Xem danh sách các camera đang cắm vào máy:
-  python capture_from_camera.py --list
-  ```
-  - **Các nút điều khiển trên màn hình Camera (Dùng chuột click hoặc phím tắt):**
-    - 🔴 **[LUU LIEN TUC] (Phím 'R')**: Nhấp 1 lần để **BẮT ĐẦU lưu liên tục** (khoảng ~7 ảnh/giây). Trong lúc này bạn chỉ cần cầm vật thể di chuyển khắp các góc, mép bàn, xoay lật. **Bấm lại lần nữa để DỪNG LƯU**.
-    - 📸 **[CHUP 1 ANH] (Phím SPACE)**: Chụp 1 ảnh tĩnh đơn lẻ.
-    - 🔄 **[DOI CAMERA] (Phím S hoặc TAB)**: Đổi qua lại giữa Camera laptop và Camera USB cắm ngoài.
-    - ❌ **[THOAT] (Phím Q hoặc ESC)**: Đóng camera an toàn.
-- **Cách B (Chụp bằng điện thoại/máy ảnh rồi chép vào):**
-  - Chép ảnh vào các thư mục tương ứng trong `dataset_raw/<tên_class>/`.
-
----
-
-### Bước 2: Chạy Script Tăng Cường Dữ Liệu (Augmentation)
-
-Chạy lệnh sau để sinh biến thể từ ảnh gốc:
+Hỗ trợ tự động nhận diện Camera USB ngoài và hiển thị nút bấm điều khiển bằng chuột trực tiếp trên màn hình:
 
 ```powershell
-python augment_images.py --count 60
+# Chụp cho class bất kỳ (tự động tạo thư mục nếu chưa có)
+python capture_from_camera.py --class cube_yellow
+
+# Xem danh sách camera đang cắm vào máy tính
+python capture_from_camera.py --list
+
+# Chỉ định mở camera USB ngoài (Camera index 1)
+python capture_from_camera.py --class cube_blue --camera 1
 ```
 
-> **Giải thích:** Lệnh trên sẽ quét toàn bộ các thư mục con trong `dataset_raw/` và sinh ra `60` ảnh biến thể mới cho mỗi class vào thư mục `dataset_augmented/`.
-
-#### Các Kỹ Thuật Siêu Augmentation (YOLO & Deep Learning) Tự Động:
-1. **YOLO Mosaic 4-in-1 (20% dữ liệu):** Ghép 4 ảnh tại tâm giao ngẫu nhiên, giúp mô hình học nhận diện vật thể ở 4 góc phần tư khác nhau với tỉ lệ đa dạng.
-2. **YOLO Mosaic 9-in-1 (10% dữ liệu):** Ghép 9 ảnh vào lưới 3x3 mô phỏng phát hiện các vật thể nhỏ ở khoảng cách xa.
-3. **CutMix (10% dữ liệu):** Cắt một vùng hình chữ nhật từ ảnh này dán đè lên ảnh kia, giúp mô hình nhận diện tốt khi vật thể bị che khuất một phần.
-4. **MixUp (10% dữ liệu):** Hòa trộn tuyến tính giữa 2 ảnh để làm trơn tru đường biên phân loại.
-5. **Random Shadows (Bóng râm ngẫu nhiên):** Mô phỏng bóng tay người, bóng đèn trần hoặc vật thể khác đổ bóng lên bàn.
-6. **Multi-Scale & Corner Shift:** Thu nhỏ vật thể đa tỉ lệ (0.4x - 1.25x) và dịch chuyển khắp 4 góc viền mép bàn.
-7. **Biến dạng không gian 3D:** Perspective Warp (góc nhìn nghiêng camera), Xoay (Rotation), Lật (Flip).
-8. **Mô phỏng camera thực tế:** Brightness, Contrast, Saturation, Sensor Noise, Motion Blur.
-9. **Bảo toàn tông màu (Hue Preservation):** Đảm bảo giữ nguyên sắc độ màu của cube để không bao giờ bị nhầm lẫn giữa cube xanh, đỏ, vàng, tím.
-
-#### Các Tùy Chọn Bổ Sung Khi Chạy:
-- **Tăng số lượng ảnh sinh ra (ví dụ 100 ảnh):**
-  ```powershell
-  python augment_images.py --count 100
-  ```
-- **Chỉ augment một ảnh duy nhất:**
-  ```powershell
-  python augment_images.py --input path/to/image.jpg --output my_output --count 50
-  ```
-- **Nếu vật thể không phân biệt theo màu (cho phép đổi màu ngẫu nhiên):**
-  ```powershell
-  python augment_images.py --allow-hue-shift
-  ```
+* **Cách dùng trên cửa sổ Camera:**
+  * 🔴 **Click nút `[LUU LIEN TUC]` (hoặc phím `R`):** Bắt đầu lưu tự động ~7 ảnh/giây. Lúc này dùng tay cầm vật thể di chuyển khắp các góc, mép bàn, xoay lật. **Bấm lại lần nữa để DỪNG LƯU**.
+  * 📸 **Click nút `[CHUP 1 ANH]` (hoặc `SPACE`):** Chụp 1 ảnh tĩnh.
+  * 🔄 **Click nút `[DOI CAMERA]` (hoặc `S` / `TAB`):** Đổi qua lại camera máy và camera USB.
+  * ❌ **Click nút `[THOAT]` (hoặc `Q` / `ESC`):** Đóng camera.
 
 ---
 
-## 3. Huấn Luyện Trên Google Teachable Machine
+### 🎨 Bước 2 (Lựa chọn 1): Huấn luyện trên Google Teachable Machine
 
-1. Truy cập vào [Google Teachable Machine](https://teachablemachine.withgoogle.com/train/image).
-2. Chọn **Image Project** -> **Standard image model**.
-3. Tại mỗi **Class**:
-   - Đổi tên class (ví dụ: `cube_blue`, `cube_red`, `cube_yellow`).
-   - Bấm nút **Upload** -> Chọn **Choose images from your files** (hoặc kéo thả toàn bộ ảnh trong thư mục `dataset_augmented/<class_name>/` vào).
-   - *(Nên thêm 1 class `background` / `khong_co_vat_the` chứa ảnh bàn làm việc trống để mô hình không nhận diện nhầm khi không có cube).*
-4. Bấm **Train Model**.
-5. Kiểm tra kết quả trực tiếp với Camera ở mục **Preview**, sau đó bấm **Export Model** (dưới dạng TensorFlow Lite hoặc Keras để dùng trên Python/Raspberry Pi).
+Nếu bạn muốn phân loại ảnh từng vật thể đơn lẻ với Teachable Machine:
+
+```powershell
+# Chạy Augmentation với các kỹ thuật hiện đại (Mosaic 4, Mosaic 9, CutMix, MixUp, Shadows)
+python augment_images.py --count 120
+```
+
+1. Mở [Google Teachable Machine (Image Model)](https://teachablemachine.withgoogle.com/train/image).
+2. Tạo các class tương ứng (`cube_blue`, `cube_red`, `cube_yellow`, `cube_green`, `background`).
+3. Kéo thả các thư mục trong `dataset_augmented/` vào.
+4. Chỉnh thông số **Advanced**: **Epochs: 75**, **Batch Size: 32**, **Learning Rate: 0.0005**.
+5. Bấm **Train Model**.
+
+---
+
+### 🎯 Bước 3 (Lựa chọn 2): Phát Hiện Đa Vật Thể & Bounding Box với YOLOv8 (Khuyên Dùng)
+
+Dành cho bài toán: **1 bức ảnh có nhiều cube cùng lúc**, cần vẽ khung chữ nhật (Bounding Box) và hiện tên nhãn từng cube.
+
+#### 3.1. Tự động tạo Dataset đa vật thể + Bounding Box (Không cần vẽ tay)
+```powershell
+# Tự động trích xuất cube từ dataset_raw, ghép 1-4 cube/ảnh và xuất nhãn YOLO chuẩn xác 100%
+python generate_yolo_dataset.py --train-count 400 --val-count 80
+```
+
+#### 3.2. Nén tập dữ liệu để chuẩn bị mang lên Google Colab
+```powershell
+python zip_dataset.py
+```
+*(Lệnh này tạo ra file `yolo_dataset.zip` khoảng vài chục MB).*
+
+#### 3.3. Huấn luyện siêu tốc bằng GPU trên Google Colab (`train_on_colab.ipynb`)
+1. Truy cập [Google Colab](https://colab.research.google.com/) $\rightarrow$ Chọn **Upload** file `train_on_colab.ipynb`.
+2. Bật GPU miễn phí: **Runtime** $\rightarrow$ **Change runtime type** $\rightarrow$ Chọn **T4 GPU** $\rightarrow$ **Save**.
+3. Kéo thả file `yolo_dataset.zip` vào cột Files (thư mục bên trái Colab).
+4. Bấm **Runtime** $\rightarrow$ **Run all** (Chạy tất cả).
+5. Sau ~2-3 phút, Colab sẽ **tự động tải file mô hình `best.pt` về máy tính** của bạn.
+
+#### 3.4. Chạy nhận diện Camera Real-time với YOLOv8
+Chép file `best.pt` vừa tải về thả vào thư mục dự án này, rồi chạy:
+
+```powershell
+python detect_camera_yolo.py
+```
+
+---
+
+### ⚡ Bước 4: Nhận Diện Bounding Box Tức Thì Bằng OpenCV (Không Cần Train)
+
+Nếu muốn kiểm tra camera nhận diện Bounding Box ngay lập tức mà không cần chờ train model:
+
+```powershell
+python detect_camera_opencv.py
+```
+* Tự động quét và đóng khung tất cả các khối cube (Xanh dương, Đỏ, Vàng, Lục) đồng thời theo thời gian thực.
+* Tốc độ cực cao (50 - 60 FPS) trên mọi loại máy tính.
