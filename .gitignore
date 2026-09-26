@@ -15,11 +15,11 @@ __pycache__/
 *.log
 
 # Model AI xuất ra từ Teachable Machine / TensorFlow (nếu tải về)
-*.h5
-*.tflite
-*.pt
-*.onnx
-model_export/
+# *.h5
+# *.tflite
+# *.pt
+# *.onnx
+# model_export/
 
 # Cấu hình IDE & Hệ điều hành
 .vscode/
