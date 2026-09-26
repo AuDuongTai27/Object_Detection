@@ -53,23 +53,32 @@ def open_camera(cam_index=1):
 
 
 def find_model_file(requested_model=None):
-    """Tìm file mô hình YOLO theo thứ tự ưu tiên."""
+    """Tìm file mô hình YOLO theo thứ tự ưu tiên trong models/ hoặc thư mục gốc."""
     if requested_model and Path(requested_model).exists():
         return Path(requested_model)
 
     priority_list = [
-        Path("best_v11.pt"),
+        # 1. Các model chính thức đã được kiểm định (Khuyên dùng)
+        Path("models/best_11.pt"),
+        Path("models/best_v11.pt"),
         Path("best_11.pt"),
+        Path("best_v11.pt"),
+        Path("models/best_v8_more_augmentation.pt"),
         Path("best_v8_more_augmentation.pt"),
-        Path("best_v8.pt"),
+        # 2. Các model lưu trữ đối chứng (Archive)
+        Path("models/archive/best_v8_background.pt"),
+        Path("models/archive/best_v8.pt"),
+        Path("models/archive/best_v5.pt"),
         Path("best_v8_background.pt"),
+        Path("best_v8.pt"),
         Path("best_v5.pt"),
     ]
     for p in priority_list:
         if p.exists():
             return p
 
-    all_pts = [p for p in Path(".").glob("*.pt") if "yolov" not in p.name]
+    # Quét dự phòng trong models/ và thư mục gốc
+    all_pts = list(Path("models").glob("*.pt")) + [p for p in Path(".").glob("*.pt") if "yolov" not in p.name]
     if all_pts:
         return all_pts[0]
 
@@ -83,14 +92,14 @@ def main():
         "-m",
         type=str,
         default=None,
-        help="Đường dẫn tới file model (mặc định: tự ưu tiên best_v8.pt rồi best_v5.pt)",
+        help="Đường dẫn file model .pt (mặc định: tự tìm models/best_11.pt hoặc models/best_v8_more_augmentation.pt)",
     )
     parser.add_argument(
         "--conf",
         "-c",
         type=float,
-        default=0.65,
-        help="Ngưỡng tự tin tối thiểu (mặc định: 0.65 = 65%%, điểm ngọt nhận diện cube ổn định)",
+        default=0.70,
+        help="Ngưỡng tự tin tối thiểu (mặc định: 0.70 = 70%%, điểm ngọt lọc nhiễu tốt nhất)",
     )
     parser.add_argument(
         "--camera",

@@ -1,0 +1,13 @@
+# Thư viện lõi cho Deep Learning & YOLO Object Detection
+ultralytics>=8.3.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Xử lý hình ảnh và Camera thời gian thực
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Tiện ích trực quan hóa & Xử lý dữ liệu
+tqdm>=4.65.0
+matplotlib>=3.7.0
+PyYAML>=6.0
