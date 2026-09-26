@@ -29,18 +29,28 @@ ObjectDetection/
 ├── yolo_dataset/                         # Tập dữ liệu tổng hợp chuẩn YOLO (Train / Val / data.yaml)
 ├── yolo_dataset.zip                      # File nén dataset sẵn sàng đẩy lên Google Colab (~141 MB)
 │
-├── detect_camera_yolo.py                 # ⭐ [Chính] Chương trình nhận diện camera thời gian thực bằng YOLO
-├── detect_camera_opencv.py               # Nhận diện cơ bản bằng giải thuật phân đoạn màu HSV (60 FPS)
-├── capture_from_camera.py                # Công cụ chụp và thu thập ảnh mẫu từ Webcam / USB Cam
-├── generate_yolo_dataset.py              # Pipeline sinh dataset YOLO kèm mô phỏng che khuất & sai lệch cảm biến
-├── augment_images.py                     # Bộ công cụ siêu Augmentation (Mosaic, CutMix, Shadows)
-├── zip_dataset.py                        # Tiện ích tự động nén yolo_dataset.zip
-├── train_on_colab.ipynb                  # Sổ tay huấn luyện GPU T4 trên Google Colab (~2-3 phút)
-├── train_yolo.py                         # Huấn luyện cục bộ bằng CPU (tuỳ chọn)
+├── fablab_studio.py                  # 🚀 [GIAO DIỆN GUI TOÀN DIỆN] App học sinh 3 Tab (Thu thập -> 1-Click Train -> Dobot)
+├── run_studio.bat                    # 🖱️ [1-Click Windows] Double click để mở ngay phần mềm GUI
 │
-├── requirements.txt                      # Danh sách các thư viện phụ thuộc
-├── .gitignore                            # Cấu hình bỏ qua tệp nháp / file nhị phân
-└── README.md                             # Tài liệu hướng dẫn sử dụng chi tiết
+├── DOBOT/                            # [Hệ thống Động học & Điều khiển Cánh tay Dobot]
+│   ├── dobot_auto_sort.py            # Script nhận diện & tự động phân loại bằng Dobot
+│   ├── calibrate_camera_to_dobot.py  # Hiệu chuẩn ma trận Homography (Pixel -> mm Dobot)
+│   ├── homography_dobot.json         # Ma trận tọa độ camera sang Dobot thực nghiệm
+│   ├── move_to_point.py              # Di chuyển điểm chỉ định với quỹ đạo an toàn Safe Jump
+│   └── dobot_live_server.py          # Server Digital Twin 3D thời gian thực
+│
+├── detect_camera_yolo.py             # Chương trình nhận diện camera thời gian thực bằng YOLO (CLI)
+├── detect_camera_opencv.py           # Nhận diện cơ bản bằng giải thuật phân đoạn màu HSV (60 FPS)
+├── capture_from_camera.py            # Công cụ chụp và thu thập ảnh mẫu từ Webcam / USB Cam (CLI)
+├── generate_yolo_dataset.py          # Pipeline sinh dataset YOLO kèm mô phỏng che khuất & sai lệch cảm biến
+├── augment_images.py                 # Bộ công cụ siêu Augmentation (Mosaic, CutMix, Shadows)
+├── zip_dataset.py                    # Tiện ích tự động nén yolo_dataset.zip
+├── train_on_colab.ipynb              # Sổ tay huấn luyện GPU T4 trên Google Colab (~2-3 phút)
+├── train_yolo.py                     # Huấn luyện cục bộ bằng CPU (tuỳ chọn)
+│
+├── requirements.txt                  # Danh sách các thư viện phụ thuộc
+├── .gitignore                        # Cấu hình bỏ qua tệp nháp / file nhị phân
+└── README.md                         # Tài liệu hướng dẫn sử dụng chi tiết
 ```
 
 ---

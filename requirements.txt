@@ -1,4 +1,7 @@
-# Thư viện lõi cho Deep Learning & YOLO Object Detection
+# Giao diện đồ họa máy tính (GUI Desktop App)
+PyQt6>=6.6.0
+
+# Xử lý hình ảnh và Camera thời gian thực
 ultralytics>=8.3.0
 torch>=2.0.0
 torchvision>=0.15.0
@@ -6,6 +9,11 @@ torchvision>=0.15.0
 # Xử lý hình ảnh và Camera thời gian thực
 opencv-python>=4.8.0
 numpy>=1.24.0
+
+# Giao tiếp điều khiển Cánh tay Robot Dobot Magician qua Serial/COM & WebSocket
+pyserial>=3.5
+tornado>=6.0
+websocket-client>=1.6
 
 # Tiện ích trực quan hóa & Xử lý dữ liệu
 tqdm>=4.65.0
