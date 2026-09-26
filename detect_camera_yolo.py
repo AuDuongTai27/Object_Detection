@@ -58,9 +58,10 @@ def find_model_file(requested_model=None):
         return Path(requested_model)
 
     priority_list = [
-        Path("best_v5.pt"),
+        Path("best_v8_more_augmentation.pt"),
         Path("best_v8.pt"),
-        Path("best.pt"),
+        Path("best_v8_background.pt"),
+        Path("best_v5.pt"),
     ]
     for p in priority_list:
         if p.exists():
@@ -172,14 +173,14 @@ def main():
                 bw = x2 - x1
                 bh = y2 - y1
 
-                # 1. Bộ lọc hình khối Cube mềm mại (0.45 <= w/h <= 2.2)
+                # 1. Bộ lọc hình khối Cube mềm mại (0.40 <= w/h <= 2.5)
                 aspect_ratio = bw / float(bh) if bh > 0 else 0
-                if aspect_ratio < 0.45 or aspect_ratio > 2.20:
+                if aspect_ratio < 0.40 or aspect_ratio > 2.50:
                     continue
 
-                # 2. Bộ lọc diện tích: loại mảng quá lớn (> 60% màn hình) hoặc quá nhỏ
+                # 2. Bộ lọc diện tích: nới rộng để bắt được cube xa/nhỏ (từ 250px) trên camera laptop góc rộng
                 area = bw * bh
-                if area < 800 or area > (0.60 * w_img * h_img):
+                if area < 250 or area > (0.75 * w_img * h_img):
                     continue
 
                 valid_count += 1
