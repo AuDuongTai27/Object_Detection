@@ -58,6 +58,8 @@ def find_model_file(requested_model=None):
         return Path(requested_model)
 
     priority_list = [
+        Path("best_v11.pt"),
+        Path("best_11.pt"),
         Path("best_v8_more_augmentation.pt"),
         Path("best_v8.pt"),
         Path("best_v8_background.pt"),
