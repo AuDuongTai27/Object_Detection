@@ -32,7 +32,7 @@ ObjectDetection/
 ├── fablab_studio.py                  # 🚀 [GIAO DIỆN GUI TOÀN DIỆN] App học sinh 3 Tab (Thu thập -> 1-Click Train -> Dobot)
 ├── run_studio.bat                    # 🖱️ [1-Click Windows] Double click để mở ngay phần mềm GUI
 │
-├── DOBOT/                            # [Hệ thống Động học & Điều khiển Cánh tay Dobot]
+├── DOBOT/                            # [Hệ thống Động học & Điều khiển Dobot - Phát triển bởi Danh Huynh (https://github.com/DanhCon)]
 │   ├── dobot_auto_sort.py            # Script nhận diện & tự động phân loại bằng Dobot
 │   ├── calibrate_camera_to_dobot.py  # Hiệu chuẩn ma trận Homography (Pixel -> mm Dobot)
 │   ├── homography_dobot.json         # Ma trận tọa độ camera sang Dobot thực nghiệm
@@ -143,3 +143,14 @@ python zip_dataset.py
    - Tham số `imgsz=416` giảm 57% lượng phép tính FLOPS so với kích thước gốc 640x640, tăng gấp đôi tốc độ xử lý mà không làm suy giảm độ chính xác định vị cube.
 3. **Cơ chế chống Ức chế ngược (Negative Suppression)**:
    - Các ảnh nền thật được kết hợp song song: vừa làm ảnh âm tính (0 bytes), vừa làm phôi nền để dán cube, giúp mô hình phân biệt rạch ròi giữa đồ vật trong phòng và khối cube màu.
+
+---
+
+## 🤝 Đóng Góp & Tác Giả (Credits & Acknowledgements)
+
+- **Hệ thống Động học & Điều khiển Cánh tay Robot Dobot (Thư mục `DOBOT/`)**:
+  Được nghiên cứu, phát triển và tối ưu hóa bởi kỹ sư **Danh Huynh** — [GitHub: @DanhCon](https://github.com/DanhCon).
+  Bao gồm các module:
+  - Hiệu chuẩn tọa độ thị giác Hand-Eye Calibration (Homography Mapping $u, v \to X, Y\text{ mm}$).
+  - Thuật toán giải động học nghịch & Quỹ đạo an toàn **Safe Jump** chống báo động/va đập.
+  - Server bản sao số 3D Digital Twin thời gian thực và chu trình tự động hóa gắp thả phân loại khối màu.
