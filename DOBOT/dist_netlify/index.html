@@ -994,6 +994,8 @@
             line-height: 1.4;
         }
 
+
+
         /* TAB 4: AUTO SORT STYLES */
         .detected-cube-card {
             background: rgba(0, 0, 0, 0.4);
@@ -1512,7 +1514,7 @@
                         </div>
                         <div style="text-align: right;">
                             <div style="font-size: 11px; color: #94a3b8;">Thư mục lưu dataset:</div>
-                            <div style="font-size: 11.5px; font-family: monospace; color: #cbd5e1;">dataset/raw/<span id="txt-current-capture-folder">cube_red</span>/</div>
+                            <div style="font-size: 11.5px; font-family: monospace; color: #cbd5e1;">dataset_raw/<span id="txt-current-capture-folder">cube_red</span>/</div>
                         </div>
                     </div>
 
@@ -1580,8 +1582,11 @@
     <!-- =====================================================================
          TAB 3 VIEW: HUẤN LUYỆN AI 1-CLICK (AI TRAINER)
     ====================================================================== -->
-    <main id="view-ai-trainer" class="studio-view">
-        <div class="studio-content-grid">
+    <main id="view-ai-trainer" class="studio-view" style="flex-direction: column; overflow-y: auto; padding: 14px; gap: 12px; background: #0f131a; box-sizing: border-box;">
+        
+
+
+        <div class="studio-content-grid" style="flex: 1; padding: 0; min-height: 480px;">
             <!-- Left: Training Setup & Guide -->
             <div class="studio-card" style="overflow-y: auto;">
                 <div class="card-header-bar">
@@ -4091,11 +4096,12 @@
                     body: JSON.stringify({ model_name: modelName, epochs: epochs, batch: batch })
                 });
                 const data = await res.json();
-                if (data.status === 'ok') {
+                if (data.status === 'ok' || data.success) {
                     showToast(`🚀 Đã khởi chạy tiến trình huấn luyện!`);
                     startTrainPolling();
+                    fetchTrainStatus();
                 } else {
-                    showToast(`❌ Không thể bắt đầu: ${data.message}`);
+                    showToast(`❌ Không thể bắt đầu: ${data.message || data.error}`);
                 }
             } catch (err) {
                 showToast(`❌ Lỗi khởi chạy: ${err.message}`);
@@ -4107,22 +4113,31 @@
             try {
                 const res = await fetch('/api/train/stop', { method: 'POST' });
                 const data = await res.json();
-                showToast(`🛑 ${data.message}`);
+                showToast(`🛑 ${data.message || 'Đã gửi lệnh dừng'}`);
+                fetchTrainStatus();
             } catch (err) {
                 showToast(`❌ Lỗi hủy: ${err.message}`);
             }
         }
 
         async function handleExportColab() {
-            showToast("📦 Đang nén toàn bộ dataset thành file .zip...");
+            showToast("📦 Đang chuẩn bị dataset và nén thành file .zip...");
             try {
                 const res = await fetch('/api/train/export_colab', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'ok') {
-                    showToast(`🎉 Nén thành công! Đang tải xuống ${data.zip_name}...`);
-                    window.location.href = data.download_url;
+                if (data.status === 'ok' || data.success) {
+                    showToast(`🎉 Nén thành công (${data.size_mb || 0} MB)! Đang tải xuống ${data.zip_name || 'yolo_dataset.zip'}...`);
+                    const dlUrl = data.download_url || '/api/train/download_zip';
+                    const a = document.createElement('a');
+                    a.href = dlUrl;
+                    a.download = data.zip_name || 'yolo_dataset.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+
                 } else {
-                    showToast(`❌ Lỗi nén Colab: ${data.message}`);
+                    showToast(`❌ Lỗi nén Colab: ${data.message || data.error}`);
                 }
             } catch (err) {
                 showToast(`❌ Lỗi tải zip: ${err.message}`);
@@ -4186,6 +4201,8 @@
             if (lossVal) lossVal.innerText = (data.current_loss > 0) ? data.current_loss.toFixed(4) : '--';
             if (mapVal) mapVal.innerText = (data.current_map50 > 0) ? `${(data.current_map50 * 100).toFixed(1)}%` : '--';
             if (etaVal) etaVal.innerText = data.eta || '--';
+
+
 
             if (logBox && data.logs && data.logs.length > 0) {
                 logBox.innerText = data.logs.join('\n');

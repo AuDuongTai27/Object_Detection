@@ -684,7 +684,7 @@ class ToolProcessManager:
                 cmd.append(str(script))
                 cls_name = kwargs.get("class_name", "cube_red")
                 cmd.extend(["--class", str(cls_name)])
-                cmd.extend(["--output", "dataset/raw"])
+                cmd.extend(["--output", "dataset_raw"])
                 if "cam_id" in kwargs and kwargs["cam_id"] is not None:
                     cmd.extend(["--camera", str(kwargs["cam_id"])])
 
@@ -983,9 +983,10 @@ class ApiTrainStartHandler(tornado.web.RequestHandler):
             epochs = int(data.get("epochs", 30))
             batch = int(data.get("batch", 16))
             res = web_trainer.start(base_model=model_name, epochs=epochs, batch=batch)
+            res["status"] = "ok" if res.get("success") else "error"
             self.write(res)
         except Exception as e:
-            self.write({"success": False, "error": str(e)})
+            self.write({"status": "error", "success": False, "error": str(e), "message": str(e)})
 
 
 class ApiTrainStatusHandler(tornado.web.RequestHandler):
@@ -1006,20 +1007,29 @@ class ApiTrainStopHandler(tornado.web.RequestHandler):
     def post(self):
         if HAS_WEB_STUDIO:
             web_trainer.stop()
-            self.write({"success": True})
+            self.write({"status": "ok", "success": True, "message": "Đã gửi lệnh dừng tiến trình huấn luyện thành công!"})
         else:
-            self.write({"success": False})
+            self.write({"status": "error", "success": False, "message": "Chưa hỗ trợ"})
 
 
 class ApiTrainExportColabHandler(tornado.web.RequestHandler):
     def set_default_headers(self):
         self.set_header("Access-Control-Allow-Origin", "*")
 
-    def post(self):
+    async def post(self):
         if HAS_WEB_STUDIO:
-            self.write(web_trainer.export_colab_zip())
+            loop = tornado.ioloop.IOLoop.current()
+            res = await loop.run_in_executor(None, web_trainer.export_colab_zip)
+            if res.get("success"):
+                res["status"] = "ok"
+                res["download_url"] = "/api/train/download_zip"
+                res["zip_name"] = res.get("filename", "yolo_dataset.zip")
+            else:
+                res["status"] = "error"
+                res["message"] = res.get("error", "Lỗi tạo file zip")
+            self.write(res)
         else:
-            self.write({"success": False, "error": "Chưa hỗ trợ"})
+            self.write({"status": "error", "success": False, "message": "Chưa hỗ trợ"})
 
 
 class ApiTrainDownloadZipHandler(tornado.web.RequestHandler):

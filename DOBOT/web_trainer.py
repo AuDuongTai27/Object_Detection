@@ -57,7 +57,18 @@ class WebYOLOTrainer:
 
     def get_status(self) -> dict:
         with self.lock:
-            return dict(self.state)
+            st = dict(self.state)
+            st["progress_pct"] = st.get("progress", 0)
+            st["current_loss"] = st.get("loss", 0.0)
+            st["current_map50"] = st.get("map50", 0.0)
+            eta_s = st.get("eta_seconds", 0)
+            if eta_s > 0:
+                mins = eta_s // 60
+                secs = eta_s % 60
+                st["eta"] = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
+            else:
+                st["eta"] = "--"
+            return st
 
     def stop(self):
         with self.lock:
@@ -95,12 +106,13 @@ class WebYOLOTrainer:
         try:
             self.log(f"Khởi động tiến trình: Base Model={base_model}, Epochs={epochs}, Batch={batch}")
 
-            # 1. Tự động sinh tập dữ liệu YOLO từ dataset_raw
+            # 1. Tự động sinh tập dữ liệu YOLO từ dataset_raw nếu chưa có
+            data_yaml = YOLO_DATASET_DIR / "data.yaml"
             gen_script = PROJECT_ROOT / "generate_yolo_dataset.py"
-            if gen_script.exists():
+            if not data_yaml.exists() and gen_script.exists():
                 self.log("Đang gán nhãn và chia tập Train/Val từ dataset_raw/...")
                 res = subprocess.run(
-                    [sys.executable, str(gen_script)],
+                    [sys.executable, str(gen_script), "--train-count", "200", "--val-count", "50"],
                     cwd=str(PROJECT_ROOT),
                     capture_output=True,
                     text=True,
@@ -113,8 +125,9 @@ class WebYOLOTrainer:
                         self.state["message"] = f"Lỗi sinh dataset: {res.stderr[:100]}"
                     return
                 self.log("Chuẩn bị dữ liệu thành công! File data.yaml sẵn sàng.")
+            else:
+                self.log("Tập dữ liệu data.yaml đã có sẵn, bắt đầu nạp mô hình...")
 
-            data_yaml = YOLO_DATASET_DIR / "data.yaml"
             if not data_yaml.exists():
                 raise FileNotFoundError(f"Không tìm thấy {data_yaml}")
 
@@ -170,6 +183,11 @@ class WebYOLOTrainer:
                 except Exception:
                     pass
 
+            def on_train_batch_end(trainer):
+                if trainer_ref.stop_requested:
+                    raise KeyboardInterrupt("Người dùng dừng huấn luyện")
+
+            model.add_callback("on_train_batch_end", on_train_batch_end)
             model.add_callback("on_train_epoch_end", on_train_epoch_end)
             model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
@@ -215,13 +233,14 @@ class WebYOLOTrainer:
     def export_colab_zip(self) -> dict:
         """Nén thư mục yolo_dataset thành file zip sẵn sàng tải về."""
         try:
-            # Chạy generate_yolo_dataset trước nếu cần
+            # Chỉ sinh dataset nếu chưa có data.yaml
+            data_yaml = YOLO_DATASET_DIR / "data.yaml"
             gen_script = PROJECT_ROOT / "generate_yolo_dataset.py"
-            if gen_script.exists():
-                subprocess.run([sys.executable, str(gen_script)], cwd=str(PROJECT_ROOT), capture_output=True)
+            if not data_yaml.exists() and gen_script.exists():
+                subprocess.run([sys.executable, str(gen_script), "--train-count", "500", "--val-count", "100"], cwd=str(PROJECT_ROOT), capture_output=True)
 
             if not YOLO_DATASET_DIR.exists():
-                return {"success": False, "error": "Chưa có dữ liệu yolo_dataset!"}
+                return {"success": False, "status": "error", "error": "Chưa có dữ liệu yolo_dataset!", "message": "Chưa có dữ liệu yolo_dataset!"}
 
             # Nén thành file zip
             zip_base = str(PROJECT_ROOT / "yolo_dataset")
@@ -231,13 +250,16 @@ class WebYOLOTrainer:
                 size_mb = COLAB_ZIP_PATH.stat().st_size / (1024 * 1024)
                 return {
                     "success": True,
+                    "status": "ok",
                     "filename": "yolo_dataset.zip",
+                    "zip_name": "yolo_dataset.zip",
+                    "download_url": "/api/train/download_zip",
                     "path": str(COLAB_ZIP_PATH),
                     "size_mb": round(size_mb, 2)
                 }
-            return {"success": False, "error": "Không tạo được file zip"}
+            return {"success": False, "status": "error", "error": "Không tạo được file zip", "message": "Không tạo được file zip"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "status": "error", "error": str(e), "message": str(e)}
 
 
 # Singleton instance
