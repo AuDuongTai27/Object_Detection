@@ -1093,6 +1093,9 @@
             <button class="nav-studio-tab" id="btn-tab-sort" onclick="switchStudioTab('sort')">
                 <span>🦾</span> <span>4. AI Vision & Phân Loại</span>
             </button>
+            <button class="nav-studio-tab" id="btn-tab-calib" onclick="switchStudioTab('calib')">
+                <span>📐</span> <span>5. Hiệu Chuẩn (Calib)</span>
+            </button>
         </nav>
 
         <div class="nav-system-status">
@@ -1795,6 +1798,159 @@
                 </div>
                 <div id="detected-cubes-list" style="display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 280px;">
                     <!-- Detected cube cards -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =====================================================================
+         TAB 5 VIEW: HIỆU CHUẨN CAMERA - DOBOT (CALIBRATION)
+    ====================================================================== -->
+    <main id="view-camera-calib" class="studio-view">
+        <div class="studio-content-grid">
+            <!-- Left: Calibration Steps & Launch -->
+            <div class="studio-card" style="overflow-y: auto;">
+                <div>
+                    <div class="card-header-bar">
+                        <div class="card-title-text">
+                            <span>📐 Hiệu Chuẩn Camera - Robot (Hand-Eye Calibration)</span>
+                        </div>
+                        <span id="badge-tool-calib" class="sys-badge offline">Chưa mở công cụ</span>
+                    </div>
+
+                    <!-- Banner cảnh báo khi đang chạy Native Tool -->
+                    <div id="banner-tool-calib-running" style="display: none; background: rgba(56, 189, 248, 0.12); border: 1px solid #38bdf8; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 20px;">🔵</span>
+                            <div>
+                                <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8;">CỬA SỔ HIỆU CHUẨN CAMERA ĐANG MỞ TRÊN MÀN HÌNH</div>
+                                <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">Nhấn phím <b>'Q'</b> trên cửa sổ OpenCV hoặc bấm nút <b>Dừng</b> bên dưới để kết thúc & giải phóng camera.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hướng dẫn chi tiết quy trình Calib 4 điểm thông minh -->
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+                        <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚡</span> <span>QUY TRÌNH CALIB 1-CLICK TỰ ĐỘNG ĐỌC TỌA ĐỘ (calibrate_camera_to_dobot)</span>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11.5px;">
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #38bdf8; font-weight: 700; margin-bottom: 2px;">BƯỚC 1: CLICK CHUỘT CHỌN ĐIỂM TRÊN ẢNH</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Nhấp chuột trái vào điểm mốc bất kỳ trên cửa sổ camera OpenCV. Một vòng tròn mục tiêu vàng nhấp nháy sẽ xuất hiện tại vị trí đó.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #4ade80; font-weight: 700; margin-bottom: 2px;">BƯỚC 2: DI CHUYỂN DOBOT TỚI ĐIỂM ĐÓ TRÊN BÀN</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Kéo hoặc điều khiển mũi hút Dobot chạm đúng vào điểm đó trên mặt bàn. Hệ thống <b>tự động đọc và hiển thị tọa độ X, Y thời gian thực</b> ngay trên màn hình camera!</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #22c55e; font-weight: 700; margin-bottom: 2px;">BƯỚC 3: NHẤN [ENTER] ĐỂ CHỐT ĐIỂM TỨC THÌ</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Nhấn phím <b>[ENTER]</b> (hoặc <b>[SPACE]</b>, hoặc click nút <b>CHỐT ĐIỂM</b> trên màn hình), hệ thống tự động gán tọa độ Dobot hiện tại vào điểm đó. Không cần gõ phím thủ công!</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #f97316; font-weight: 700; margin-bottom: 2px;">BƯỚC 4: XÓA ĐIỂM KHÔNG ƯNG Ý BẰNG PHÍM [D]</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Nếu chọn nhầm hoặc không ưng ý, nhấn phím <b>[D]</b> hoặc <b>[BACKSPACE]</b> (hoặc click nút <b>XÓA ĐIỂM</b>) để hủy và chọn lại ngay lập tức mà không cần làm lại từ đầu.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #a78bfa; font-weight: 700; margin-bottom: 2px;">BƯỚC 5: TỰ ĐỘNG LƯU VÀ KIỂM CHỨNG TỨC THỜI</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Đủ 4 điểm, ma trận Homography tự động được tính và lưu vào file. Chuyển ngay sang chế độ kiểm chứng: Rê chuột để thấy tọa độ Dobot theo thời gian thực!</div>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 11px;">
+                            <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 6px 10px; color: #cbd5e1;">
+                                💾 Phím <b>[ENTER] / [SPACE]</b>: Chốt điểm
+                            </div>
+                            <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 6px 10px; color: #cbd5e1;">
+                                ↩️ Phím <b>[D] / [BACKSPACE]</b>: Xóa điểm
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lựa chọn Camera cho Tab 5 -->
+                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label for="sel-cam-tab5" style="color: #cbd5e1; font-weight: 700; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                                <span>📷</span> <span>Chọn Camera Cho Hiệu Chuẩn:</span>
+                            </label>
+                            <button type="button" onclick="fetchCameraDevices(true)" style="background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Quét lại các cổng camera đang cắm">
+                                <span>🔄 Quét lại</span>
+                            </button>
+                        </div>
+                        <select id="sel-cam-tab5" style="background: #1e293b; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 8px 10px; width: 100%; font-size: 13px; font-weight: 600; outline: none; cursor: pointer;">
+                            <option value="">Đang dò tìm camera...</option>
+                        </select>
+                        <div id="warn-no-cam-tab5" style="display: none; margin-top: 8px; font-size: 11.5px; color: #f87171; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 7px 10px;">
+                            ⚠️ Không phát hiện camera nào được kết nối với máy tính! Không thể mở công cụ. Vui lòng cắm camera USB hoặc kiểm tra webcam và bấm "Quét lại".
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nút Khởi Chạy / Dừng Công Cụ Calib -->
+                <div>
+                    <button id="btn-launch-calib" class="btn-capture-big" style="background: linear-gradient(135deg, #0284c7, #0369a1); border: 1px solid #38bdf8; box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); width: 100%; padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer;" onclick="handleLaunchCalibTool()">
+                        <span>🚀</span> <span>MỞ CỬA SỔ HIỆU CHUẨN CAMERA (NATIVE CALIB TOOL)</span>
+                    </button>
+                    <button id="btn-stop-calib" class="btn-capture-big" style="display: none; background: linear-gradient(135deg, #dc2626, #b91c1c); border: 1px solid #f87171; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); width: 100%; padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer;" onclick="handleStopTool('calib')">
+                        <span>⏹️</span> <span>DỪNG HIỆU CHUẨN / GIẢI PHÓNG CAMERA</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Homography Matrix Info & Points Table -->
+            <div class="studio-card" style="overflow-y: auto;">
+                <div class="card-header-bar">
+                    <div class="card-title-text">
+                        <span>📊 Ma Trận Homography Hiện Tại</span>
+                    </div>
+                    <button onclick="fetchCalibInfo(true)" style="background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                        🔄 Tải lại
+                    </button>
+                </div>
+
+                <div id="calib-status-summary" style="background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 11px; color: #94a3b8;">Trạng thái hiệu chuẩn:</div>
+                        <div id="txt-calib-status" style="font-size: 14px; font-weight: 800; color: #4ade80;">✅ Đã có ma trận Homography</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 11px; color: #94a3b8;">Thời gian tạo:</div>
+                        <div id="txt-calib-time" style="font-size: 11.5px; font-family: monospace; color: #cbd5e1;">--</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                    <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">
+                        🎯 4 ĐIỂM MỐC HIỆU CHUẨN GẦN NHẤT:
+                    </div>
+                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left;">
+                            <thead>
+                                <tr style="background: rgba(255,255,255,0.06); color: #94a3b8; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                                    <th style="padding: 8px 12px;">Điểm</th>
+                                    <th style="padding: 8px 12px;">Pixel (u, v)</th>
+                                    <th style="padding: 8px 12px;">Tọa độ Dobot (X, Y mm)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="calib-points-table-body">
+                                <tr><td colspan="3" style="padding: 12px; text-align: center; color: #64748b;">Đang nạp dữ liệu...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                    <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 8px;">
+                        🔢 MA TRẬN CHUYỂN ĐỔI HOMOGRAPHY (3x3):
+                    </div>
+                    <div id="calib-matrix-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11.5px; color: #38bdf8; text-align: center;">
+                        <!-- Dynamic cells -->
+                    </div>
+                </div>
+
+                <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 12px; font-size: 11px; color: #94a3b8; line-height: 1.45;">
+                    💡 <b>Nguyên lý hoạt động:</b> Ma trận Homography thiết lập phép ánh xạ xạ ảnh 2D từ tọa độ điểm ảnh Camera $(u, v)$ sang mặt phẳng làm việc của Dobot Magician $(X, Y)$ với độ chính xác cao. Dữ liệu được nạp tự động từ file <code>DOBOT/homography_dobot.json</code>.
                 </div>
             </div>
         </div>
@@ -3588,6 +3744,12 @@
             const btnLaunchSort = document.getElementById('btn-launch-sort');
             const btnStopSort = document.getElementById('btn-stop-sort');
 
+            // Tab 5 (Calib)
+            const badgeCalib = document.getElementById('badge-tool-calib');
+            const bannerCalib = document.getElementById('banner-tool-calib-running');
+            const btnLaunchCalib = document.getElementById('btn-launch-calib');
+            const btnStopCalib = document.getElementById('btn-stop-calib');
+
             // Cập nhật Tab 2
             if (isRunning && activeTool === 'capture') {
                 if (badgeCap) { badgeCap.className = 'sys-badge online'; badgeCap.innerText = '🔴 Đang mở cửa sổ Camera'; }
@@ -3612,6 +3774,19 @@
                 if (bannerSort) bannerSort.style.display = 'none';
                 if (btnLaunchSort) btnLaunchSort.style.display = 'flex';
                 if (btnStopSort) btnStopSort.style.display = 'none';
+            }
+
+            // Cập nhật Tab 5
+            if (isRunning && activeTool === 'calib') {
+                if (badgeCalib) { badgeCalib.className = 'sys-badge online'; badgeCalib.innerText = '🔵 Đang Mở Hiệu Chuẩn'; }
+                if (bannerCalib) bannerCalib.style.display = 'block';
+                if (btnLaunchCalib) btnLaunchCalib.style.display = 'none';
+                if (btnStopCalib) btnStopCalib.style.display = 'flex';
+            } else {
+                if (badgeCalib) { badgeCalib.className = 'sys-badge offline'; badgeCalib.innerText = 'Chưa mở công cụ'; }
+                if (bannerCalib) bannerCalib.style.display = 'none';
+                if (btnLaunchCalib) btnLaunchCalib.style.display = 'flex';
+                if (btnStopCalib) btnStopCalib.style.display = 'none';
             }
         }
 
@@ -3687,6 +3862,40 @@
             }
         }
 
+        async function handleLaunchCalibTool() {
+            if (currentActiveTool && currentActiveTool !== 'calib') {
+                showToast("⚠️ Vui lòng dừng công cụ ở Tab kia trước để giải phóng Camera!");
+                return;
+            }
+            const selCam = document.getElementById('sel-cam-tab5');
+            const camId = selCam ? selCam.value : '';
+            if (camId === '' || camId === null || isNaN(parseInt(camId))) {
+                showToast("⚠️ Không tìm thấy camera nào kết nối! Không thể mở công cụ.");
+                return;
+            }
+
+            showToast(`🔄 Đang mở cửa sổ Hiệu Chuẩn calibrate_camera_to_dobot (Camera ${camId})...`);
+            try {
+                const res = await fetch('/api/tool/launch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        tool: 'calib', 
+                        cam_id: parseInt(camId)
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ Đã mở cửa sổ Hiệu Chuẩn! Nhấp chuột chọn 4 điểm và nhập X,Y trong Terminal.");
+                    checkToolStatus();
+                } else {
+                    showToast(`❌ ${data.error}`);
+                }
+            } catch(err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
         async function handleStopTool(toolName) {
             showToast("🔄 Đang đóng công cụ & giải phóng camera...");
             try {
@@ -3699,6 +3908,7 @@
                 showToast("✅ Đã đóng công cụ & Camera đã được giải phóng!");
                 checkToolStatus();
                 fetchDatasetStats();
+                if (toolName === 'calib') fetchCalibInfo();
             } catch(err) {
                 showToast(`❌ Lỗi: ${err.message}`);
             }
@@ -3718,7 +3928,8 @@
                 '3d': 'view-3d-twin',
                 'data': 'view-data-collection',
                 'train': 'view-ai-trainer',
-                'sort': 'view-auto-sort'
+                'sort': 'view-auto-sort',
+                'calib': 'view-camera-calib'
             };
 
             Object.entries(tabViews).forEach(([id, viewId]) => {
@@ -3737,6 +3948,10 @@
                 fetchVisionModels();
                 fetchCameraDevices();
                 checkToolStatus();
+            } else if (tabId === 'calib') {
+                fetchCameraDevices();
+                checkToolStatus();
+                fetchCalibInfo();
             }
         }
 
@@ -3761,10 +3976,13 @@
                 const data = await res.json();
                 const selTab2 = document.getElementById('sel-cam-tab2');
                 const selTab4 = document.getElementById('sel-cam-tab4');
+                const selTab5 = document.getElementById('sel-cam-tab5');
                 const warnTab2 = document.getElementById('warn-no-cam-tab2');
                 const warnTab4 = document.getElementById('warn-no-cam-tab4');
+                const warnTab5 = document.getElementById('warn-no-cam-tab5');
                 const btnCapture = document.getElementById('btn-launch-capture');
                 const btnSort = document.getElementById('btn-launch-sort');
+                const btnCalib = document.getElementById('btn-launch-calib');
 
                 const cams = (data.status === 'ok' && Array.isArray(data.available_cameras)) ? data.available_cameras : [];
 
@@ -3772,9 +3990,11 @@
                     const noCamHtml = `<option value="">⚠️ Không phát hiện camera nào</option>`;
                     if (selTab2) selTab2.innerHTML = noCamHtml;
                     if (selTab4) selTab4.innerHTML = noCamHtml;
+                    if (selTab5) selTab5.innerHTML = noCamHtml;
 
                     if (warnTab2) warnTab2.style.display = 'block';
                     if (warnTab4) warnTab4.style.display = 'block';
+                    if (warnTab5) warnTab5.style.display = 'block';
 
                     if (btnCapture) {
                         btnCapture.disabled = true;
@@ -3788,6 +4008,12 @@
                         btnSort.style.cursor = 'not-allowed';
                         btnSort.title = 'Không thể mở vì máy tính chưa nhận diện camera!';
                     }
+                    if (btnCalib) {
+                        btnCalib.disabled = true;
+                        btnCalib.style.opacity = '0.45';
+                        btnCalib.style.cursor = 'not-allowed';
+                        btnCalib.title = 'Không thể mở vì máy tính chưa nhận diện camera!';
+                    }
 
                     if (forceRefresh) {
                         showToast("⚠️ Không tìm thấy camera nào đang kết nối!");
@@ -3795,6 +4021,7 @@
                 } else {
                     const prevTab2Val = selTab2 ? selTab2.value : null;
                     const prevTab4Val = selTab4 ? selTab4.value : null;
+                    const prevTab5Val = selTab5 ? selTab5.value : null;
 
                     const optionsHtml = cams.map((cam, idx) => 
                         `<option value="${cam.id}">${cam.name}</option>`
@@ -3812,9 +4039,16 @@
                             selTab4.value = prevTab4Val;
                         }
                     }
+                    if (selTab5) {
+                        selTab5.innerHTML = optionsHtml;
+                        if (prevTab5Val !== null && cams.some(c => String(c.id) === String(prevTab5Val))) {
+                            selTab5.value = prevTab5Val;
+                        }
+                    }
 
                     if (warnTab2) warnTab2.style.display = 'none';
                     if (warnTab4) warnTab4.style.display = 'none';
+                    if (warnTab5) warnTab5.style.display = 'none';
 
                     if (btnCapture) {
                         btnCapture.disabled = false;
@@ -3828,6 +4062,12 @@
                         btnSort.style.cursor = 'pointer';
                         btnSort.title = '';
                     }
+                    if (btnCalib) {
+                        btnCalib.disabled = false;
+                        btnCalib.style.opacity = '1';
+                        btnCalib.style.cursor = 'pointer';
+                        btnCalib.title = '';
+                    }
 
                     if (forceRefresh) {
                         showToast(`✅ Đã tìm thấy ${cams.length} camera khả dụng!`);
@@ -3835,6 +4075,61 @@
                 }
             } catch (err) {
                 console.warn("fetchCameraDevices error:", err);
+            }
+        }
+
+        async function fetchCalibInfo(showFeedback = false) {
+            try {
+                if (showFeedback) showToast("🔄 Đang nạp thông số Homography...");
+                const res = await fetch('/api/calib/info');
+                const data = await res.json();
+                const statusEl = document.getElementById('txt-calib-status');
+                const timeEl = document.getElementById('txt-calib-time');
+                const tableBody = document.getElementById('calib-points-table-body');
+                const matrixGrid = document.getElementById('calib-matrix-grid');
+
+                if (data.status === 'ok' && data.calibrated && data.data) {
+                    const cdata = data.data;
+                    if (statusEl) {
+                        statusEl.innerText = `✅ Đã có ma trận Homography (Sai số: ${cdata.mean_error_mm || 0} mm)`;
+                        statusEl.style.color = '#4ade80';
+                    }
+                    if (timeEl) timeEl.innerText = cdata.created_at || 'Không rõ';
+
+                    if (tableBody && Array.isArray(cdata.calibration_points)) {
+                        tableBody.innerHTML = cdata.calibration_points.map(pt => `
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <td style="padding: 8px 12px; font-weight: bold; color: #38bdf8;">Điểm ${pt.point_id}</td>
+                                <td style="padding: 8px 12px; font-family: monospace; color: #cbd5e1;">(${pt.pixel_u}, ${pt.pixel_v})</td>
+                                <td style="padding: 8px 12px; font-family: monospace; color: #4ade80;">X=${pt.dobot_x}, Y=${pt.dobot_y}</td>
+                            </tr>
+                        `).join('');
+                    }
+
+                    if (matrixGrid && Array.isArray(cdata.homography_matrix)) {
+                        matrixGrid.innerHTML = cdata.homography_matrix.flat().map(val => `
+                            <div style="background: rgba(255,255,255,0.03); padding: 6px 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                                ${typeof val === 'number' ? val.toFixed(4) : val}
+                            </div>
+                        `).join('');
+                    }
+
+                    if (showFeedback) showToast("✅ Đã cập nhật thông số Homography!");
+                } else {
+                    if (statusEl) {
+                        statusEl.innerText = '⚠️ Chưa thực hiện hiệu chuẩn (homography_dobot.json chưa có)';
+                        statusEl.style.color = '#facc15';
+                    }
+                    if (timeEl) timeEl.innerText = '--';
+                    if (tableBody) {
+                        tableBody.innerHTML = '<tr><td colspan="3" style="padding: 14px; text-align: center; color: #94a3b8;">Chưa có dữ liệu 4 điểm mốc. Hãy nhấn "Mở cửa sổ hiệu chuẩn" bên trái để thực hiện.</td></tr>';
+                    }
+                    if (matrixGrid) {
+                        matrixGrid.innerHTML = '<div style="grid-column: span 3; color: #64748b; padding: 10px;">Chưa có ma trận</div>';
+                    }
+                }
+            } catch(e) {
+                console.warn("fetchCalibInfo error:", e);
             }
         }
 

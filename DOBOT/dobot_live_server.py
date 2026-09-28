@@ -696,6 +696,12 @@ class ToolProcessManager:
                 if "model" in kwargs and kwargs["model"]:
                     cmd.extend(["--model", str(kwargs["model"])])
 
+            elif tool_name == "calib":
+                script = BASE_DIR / "calibrate_camera_to_dobot.py"
+                cmd.append(str(script))
+                if "cam_id" in kwargs and kwargs["cam_id"] is not None:
+                    cmd.extend(["--cam", str(kwargs["cam_id"])])
+
             else:
                 return {"success": False, "error": f"Không hỗ trợ công cụ '{tool_name}'"}
 
@@ -1174,6 +1180,25 @@ class ApiVisionModelsHandler(tornado.web.RequestHandler):
             self.write({"success": False, "error": str(e)})
 
 
+class ApiCalibInfoHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def get(self):
+        calib_file = BASE_DIR / "homography_dobot.json"
+        if calib_file.exists():
+            try:
+                with open(calib_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.write({"status": "ok", "calibrated": True, "data": data})
+                return
+            except Exception as e:
+                self.write({"status": "error", "calibrated": False, "error": str(e)})
+                return
+        self.write({"status": "ok", "calibrated": False, "message": "Chưa có file homography_dobot.json"})
+
+
 def find_available_port(preferred_port=8080):
     import socket
     for p in [preferred_port, 8081, 8082, 8088]:
@@ -1220,6 +1245,7 @@ def main():
         (r"/api/vision/pick", ApiVisionPickHandler),
         (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
         (r"/api/vision/models", ApiVisionModelsHandler),
+        (r"/api/calib/info", ApiCalibInfoHandler),
     ])
     
     app.listen(port, address="0.0.0.0")
