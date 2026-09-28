@@ -437,6 +437,10 @@ class StaticFileHandler(tornado.web.RequestHandler):
         if os.path.exists(file_path):
             if filename.endswith(".js"):
                 self.set_header("Content-Type", "application/javascript")
+            elif filename.endswith(".ico"):
+                self.set_header("Content-Type", "image/x-icon")
+            elif filename.endswith(".png"):
+                self.set_header("Content-Type", "image/png")
             with open(file_path, "rb") as f:
                 self.write(f.read())
         else:
@@ -1263,12 +1267,14 @@ def main():
     port = find_available_port(preferred)
     app = tornado.web.Application([
         (r"/", MainHandler),
+        (r"/dobot_visualizer.html", MainHandler),
+        (r"/index.html", MainHandler),
         (r"/ws", WebSocketHandler),
         (r"/api/cmd", ApiCmdHandler),
         (r"/api/robot/connect", ApiRobotConnectHandler),
         (r"/api/robot/disconnect", ApiRobotDisconnectHandler),
         (r"/api/robot/ports", ApiRobotPortsHandler),
-        (r"/(.*\.js)", StaticFileHandler),
+        (r"/(.*\.(?:js|ico|png))", StaticFileHandler),
         # Web Studio Streaming & APIs
         (r"/ws/video", VideoWsHandler),
         (r"/api/tool/launch", ApiToolLaunchHandler),
@@ -1303,6 +1309,18 @@ def main():
 
     # Tần số đọc 50ms (~20 lần/giây)
     tornado.ioloop.PeriodicCallback(poll_robot_pose, 50).start()
+
+    # Tự động mở trình duyệt web khi máy chủ đã sẵn sàng
+    import webbrowser
+    def _open_browser_auto():
+        target_url = f"http://localhost:{port}/dobot_visualizer.html"
+        print(f"[*] Dang tu dong mo trinh duyet: {target_url}")
+        try:
+            webbrowser.open(target_url)
+        except Exception as e:
+            print(f"[-] Khong the tu mo trinh duyet: {e}")
+
+    tornado.ioloop.IOLoop.current().call_later(0.8, _open_browser_auto)
 
     try:
         tornado.ioloop.IOLoop.current().start()
