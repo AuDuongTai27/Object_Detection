@@ -13,6 +13,8 @@ import struct
 import threading
 import glob
 import math
+import subprocess
+from pathlib import Path
 
 # Đảm bảo UTF-8 cho Windows console
 if sys.platform == "win32":
@@ -21,6 +23,9 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
 
 import tornado.ioloop
 import tornado.web
@@ -91,14 +96,15 @@ class DobotController:
             return devs[-1] # Lấy cổng mới nhất
         return None
 
-    def connect(self):
+    def connect(self, port=None):
         with self.lock:
             if self.connected and self.ser and self.ser.is_open:
                 return True
-            self.port = self.auto_detect_port()
-            if not self.port:
+            target_port = port or self.auto_detect_port()
+            if not target_port:
                 self.connected = False
                 return False
+            self.port = target_port
             try:
                 self.ser = serial.Serial(
                     port=self.port,
@@ -110,7 +116,7 @@ class DobotController:
                 )
                 self.ser.setDTR(True)
                 self.ser.setRTS(True)
-                time.sleep(0.3)
+                time.sleep(0.2)
                 self.ser.reset_input_buffer()
                 self.ser.reset_output_buffer()
                 self.buf.clear()
@@ -123,20 +129,36 @@ class DobotController:
                 self._send_raw_cmd(id=240, ctrl=1) # SetQueuedCmdStartExec (ID 240)
 
                 # 3. THIẾT LẬP THÔNG SỐ VẬN TỐC & GIA TỐC PTP (Bắt buộc để robot di chuyển)
-                # ID 80: SetPTPJointParams (8 floats)
                 self._send_raw_cmd(id=80, ctrl=1, params=struct.pack('<8f', *([200.0]*8)))
-                # ID 81: SetPTPCoordinateParams (4 floats: xyz_vel, xyz_acc, r_vel, r_acc)
                 self._send_raw_cmd(id=81, ctrl=1, params=struct.pack('<4f', 200.0, 200.0, 200.0, 200.0))
-                # ID 83: SetPTPCommonParams (2 floats: velocityRatio=50%, accelerationRatio=50%)
                 self._send_raw_cmd(id=83, ctrl=1, params=struct.pack('<2f', 50.0, 50.0))
 
                 self.connected = True
                 print(f"[+] Kết nối thành công với Dobot tại cổng: {self.port}")
                 return True
             except Exception as e:
-                print(f"[-] Lỗi kết nối {self.port}: {e}")
+                print(f"[-] Không thể kết nối Dobot tại {self.port}: {e}")
                 self.connected = False
+                if self.ser:
+                    try:
+                        self.ser.close()
+                    except Exception:
+                        pass
+                self.ser = None
                 return False
+
+    def disconnect(self):
+        with self.lock:
+            self.connected = False
+            if self.ser:
+                try:
+                    self.ser.close()
+                except Exception:
+                    pass
+                self.ser = None
+            self.port = None
+            print("[+] Đã ngắt kết nối Dobot Magician.")
+            return True
 
     def _calc_checksum(self, payload: bytes) -> int:
         return (0x100 - (sum(payload) % 0x100)) % 0x100
@@ -151,7 +173,7 @@ class DobotController:
         self.ser.write(packet)
         self.ser.flush()
 
-    def _read_response(self, expected_id=10, timeout=0.2):
+    def _read_response(self, expected_id=10, timeout=0.1):
         if not self.ser or not self.ser.is_open:
             return None, None
         start = time.time()
@@ -180,13 +202,12 @@ class DobotController:
 
     def get_pose(self):
         with self.lock:
-            if not self.connected:
-                if not self.connect():
-                    return None
+            if not self.connected or not self.ser or not self.ser.is_open:
+                return None
             try:
                 self.ser.reset_input_buffer()
                 self._send_raw_cmd(id=10, ctrl=0) # GetPose: AA AA 02 0A 00 F6
-                resp_id, params = self._read_response(expected_id=10, timeout=0.12)
+                resp_id, params = self._read_response(expected_id=10, timeout=0.08)
                 if params and len(params) >= 32:
                     x, y, z, r, j1, j2, j3, j4 = struct.unpack("<8f", params[:32])
                     pose = {
@@ -200,8 +221,9 @@ class DobotController:
                 if self.ser:
                     try:
                         self.ser.close()
-                    except:
+                    except Exception:
                         pass
+                self.ser = None
                 return None
         return None
 
@@ -398,7 +420,7 @@ class DobotController:
 
 
 robot = DobotController()
-vision_engine = WebVisionEngine(robot_controller=robot, default_cam=0) if HAS_WEB_STUDIO else None
+vision_engine = WebVisionEngine(robot_controller=robot) if HAS_WEB_STUDIO else None
 connected_clients = set()
 
 
@@ -545,44 +567,84 @@ class ApiCmdHandler(tornado.web.RequestHandler):
             self.write({"status": "error", "error": str(e)})
 
 
+class ApiRobotConnectHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            target_port = data.get("port", None)
+            ok = robot.connect(port=target_port)
+            if ok:
+                self.write({"success": True, "connected": True, "port": robot.port, "message": f"Kết nối Dobot thành công ({robot.port})"})
+            else:
+                self.write({"success": False, "connected": False, "error": "Không tìm thấy Dobot Magician qua cổng USB. Vui lòng cắm cáp và bấm thử lại!"})
+        except Exception as e:
+            self.write({"success": False, "connected": False, "error": str(e)})
+
+
+class ApiRobotDisconnectHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def post(self):
+        robot.disconnect()
+        self.write({"success": True, "connected": False, "message": "Đã ngắt kết nối Dobot"})
+
+
+class ApiRobotPortsHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        try:
+            ports = [p.device for p in serial.tools.list_ports.comports()]
+        except Exception:
+            ports = []
+        self.write({"ports": ports, "connected": robot.connected, "current_port": robot.port})
+
+
 poll_counter = 0
 
 def poll_robot_pose():
     global poll_counter
-    if connected_clients:
+    if not connected_clients:
+        return
+
+    poll_counter += 1
+    if robot.connected:
         pose = robot.get_pose()
-        poll_counter += 1
-        
-        # Cứ 10 vòng đọc (~500ms) kiểm tra trạng thái cờ lỗi một lần
         alarms = robot.cached_alarms
         if poll_counter % 10 == 0:
             alarms = robot.get_alarms()
-        
         has_alarm = bool(alarms and len(alarms) > 0)
-        
-        if pose:
-            msg = json.dumps({
-                "type": "pose",
-                "connected": True,
-                "port": robot.port,
-                "data": pose,
-                "alarms": alarms,
-                "has_alarm": has_alarm
-            })
-        else:
-            msg = json.dumps({
-                "type": "pose",
-                "connected": False,
-                "port": robot.port or "Chưa kết nối",
-                "alarms": alarms,
-                "has_alarm": has_alarm
-            })
-        
-        for client in list(connected_clients):
-            try:
-                client.write_message(msg)
-            except Exception:
-                connected_clients.discard(client)
+        msg = json.dumps({
+            "type": "pose",
+            "connected": True,
+            "port": robot.port,
+            "data": pose or robot.last_pose,
+            "alarms": alarms,
+            "has_alarm": has_alarm
+        })
+    else:
+        # Nếu chưa kết nối robot, gửi gói tin trạng thái nhẹ nhàng mỗi 20 chu kỳ (~1 giây)
+        if poll_counter % 20 != 0:
+            return
+        msg = json.dumps({
+            "type": "pose",
+            "connected": False,
+            "port": "Chưa kết nối",
+            "alarms": [],
+            "has_alarm": False
+        })
+
+    for client in list(connected_clients):
+        try:
+            client.write_message(msg)
+        except Exception:
+            connected_clients.discard(client)
 
         if HAS_WEB_STUDIO and poll_counter % 10 == 0:
             tr_stat = web_trainer.get_status()
@@ -596,30 +658,184 @@ def poll_robot_pose():
 
 
 # ==============================================================================
+# BỘ QUẢN LÝ TIẾN TRÌNH CÔNG CỤ CHUYÊN DỤNG (CAPTURE & AUTO SORT NATIVE TOOLS)
+# ==============================================================================
+
+class ToolProcessManager:
+    """Quản lý các công cụ Native GUI độc lập (capture_from_camera.py, dobot_auto_sort.py)."""
+    def __init__(self):
+        self.proc = None
+        self.active_tool = None
+        self.lock = threading.Lock()
+
+    def launch(self, tool_name, **kwargs):
+        with self.lock:
+            # Nếu tool cũ còn đang chạy
+            if self.proc and self.proc.poll() is None:
+                return {
+                    "success": False,
+                    "error": f"Công cụ '{self.active_tool}' đang chạy! Vui lòng dừng công cụ này trước để giải phóng camera.",
+                    "active_tool": self.active_tool
+                }
+
+            cmd = [sys.executable]
+            if tool_name == "capture":
+                script = PROJECT_ROOT / "capture_from_camera.py"
+                cmd.append(str(script))
+                cls_name = kwargs.get("class_name", "cube_red")
+                cmd.extend(["--class", str(cls_name)])
+                cmd.extend(["--output", "dataset/raw"])
+                if "cam_id" in kwargs and kwargs["cam_id"] is not None:
+                    cmd.extend(["--camera", str(kwargs["cam_id"])])
+
+            elif tool_name == "sort":
+                script = BASE_DIR / "dobot_auto_sort.py"
+                cmd.append(str(script))
+                if "cam_id" in kwargs and kwargs["cam_id"] is not None:
+                    cmd.extend(["--cam", str(kwargs["cam_id"])])
+                if "model" in kwargs and kwargs["model"]:
+                    cmd.extend(["--model", str(kwargs["model"])])
+
+            else:
+                return {"success": False, "error": f"Không hỗ trợ công cụ '{tool_name}'"}
+
+            try:
+                creationflags = subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0
+                self.proc = subprocess.Popen(cmd, cwd=str(PROJECT_ROOT), creationflags=creationflags)
+                self.active_tool = tool_name
+                print(f"[ToolManager] 🚀 Đã mở công cụ '{tool_name}' (PID: {self.proc.pid})")
+                return {"success": True, "active_tool": tool_name, "pid": self.proc.pid}
+            except Exception as e:
+                print(f"[ToolManager] ❌ Lỗi khởi chạy: {e}")
+                return {"success": False, "error": str(e)}
+
+    def stop(self, tool_name=None):
+        with self.lock:
+            if not self.proc:
+                self.proc = None
+                self.active_tool = None
+                return {"success": True, "message": "Không có công cụ nào đang chạy"}
+
+            try:
+                pid = self.proc.pid
+                tool_label = self.active_tool
+                if sys.platform == "win32":
+                    # taskkill /F /T /PID tiêu diệt toàn bộ cây tiến trình (console window + python + opencv)
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+                else:
+                    self.proc.terminate()
+                    try:
+                        self.proc.wait(timeout=2.0)
+                    except subprocess.TimeoutExpired:
+                        self.proc.kill()
+
+                print(f"[ToolManager] ⏹️ Đã dừng công cụ '{tool_label}' (PID: {pid}) và giải phóng Camera thành công!")
+                self.proc = None
+                self.active_tool = None
+                return {"success": True, "message": "Đã đóng công cụ & giải phóng camera thành công"}
+            except Exception as e:
+                print(f"[ToolManager] ❌ Lỗi khi dừng công cụ: {e}")
+                return {"success": False, "error": str(e)}
+
+    def get_status(self):
+        with self.lock:
+            if self.proc:
+                if self.proc.poll() is None:
+                    return {"is_running": True, "active_tool": self.active_tool, "pid": self.proc.pid}
+                else:
+                    self.proc = None
+                    self.active_tool = None
+            return {"is_running": False, "active_tool": None}
+
+tool_manager = ToolProcessManager()
+
+
+class ApiToolLaunchHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            tool_name = data.get("tool", "capture")
+            res = tool_manager.launch(tool_name, **data)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiToolStopHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            tool_name = data.get("tool", None)
+            res = tool_manager.stop(tool_name)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiToolStatusHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        self.write(tool_manager.get_status())
+
+
+# ==============================================================================
 # BỘ XỬ LÝ VIDEO & WEB STUDIO APIS (CAMERA, DATASET, TRAINER, AUTO SORT)
 # ==============================================================================
 
-class VideoFeedHandler(tornado.web.RequestHandler):
-    async def get(self):
-        mode = self.get_argument("mode", None)
-        if mode and HAS_WEB_STUDIO and vision_engine:
-            vision_engine.stream_mode = mode
+class VideoWsHandler(tornado.websocket.WebSocketHandler):
+    """WebSocket stream camera frames (JPEG binary) - đáng tin cậy hơn MJPEG HTTP."""
 
-        self.set_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
-        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, pre-check=0, post-check=0, max-age=0')
-        self.set_header('Pragma', 'no-cache')
-        self.set_header('Connection', 'close')
+    def check_origin(self, origin):
+        return True  # Cho phép mọi origin
 
+    def open(self):
+        mode = self.get_argument("mode", "raw")
+        self._mode = mode
+        self._running = True
+        tornado.ioloop.IOLoop.current().spawn_callback(self._push_frames)
+
+    async def _push_frames(self):
+        if not HAS_WEB_STUDIO or not vision_engine:
+            return
+
+        # 1. Gửi ngay khung hình hiện có đầu tiên để Client không bị trễ/màn hình đen
         try:
-            while not self.request.connection.stream.closed():
-                if HAS_WEB_STUDIO and vision_engine:
-                    jpeg = vision_engine.get_jpeg()
-                    if jpeg:
-                        self.write(b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
-                        await self.flush()
-                await tornado.gen.sleep(0.033) # ~30 fps
-        except (tornado.iostream.StreamClosedError, Exception):
+            _, initial_jpeg = vision_engine.get_jpeg_with_id(self._mode)
+            if initial_jpeg and self._running:
+                await self.write_message(initial_jpeg, binary=True)
+        except Exception:
             pass
+
+        # 2. Vòng lặp đẩy các khung hình mới liên tục (~30 FPS)
+        last_id = -1
+        while self._running:
+            try:
+                cur_id, jpeg = vision_engine.get_jpeg_with_id(self._mode)
+                if jpeg and cur_id != last_id:
+                    last_id = cur_id
+                    await self.write_message(jpeg, binary=True)
+                await tornado.gen.sleep(0.033)  # ~30 fps
+            except tornado.websocket.WebSocketClosedError:
+                break
+            except Exception:
+                break
+        self._running = False
+
+    def on_message(self, message):
+        pass  # Không nhận message từ client
+
+    def on_close(self):
+        self._running = False
 
 
 class ApiCameraHandler(tornado.web.RequestHandler):
@@ -628,22 +844,17 @@ class ApiCameraHandler(tornado.web.RequestHandler):
         self.set_header("Access-Control-Allow-Headers", "Content-Type")
 
     def get(self):
-        devices = []
-        if sys.platform == "win32":
-            for i in range(3):
-                try:
-                    c = cv2.VideoCapture(i, cv2.CAP_DSHOW)
-                    if c.isOpened():
-                        devices.append({"id": i, "name": f"Camera {i}"})
-                        c.release()
-                except Exception:
-                    pass
-        if not devices:
-            devices = [{"id": 0, "name": "Camera 0"}]
+        # Trả về ngay danh sách camera khả dụng mà không mở lại thiết bị đang quay
+        if HAS_WEB_STUDIO and vision_engine:
+            devices = vision_engine.get_camera_devices()
+            status = vision_engine.get_status()
+            active_cam = vision_engine.cam_id
+            is_cam_open = status.get("camera_online", False)
+        else:
+            devices = [{"id": 0, "name": "Camera 0 (Mặc định)", "is_external": False, "is_current": True}]
+            active_cam = 0
+            is_cam_open = False
 
-        status = vision_engine.get_status() if HAS_WEB_STUDIO and vision_engine else {}
-        is_cam_open = status.get("camera_online", False)
-        active_cam = vision_engine.cam_id if HAS_WEB_STUDIO and vision_engine else 0
         self.write({
             "status": "ok",
             "success": True,
@@ -651,24 +862,24 @@ class ApiCameraHandler(tornado.web.RequestHandler):
             "available_cameras": devices,
             "active_cam": active_cam,
             "current_cam": active_cam,
-            "stream_mode": vision_engine.stream_mode if HAS_WEB_STUDIO and vision_engine else "raw",
             "camera_online": is_cam_open,
             "is_opened": is_cam_open
         })
 
     def post(self):
         try:
-            data = json.loads(self.request.body)
-            if "cam_id" in data and HAS_WEB_STUDIO and vision_engine:
+            data = json.loads(self.request.body) if self.request.body else {}
+            if data.get("refresh", False) and HAS_WEB_STUDIO and vision_engine:
+                # Quét lại danh sách camera
+                cams = vision_engine.scan_cameras()
+                self.write({"status": "ok", "success": True, "devices": cams, "available_cameras": cams})
+            elif "cam_id" in data and HAS_WEB_STUDIO and vision_engine:
                 ok = vision_engine.start_camera(int(data["cam_id"]))
-                self.write({"success": ok, "cam_id": vision_engine.cam_id})
-            elif "mode" in data and HAS_WEB_STUDIO and vision_engine:
-                vision_engine.stream_mode = str(data["mode"])
-                self.write({"success": True, "mode": vision_engine.stream_mode})
+                self.write({"status": "ok", "success": ok, "cam_id": vision_engine.cam_id})
             else:
-                self.write({"success": False, "error": "Tham số không hợp lệ"})
+                self.write({"status": "error", "success": False, "error": "Tham số không hợp lệ"})
         except Exception as e:
-            self.write({"success": False, "error": str(e)})
+            self.write({"status": "error", "success": False, "error": str(e)})
 
 
 class ApiDatasetStatsHandler(tornado.web.RequestHandler):
@@ -974,9 +1185,15 @@ def main():
         (r"/", MainHandler),
         (r"/ws", WebSocketHandler),
         (r"/api/cmd", ApiCmdHandler),
+        (r"/api/robot/connect", ApiRobotConnectHandler),
+        (r"/api/robot/disconnect", ApiRobotDisconnectHandler),
+        (r"/api/robot/ports", ApiRobotPortsHandler),
         (r"/(.*\.js)", StaticFileHandler),
         # Web Studio Streaming & APIs
-        (r"/video_feed", VideoFeedHandler),
+        (r"/ws/video", VideoWsHandler),
+        (r"/api/tool/launch", ApiToolLaunchHandler),
+        (r"/api/tool/stop", ApiToolStopHandler),
+        (r"/api/tool/status", ApiToolStatusHandler),
         (r"/api/camera", ApiCameraHandler),
         (r"/api/dataset/stats", ApiDatasetStatsHandler),
         (r"/api/dataset/capture", ApiDatasetCaptureHandler),
@@ -1000,8 +1217,7 @@ def main():
     print(f"  DOBOT MAGICIAN 3D LIVE DIGITAL TWIN SERVER")
     print(f"  Giao diện Web: http://localhost:{port}")
     print("=" * 60)
-    print("[*] Đang tự động dò tìm Dobot Magician qua cáp USB...")
-    robot.connect()
+    print("[*] Dobot Magician: Chế độ kết nối qua Web UI (Bấm nút 'Kết Nối Dobot' khi cắm USB)")
 
     # Tần số đọc 50ms (~20 lần/giây)
     tornado.ioloop.PeriodicCallback(poll_robot_pose, 50).start()

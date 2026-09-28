@@ -1,8 +1,9 @@
 """
 Module Thị Giác AI & Tự Động Phân Loại (Vision & Auto Sort Engine)
 cho FabLab AI & Dobot Web Studio:
-- Đọc luồng Camera liên tục (OpenCV CAP_DSHOW, MJPG)
+- Đọc luồng Camera thời gian thực (Ưu tiên Camera ngoài USB, fallback Camera laptop)
 - Nhận diện vật thể bằng YOLOv8 / YOLO11
+- Tách biệt luồng ảnh RAW (Tab 2) và luồng YOLO Detect (Tab 4) không xung đột
 - Ánh xạ tọa độ ảnh (u, v) sang tọa độ Dobot (X, Y) bằng Homography
 - Hỗ trợ Click-to-Pick (Nhấp chuột trên video để gắp)
 - Hỗ trợ Chế độ Tự Động Phân Loại (Auto Sort)
@@ -59,20 +60,35 @@ COLOR_MAP = {
 
 
 class WebVisionEngine:
-    def __init__(self, robot_controller=None, default_cam=0):
+    def __init__(self, robot_controller=None, default_cam=None):
         self.robot = robot_controller
-        self.cam_id = default_cam
         self.cap = None
         self.running = False
+        self.worker_thread = None
         self.lock = threading.Lock()
 
-        # Frame data
+        # Frame buffers & versioning
         self.raw_frame = None
         self.annotated_frame = None
-        self.latest_jpeg = None
+        self.latest_raw_jpeg = None
+        self.latest_yolo_jpeg = None
+        self.raw_frame_id = 0
+        self.yolo_frame_id = 0
+        self.frame_id = 0
         self.detected_cubes = []
 
-        # Vision mode: 'raw' (cho thu thập ảnh) hoặc 'yolo' (cho phân loại)
+        # Placeholder frame khi chưa có camera
+        self.placeholder_jpeg = self._create_placeholder_jpeg("Đang khởi động Camera...")
+
+        # Worker threads
+        self.capture_thread = None
+        self.ai_thread = None
+
+        # Danh sách camera đã quét
+        self.available_cameras = []
+        self.cam_id = 0
+
+        # Vision settings
         self.stream_mode = "raw" 
         self.conf_threshold = 0.45
 
@@ -90,8 +106,77 @@ class WebVisionEngine:
         self.is_picking = False
         self.auto_sort_thread = None
 
-        # Start camera thread
-        self.start_camera(self.cam_id)
+        # Danh sách camera ban đầu
+        self.cam_id = 0
+        self.available_cameras = [
+            {"id": 0, "name": "Camera 0 (Camera tích hợp laptop / PC)", "is_external": False, "is_current": True},
+            {"id": 1, "name": "Camera 1 (USB Camera ngoài - Ưu tiên ⭐)", "is_external": True, "is_current": False}
+        ]
+
+        # Camera được giữ ở trạng thái tự do (không chiếm dụng phần cứng)
+        # để các công cụ chuyên dụng (capture_from_camera, dobot_auto_sort) luôn mở được 100%
+        self.cap = None
+        self.running = False
+        print("[VisionEngine] 📷 Sẵn sàng chế độ Native Tools (Camera tự do)")
+
+    def _create_placeholder_jpeg(self, text="Camera Offline"):
+        img = np.zeros((480, 640, 3), dtype=np.uint8)
+        img[:] = (24, 27, 34) # Nền tối sang trọng
+        cv2.putText(img, text, (140, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 2)
+        _, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        return buf.tobytes()
+
+    def scan_cameras(self):
+        """
+        Quét các camera có trên máy tính khi người dùng yêu cầu:
+        - Giữ nguyên camera đang chạy
+        - Kiểm tra an toàn kèm delay nhỏ để tránh khóa driver DirectShow trên Windows
+        """
+        cams = []
+        tested_indices = [1, 2, 0]
+
+        for idx in tested_indices:
+            # Nếu camera này đang chạy bởi chính WebVisionEngine, đánh dấu có sẵn luôn
+            if self.running and self.cap and self.cap.isOpened() and self.cam_id == idx:
+                is_ext = (idx > 0)
+                label = f"Camera {idx} (USB Camera ngoài - Đang kết nối ⭐)" if is_ext else "Camera 0 (Camera tích hợp máy tính - Đang kết nối)"
+                cams.append({
+                    "id": idx,
+                    "name": label,
+                    "is_external": is_ext,
+                    "is_current": True
+                })
+                continue
+
+            try:
+                backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+                c = cv2.VideoCapture(idx, backend)
+                if c.isOpened():
+                    ret, _ = c.read()
+                    c.release()
+                    time.sleep(0.05)  # Tránh kẹt driver DirectShow trên Windows
+                    if ret:
+                        is_ext = (idx > 0)
+                        label = f"Camera {idx} (USB Camera ngoài - Ưu tiên ⭐)" if is_ext else "Camera 0 (Camera tích hợp laptop / PC)"
+                        cams.append({
+                            "id": idx,
+                            "name": label,
+                            "is_external": is_ext,
+                            "is_current": (self.cam_id == idx)
+                        })
+            except Exception:
+                pass
+
+        if not cams:
+            cams = [{"id": 0, "name": "Camera 0 (Mặc định)", "is_external": False, "is_current": True}]
+
+        # Sắp xếp: Camera ngoài lên đầu, sau đó đến camera tích hợp
+        cams.sort(key=lambda x: (not x.get("is_external", False), x["id"]))
+        with self.lock:
+            self.available_cameras = cams
+
+        print(f"[VisionEngine] 📷 Danh sách Camera phát hiện: {[c['name'] for c in cams]}")
+        return cams
 
     def load_homography(self):
         if HOMOGRAPHY_JSON_PATH.exists():
@@ -126,60 +211,158 @@ class WebVisionEngine:
             return False
 
     def start_camera(self, cam_id=0):
+        """Khởi động camera an toàn với fallback DirectShow và tách riêng thread Capture & thread AI."""
         with self.lock:
+            # 1. Dừng các thread cũ nếu có
             self.running = False
+
+        if self.capture_thread and self.capture_thread.is_alive():
+            self.capture_thread.join(timeout=1.0)
+        if self.ai_thread and self.ai_thread.is_alive():
+            self.ai_thread.join(timeout=1.0)
+
+        with self.lock:
             if self.cap:
                 try:
                     self.cap.release()
+                    time.sleep(0.1)  # Đảm bảo Windows DirectShow kịp giải phóng
                 except Exception:
                     pass
+                self.cap = None
 
             self.cam_id = int(cam_id)
-            backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
-            self.cap = cv2.VideoCapture(self.cam_id, backend)
-            if self.cap.isOpened():
-                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-                self.cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                self.running = True
-                threading.Thread(target=self._camera_worker, daemon=True).start()
-                print(f"[VisionEngine] Đã mở Camera ID: {self.cam_id}")
-                return True
-            else:
-                print(f"[VisionEngine] Không mở được Camera ID: {self.cam_id}")
+            print(f"[VisionEngine] 🔄 Đang mở Camera ID: {self.cam_id}...")
+
+            # Thử mở bằng DirectShow (Windows) trước, nếu lỗi thử CAP_ANY
+            cap = None
+            if sys.platform == "win32":
+                try:
+                    cap = cv2.VideoCapture(self.cam_id, cv2.CAP_DSHOW)
+                except Exception:
+                    cap = None
+
+            if not cap or not cap.isOpened():
+                try:
+                    cap = cv2.VideoCapture(self.cam_id, cv2.CAP_ANY)
+                except Exception:
+                    cap = None
+
+            # Fallback về Camera 0 nếu Camera ID được chọn (ví dụ 1) không khả dụng
+            if (not cap or not cap.isOpened()) and self.cam_id != 0:
+                print(f"[VisionEngine] ⚠️ Không mở được Camera {self.cam_id}, tự động chuyển sang Camera 0...")
+                self.cam_id = 0
+                if sys.platform == "win32":
+                    try:
+                        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                    except Exception:
+                        cap = None
+                if not cap or not cap.isOpened():
+                    try:
+                        cap = cv2.VideoCapture(0, cv2.CAP_ANY)
+                    except Exception:
+                        cap = None
+
+            if not cap or not cap.isOpened():
+                print(f"[VisionEngine] ❌ Không thể mở Camera ID: {self.cam_id}!")
+                self.placeholder_jpeg = self._create_placeholder_jpeg(f"Camera ID {self.cam_id} không thể mở!")
                 return False
 
-    def _camera_worker(self):
+            # Cài đặt kích thước và phần cứng tối ưu
+            try:
+                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+            except Exception:
+                pass
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+            # Thử đọc frame khởi động (warmup)
+            ret = False
+            warm_frame = None
+            for _ in range(5):
+                ret, warm_frame = cap.read()
+                if ret and warm_frame is not None:
+                    break
+                time.sleep(0.05)
+
+            if not ret or warm_frame is None:
+                print(f"[VisionEngine] ⚠️ Mở được camera {self.cam_id} nhưng chưa đọc được ảnh.")
+            else:
+                print(f"[VisionEngine] ✅ Camera {self.cam_id} sẵn sàng! Độ sáng: {warm_frame.mean():.1f}")
+                self.raw_frame = warm_frame.copy()
+                _, b1 = cv2.imencode('.jpg', warm_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                self.latest_raw_jpeg = b1.tobytes()
+                self.latest_yolo_jpeg = self.latest_raw_jpeg
+                self.raw_frame_id += 1
+                self.yolo_frame_id += 1
+                self.frame_id += 1
+
+            self.cap = cap
+            self.running = True
+
+            # Khởi động riêng biệt 2 thread: Capture (30 FPS) và AI (asynchronous)
+            self.capture_thread = threading.Thread(target=self._capture_worker, daemon=True)
+            self.capture_thread.start()
+            self.ai_thread = threading.Thread(target=self._ai_worker, daemon=True)
+            self.ai_thread.start()
+
+            # Cập nhật cờ is_current trong danh sách
+            for c in self.available_cameras:
+                c["is_current"] = (c["id"] == self.cam_id)
+
+            return True
+
+    def _capture_worker(self):
+        """Vòng lặp đọc frame từ Camera liên tục ở tốc độ cao (30 FPS), không bị block bởi AI."""
         while self.running and self.cap and self.cap.isOpened():
             ret, frame = self.cap.read()
             if not ret or frame is None:
-                time.sleep(0.03)
+                time.sleep(0.015)
                 continue
 
-            with self.lock:
-                self.raw_frame = frame.copy()
-
-            # Nếu ở chế độ phân loại hoặc auto sort: chạy YOLO inference
-            if self.stream_mode == "yolo" and self.yolo_model is not None:
-                ann_frame, cubes = self._process_yolo(frame)
+            # Nén RAW JPEG siêu tốc
+            ret_raw, buf_raw = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            if ret_raw:
+                raw_bytes = buf_raw.tobytes()
                 with self.lock:
-                    self.annotated_frame = ann_frame
-                    self.detected_cubes = cubes
-                    display_frame = ann_frame
-            else:
-                with self.lock:
-                    self.detected_cubes = []
-                    display_frame = frame
+                    self.raw_frame = frame
+                    self.latest_raw_jpeg = raw_bytes
+                    self.raw_frame_id += 1
+                    self.frame_id = self.raw_frame_id
 
-            # Nén sang JPEG để stream
-            ret_encode, buf = cv2.imencode('.jpg', display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            if ret_encode:
-                with self.lock:
-                    self.latest_jpeg = buf.tobytes()
+            time.sleep(0.01)
 
-            time.sleep(0.02) # ~40-50 FPS
+    def _ai_worker(self):
+        """Vòng lặp xử lý YOLO nhận diện vật thể trong nền độc lập, không làm chậm camera gốc."""
+        last_processed_raw_id = -1
+        while self.running:
+            cur_raw_id = self.raw_frame_id
+            frame_to_process = None
+            if cur_raw_id != last_processed_raw_id:
+                with self.lock:
+                    if self.raw_frame is not None:
+                        frame_to_process = self.raw_frame.copy()
+                last_processed_raw_id = cur_raw_id
+
+            if frame_to_process is not None and self.yolo_model is not None:
+                try:
+                    ann_frame, cubes = self._process_yolo(frame_to_process)
+                    ret_yolo, buf_yolo = cv2.imencode('.jpg', ann_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                    if ret_yolo:
+                        with self.lock:
+                            self.latest_yolo_jpeg = buf_yolo.tobytes()
+                            self.yolo_frame_id += 1
+                            self.detected_cubes = cubes
+                except Exception:
+                    time.sleep(0.03)
+            elif frame_to_process is not None:
+                with self.lock:
+                    self.latest_yolo_jpeg = self.latest_raw_jpeg
+                    self.yolo_frame_id = self.raw_frame_id
+
+            time.sleep(0.02)
 
     def _process_yolo(self, frame):
         h, w = frame.shape[:2]
@@ -204,7 +387,7 @@ class WebVisionEngine:
 
                     color = COLOR_MAP.get(cls_name, (0, 255, 255))
 
-                    # Vẽ Bounding Box
+                    # Vẽ Bounding Box & tâm
                     cv2.rectangle(display, (x1, y1), (x2, y2), color, 2)
                     cv2.circle(display, (int(u_center), int(v_center)), 4, (0, 0, 255), -1)
 
@@ -228,7 +411,7 @@ class WebVisionEngine:
                         "dobot_y": round(dobot_y, 1) if dobot_y else None,
                         "bbox": [int(x1), int(y1), int(x2), int(y2)]
                     })
-        except Exception as e:
+        except Exception:
             pass
 
         return display, cubes
@@ -244,20 +427,35 @@ class WebVisionEngine:
         y = float(dobot_pt[1] / dobot_pt[2])
         return x, y
 
-    def get_jpeg(self):
+    def get_jpeg_with_id(self, mode="raw"):
+        """Trả về (frame_id, jpeg_bytes) theo chế độ yêu cầu (raw hoặc yolo)."""
         with self.lock:
-            return self.latest_jpeg
+            if mode == "yolo":
+                jpeg = self.latest_yolo_jpeg or self.latest_raw_jpeg or self.placeholder_jpeg
+                return self.yolo_frame_id, jpeg
+            else:
+                jpeg = self.latest_raw_jpeg or self.placeholder_jpeg
+                return self.raw_frame_id, jpeg
+
+    def get_jpeg(self, mode="raw"):
+        _, jpeg = self.get_jpeg_with_id(mode)
+        return jpeg
 
     def get_raw_frame(self):
         with self.lock:
             return self.raw_frame.copy() if self.raw_frame is not None else None
+
+    def get_camera_devices(self):
+        """Trả về danh sách camera khả dụng mà không làm gián đoạn luồng đang chạy."""
+        with self.lock:
+            return list(self.available_cameras)
 
     def get_status(self):
         with self.lock:
             return {
                 "camera_online": self.running and self.cap is not None and self.cap.isOpened(),
                 "camera_id": self.cam_id,
-                "stream_mode": self.stream_mode,
+                "available_cameras": list(self.available_cameras),
                 "active_model": self.active_model_name,
                 "homography_loaded": self.homography_matrix is not None,
                 "auto_sort_active": self.auto_sort_active,
@@ -278,7 +476,6 @@ class WebVisionEngine:
         def _worker():
             self.is_picking = True
             try:
-                # Điểm thả
                 target_tray = DROP_TARGETS_BY_COLOR.get(cube_name, DEFAULT_DROP_TARGET)
                 drop_x = target_tray["x"]
                 drop_y = target_tray["y"]
@@ -337,13 +534,11 @@ class WebVisionEngine:
         print("[VisionEngine] BẮT ĐẦU CHẾ ĐỘ TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)...")
         while self.auto_sort_active:
             if not self.is_picking and self.robot and self.robot.connected:
-                # Tìm một khối màu hợp lệ đang nằm trên mặt phẳng
                 target_cube = None
                 with self.lock:
                     for c in self.detected_cubes:
                         coord = c.get("dobot_coord", {})
                         if coord.get("x") is not None and coord.get("y") is not None:
-                            # Kiểm tra bán kính làm việc an toàn
                             r = (coord["x"]**2 + coord["y"]**2)**0.5
                             if 150 <= r <= 320:
                                 target_cube = c

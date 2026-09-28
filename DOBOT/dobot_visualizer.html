@@ -1094,13 +1094,14 @@
         </nav>
 
         <div class="nav-system-status">
-            <div id="nav-robot-badge" class="sys-badge offline">
+            <div id="nav-robot-badge" class="sys-badge offline" style="display: flex; align-items: center; gap: 6px;">
                 <span class="sys-dot"></span>
-                <span id="nav-robot-text">Robot: Đang dò...</span>
+                <span id="nav-robot-text">Robot: Chưa kết nối</span>
+                <button id="btn-toggle-robot" onclick="handleToggleRobotConnect()" style="background: #2563eb; color: #fff; border: 1px solid #38bdf8; border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s;">🔌 Kết Nối</button>
             </div>
             <div id="nav-cam-badge" class="sys-badge offline">
                 <span class="sys-dot"></span>
-                <span id="nav-cam-text">Camera: Offline</span>
+                <span id="nav-cam-text">Camera: Sẵn sàng</span>
             </div>
         </div>
     </header>
@@ -1454,36 +1455,79 @@
     ====================================================================== -->
     <main id="view-data-collection" class="studio-view">
         <div class="studio-content-grid">
-            <!-- Left: Video feed & Actions -->
-            <div class="studio-card">
-                <div class="card-header-bar">
-                    <div class="card-title-text">
-                        <span>📸 Luồng Camera Trực Tiếp</span>
+            <!-- Left: Native Camera Tool Control & Guide -->
+            <div class="studio-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div class="card-header-bar">
+                        <div class="card-title-text">
+                            <span>📸 Công Cụ Thu Thập Dữ Liệu Camera (capture_from_camera.py)</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span id="badge-tool-capture" class="sys-badge offline" style="font-size: 11px;">Chưa mở công cụ</span>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <select id="sel-camera-device" onchange="changeCameraDevice(this.value)" style="width: auto; margin-top: 0; padding: 4px 8px; font-size: 11px;">
-                            <option value="0">Camera 0</option>
-                        </select>
-                        <button onclick="fetchCameraDevices()" class="btn-config-gear" title="Tìm lại camera">🔄</button>
+
+                    <!-- Status Banner khi công cụ đang chạy -->
+                    <div id="banner-tool-capture-running" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">🔴</span>
+                            <div>
+                                <div style="font-size: 12.5px; font-weight: 700; color: #f87171;">CỬA SỔ CAMERA ĐANG MỞ TRÊN MÀN HÌNH MÁY TÍNH</div>
+                                <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">Nhấn phím <b>'Q'</b> trên cửa sổ Camera hoặc bấm nút <b>Dừng</b> bên dưới để hoàn tất & giải phóng camera.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hướng dẫn sử dụng phím tắt -->
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+                        <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span>📖</span> <span>HƯỚNG DẪN ĐIỀU KHIỂN CÔNG CỤ (capture_from_camera)</span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11.5px;">
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #ef4444; font-weight: 700; margin-bottom: 2px;">🔴 Phím [R] : LƯU LIÊN TỤC</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Bấm 1 lần để bật lưu liên tục, di chuyển vật thể ra các góc, xoay lật. Bấm lại để dừng.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #38bdf8; font-weight: 700; margin-bottom: 2px;">📸 Phím [SPACE] : CHỤP 1 ẢNH</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Chụp ngay 1 ảnh đơn lẻ tại vị trí hiện tại và lưu vào nhãn đang chọn.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #facc15; font-weight: 700; margin-bottom: 2px;">🔄 Phím [S] / [TAB] : ĐỔI CAM</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Đổi nhanh giữa Camera Laptop tích hợp và Camera USB ngoài.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #a855f7; font-weight: 700; margin-bottom: 2px;">❌ Phím [Q] / [ESC] : THOÁT</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Đóng cửa sổ camera, giải phóng tài nguyên để dùng các tính năng khác.</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 10px; font-size: 11px; color: #64748b; line-height: 1.4; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 10px;">
+                            💡 <i>Ngoài các phím tắt bàn phím, bạn có thể <b>nhấp chuột trực tiếp</b> lên 4 nút bấm hiển thị ngay trên màn hình Camera OpenCV!</i>
+                        </div>
+                    </div>
+
+                    <!-- Thông tin nhãn đang chọn -->
+                    <div style="background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 11px; color: #94a3b8;">Nhãn chụp ảnh mục tiêu:</div>
+                            <div id="txt-current-capture-class" style="font-size: 14px; font-weight: 800; color: #38bdf8;">cube_red</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 11px; color: #94a3b8;">Thư mục lưu dataset:</div>
+                            <div style="font-size: 11.5px; font-family: monospace; color: #cbd5e1;">dataset/raw/<span id="txt-current-capture-folder">cube_red</span>/</div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="video-box-container">
-                    <img id="img-data-stream" class="video-stream-img" src="/video_feed?mode=raw" alt="Camera Stream">
-                    <svg class="video-crosshair" viewBox="0 0 40 40">
-                        <circle cx="20" cy="20" r="16" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 2"/>
-                        <line x1="20" y1="0" x2="20" y2="40" stroke="#38bdf8" stroke-width="1.5"/>
-                        <line x1="0" y1="20" x2="40" y2="20" stroke="#38bdf8" stroke-width="1.5"/>
-                    </svg>
-                    <div id="data-flash-overlay" class="video-flash-overlay"></div>
-                </div>
-
-                <div class="capture-action-row">
-                    <button class="btn-capture-big btn-capture-snap" onclick="triggerSingleCapture()">
-                        <span>📸</span> <span>CHỤP 1 ẢNH (SPACE)</span>
+                <!-- Nút Khởi Chạy / Dừng Công Cụ -->
+                <div>
+                    <button id="btn-launch-capture" class="btn-capture-big" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: 1px solid #38bdf8; box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); width: 100%; padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer;" onclick="handleLaunchCaptureTool()">
+                        <span>🚀</span> <span>MỞ CỬA SỔ THU THẬP DỮ LIỆU (NATIVE TOOL)</span>
                     </button>
-                    <button id="btn-toggle-record" class="btn-capture-big btn-capture-record" onclick="toggleContinuousRecording()">
-                        <span>🔴</span> <span>LƯU LIÊN TỤC (R)</span>
+                    <button id="btn-stop-capture" class="btn-capture-big" style="display: none; background: linear-gradient(135deg, #dc2626, #b91c1c); border: 1px solid #f87171; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); width: 100%; padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer;" onclick="handleStopTool('capture')">
+                        <span>⏹️</span> <span>DỪNG / ĐÓNG CỬA SỔ CAMERA (GIẢI PHÓNG CAMERA)</span>
                     </button>
                 </div>
             </div>
@@ -1619,25 +1663,68 @@
     ====================================================================== -->
     <main id="view-auto-sort" class="studio-view">
         <div class="studio-content-grid">
-            <!-- Left: Annotated Video Feed with Click-to-Pick -->
-            <div class="studio-card">
-                <div class="card-header-bar">
-                    <div class="card-title-text">
-                        <span>🦾 Nhận Diện AI & Nhấp Chuột Để Gắp (Click-to-Pick)</span>
+            <!-- Left: Native Auto Sort Tool Control & Guide -->
+            <div class="studio-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div class="card-header-bar">
+                        <div class="card-title-text">
+                            <span>🦾 Tự Động Phân Loại Màu Bằng AI (dobot_auto_sort.py)</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span id="badge-tool-sort" class="sys-badge offline" style="font-size: 11px;">Chưa khởi chạy</span>
+                        </div>
                     </div>
-                    <span style="font-size: 11px; color: #4ade80; font-weight: 700; background: rgba(74, 222, 128, 0.1); padding: 3px 8px; border-radius: 6px;">Live Inference</span>
+
+                    <!-- Status Banner khi Auto Sort đang chạy -->
+                    <div id="banner-tool-sort-running" style="display: none; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 20px;">🟢</span>
+                            <div>
+                                <div style="font-size: 12.5px; font-weight: 700; color: #4ade80;">HỆ THỐNG AI & DOBOT AUTO SORT ĐANG CHẠY TRÊN MÀN HÌNH</div>
+                                <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">Nhấn phím <b>'Q'</b> trên cửa sổ hoặc bấm nút <b>Dừng</b> bên dưới để kết thúc & giải phóng camera.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hướng dẫn điều khiển Auto Sort -->
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+                        <div style="font-size: 12.5px; font-weight: 700; color: #4ade80; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚡</span> <span>HƯỚNG DẪN ĐIỀU KHIỂN AUTO SORT (dobot_auto_sort)</span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11.5px;">
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #38bdf8; font-weight: 700; margin-bottom: 2px;">🖱️ CLICK CHUỘT : GẮP TỨC THÌ</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Nhấp chuột trực tiếp lên khối màu bất kỳ trên màn hình camera, Dobot tự động bay tới gắp!</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #4ade80; font-weight: 700; margin-bottom: 2px;">⚡ Phím [A] : TỰ ĐỘNG HOÀN TOÀN</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Bật chế độ Auto Sorting liên tục. Robot tự động dò tìm và phân loại tất cả khối màu về khay.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #facc15; font-weight: 700; margin-bottom: 2px;">🎯 Phím [SPACE] : GẮP KHỐI ĐẦU TIÊN</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Gắp ngay khối màu đầu tiên mà hệ thống AI nhận diện được trên bàn làm việc.</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 8px 10px;">
+                                <div style="color: #ef4444; font-weight: 700; margin-bottom: 2px;">❌ Phím [Q] : THOÁT & GIẢI PHÓNG</div>
+                                <div style="color: #94a3b8; font-size: 10.5px; line-height: 1.35;">Dừng hệ thống, giải phóng camera để có thể chuyển sang Tab khác sử dụng.</div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 10px; font-size: 11px; color: #64748b; line-height: 1.4; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 10px;">
+                            📍 Tọa độ khay phân loại: <b>X = 49.2 mm, Y = -230.1 mm</b> | Z gắp: <b>-51.7 mm</b> | Chuyển đổi tọa độ: <b>Homography Matrix chuẩn</b>.
+                        </div>
+                    </div>
                 </div>
 
-                <div class="video-box-container" style="cursor: crosshair;" onclick="handleVideoClickToPick(event)" title="Nhấp vào khối màu để Dobot tự động bay tới gắp!">
-                    <img id="img-sort-stream" class="video-stream-img" src="/video_feed?mode=yolo" alt="YOLO Stream">
-                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 8px; font-size: 11px; color: #f1f5f9; pointer-events: none;">
-                        💡 <b>Click-to-Pick:</b> Nhấp chuột trực tiếp lên khối màu để robot gắp!
-                    </div>
-                </div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11.5px; color: #94a3b8;">
-                    <span>Khay thả đích: <b>Khay (X=49.2, Y=-230.1)</b></span>
-                    <span>Tọa độ tính theo: <b>Homography Hand-Eye Matrix</b></span>
+                <!-- Nút Khởi Chạy / Dừng Công Cụ Auto Sort -->
+                <div>
+                    <button id="btn-launch-sort" class="btn-capture-big" style="background: linear-gradient(135deg, #16a34a, #15803d); border: 1px solid #4ade80; box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4); width: 100%; padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer;" onclick="handleLaunchSortTool()">
+                        <span>🚀</span> <span>KHỞI CHẠY TỰ ĐỘNG PHÂN LOẠI (NATIVE AI SORT)</span>
+                    </button>
+                    <button id="btn-stop-sort" class="btn-capture-big" style="display: none; background: linear-gradient(135deg, #dc2626, #b91c1c); border: 1px solid #f87171; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4); width: 100%; padding: 14px; font-size: 14px; font-weight: 800; cursor: pointer;" onclick="handleStopTool('sort')">
+                        <span>⏹️</span> <span>DỪNG AUTO SORT / GIẢI PHÓNG CAMERA</span>
+                    </button>
                 </div>
             </div>
 
@@ -2942,6 +3029,7 @@
                     const navRobotText = document.getElementById('nav-robot-text');
 
                     if (msg.connected && msg.data) {
+                        isRobotConnected = true;
                         badge.className = "status-badge live";
                         badge.style.background = "";
                         badge.style.borderColor = "";
@@ -2950,19 +3038,32 @@
                         
                         if (navRobotBadge) {
                             navRobotBadge.className = "sys-badge online";
-                            navRobotText.innerText = `Robot: ${msg.port} (Online)`;
+                            navRobotText.innerText = `Robot: ${msg.port}`;
+                        }
+                        const btnRobot = document.getElementById('btn-toggle-robot');
+                        if (btnRobot && !isRobotConnecting) {
+                            btnRobot.innerText = "⏹️ Ngắt";
+                            btnRobot.style.background = "#dc2626";
+                            btnRobot.style.borderColor = "#f87171";
                         }
 
                         if (currentMode === "live") {
                             renderRobot(msg.data.j1, msg.data.j2, msg.data.j3, msg.data.j4, msg.data.x, msg.data.y, msg.data.z);
                         }
                     } else {
+                        isRobotConnected = false;
                         badge.className = "status-badge offline";
-                        statusText.innerText = "○ Chưa cắm USB hoặc Robot đang tắt";
+                        statusText.innerText = "○ Chưa kết nối Robot (Bấm nút Kết Nối khi cắm cáp USB)";
 
                         if (navRobotBadge) {
                             navRobotBadge.className = "sys-badge offline";
-                            navRobotText.innerText = "Robot: Offline";
+                            navRobotText.innerText = "Robot: Chưa kết nối";
+                        }
+                        const btnRobot = document.getElementById('btn-toggle-robot');
+                        if (btnRobot && !isRobotConnecting) {
+                            btnRobot.innerText = "🔌 Kết Nối";
+                            btnRobot.style.background = "#2563eb";
+                            btnRobot.style.borderColor = "#38bdf8";
                         }
                     }
 
@@ -3011,6 +3112,69 @@
                     data.value = payload;
                 }
                 ws.send(JSON.stringify(data));
+            }
+        }
+
+        let isRobotConnecting = false;
+        let isRobotConnected = false;
+
+        async function handleToggleRobotConnect() {
+            if (isRobotConnecting) return;
+            const btn = document.getElementById('btn-toggle-robot');
+
+            if (!isRobotConnected) {
+                isRobotConnecting = true;
+                if (btn) btn.innerText = "⏳ Đang dò...";
+                showToast("🔌 Đang dò tìm và kết nối Dobot Magician qua USB...");
+                try {
+                    const res = await fetch('/api/robot/connect', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'}
+                    });
+                    const data = await res.json();
+                    if (data.success && data.connected) {
+                        isRobotConnected = true;
+                        showToast(`✅ ${data.message}`);
+                        if (btn) {
+                            btn.innerText = "⏹️ Ngắt";
+                            btn.style.background = "#dc2626";
+                            btn.style.borderColor = "#f87171";
+                        }
+                    } else {
+                        showToast(`❌ ${data.error || 'Không tìm thấy Dobot'}`);
+                        if (btn) {
+                            btn.innerText = "🔌 Kết Nối";
+                            btn.style.background = "#2563eb";
+                            btn.style.borderColor = "#38bdf8";
+                        }
+                    }
+                } catch(e) {
+                    showToast(`❌ Lỗi kết nối: ${e.message}`);
+                    if (btn) {
+                        btn.innerText = "🔌 Kết Nối";
+                        btn.style.background = "#2563eb";
+                        btn.style.borderColor = "#38bdf8";
+                    }
+                } finally {
+                    isRobotConnecting = false;
+                }
+            } else {
+                isRobotConnecting = true;
+                showToast("🔄 Đang ngắt kết nối Dobot...");
+                try {
+                    await fetch('/api/robot/disconnect', { method: 'POST' });
+                    isRobotConnected = false;
+                    showToast("✅ Đã ngắt kết nối Dobot Magician.");
+                    if (btn) {
+                        btn.innerText = "🔌 Kết Nối";
+                        btn.style.background = "#2563eb";
+                        btn.style.borderColor = "#38bdf8";
+                    }
+                } catch(e) {
+                    showToast(`❌ Lỗi: ${e.message}`);
+                } finally {
+                    isRobotConnecting = false;
+                }
             }
         }
 
@@ -3264,6 +3428,223 @@
         let visionPollTimer = null;
         let knownClasses = ['cube_red', 'cube_green', 'cube_blue', 'cube_yellow'];
 
+        // =====================================================================
+        // VIDEO WEBSOCKET MANAGER - thay thế MJPEG <img src> không ổn định
+        // =====================================================================
+        const videoStreams = {};
+
+        function startVideoStream(canvasId, mode) {
+            // 1. Nếu stream này đã đang chạy đúng canvas và đúng mode thì giữ nguyên
+            const existing = videoStreams[canvasId];
+            if (existing && existing.mode === mode && existing.ws && 
+                (existing.ws.readyState === WebSocket.OPEN || existing.ws.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+
+            // 2. Dừng stream cũ một cách an toàn
+            stopVideoStream(canvasId);
+
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+            const wsUrl = `${protocol}://${location.host}/ws/video?mode=${mode}`;
+            const ws = new WebSocket(wsUrl);
+            ws.binaryType = 'arraybuffer';
+
+            const streamEntry = { ws, mode, isClosedByUser: false };
+            videoStreams[canvasId] = streamEntry;
+
+            ws.onopen = () => {
+                console.log(`[VideoWS] ${canvasId} connected (mode=${mode})`);
+            };
+
+            ws.onmessage = (event) => {
+                if (!(event.data instanceof ArrayBuffer) || event.data.byteLength === 0) return;
+                const blob = new Blob([event.data], { type: 'image/jpeg' });
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.naturalWidth || canvas.clientWidth;
+                    canvas.height = img.naturalHeight || canvas.clientHeight;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            };
+
+            ws.onerror = (e) => {
+                if (!streamEntry.isClosedByUser) {
+                    console.warn('[VideoWS] error', e);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log(`[VideoWS] ${canvasId} closed (intentional=${streamEntry.isClosedByUser})`);
+                if (videoStreams[canvasId] === streamEntry) {
+                    videoStreams[canvasId] = null;
+                }
+                // Chỉ tự động reconnect nếu không phải do người dùng chuyển tab (chủ động đóng)
+                if (!streamEntry.isClosedByUser) {
+                    setTimeout(() => {
+                        const isCurrentTab = (canvasId === 'img-data-stream' && currentStudioTab === 'data') ||
+                                             (canvasId === 'img-sort-stream' && currentStudioTab === 'sort');
+                        if (isCurrentTab && !videoStreams[canvasId]) {
+                            startVideoStream(canvasId, mode);
+                        }
+                    }, 2000);
+                }
+            };
+        }
+
+        function stopVideoStream(canvasId) {
+            const entry = videoStreams[canvasId];
+            if (entry) {
+                entry.isClosedByUser = true;
+                videoStreams[canvasId] = null;
+                if (entry.ws) {
+                    // Nếu đang CONNECTING, đợi kết nối xong mới đóng để trình duyệt không báo lỗi
+                    if (entry.ws.readyState === WebSocket.CONNECTING) {
+                        entry.ws.onopen = () => {
+                            try { entry.ws.close(); } catch(e) {}
+                        };
+                    } else if (entry.ws.readyState === WebSocket.OPEN) {
+                        try { entry.ws.close(); } catch(e) {}
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // BỘ QUẢN LÝ TIẾN TRÌNH CÔNG CỤ NATIVE (CAPTURE & AUTO SORT)
+        // =====================================================================
+        let currentActiveTool = null;
+        let toolStatusTimer = null;
+
+        async function checkToolStatus() {
+            try {
+                const res = await fetch('/api/tool/status');
+                const data = await res.json();
+                const wasRunning = (currentActiveTool !== null);
+                const isRunning = data.is_running;
+                currentActiveTool = isRunning ? data.active_tool : null;
+                updateToolUiState(isRunning, data.active_tool);
+
+                // Nếu vừa mới đóng công cụ capture, tự động tải lại thống kê ảnh đã chụp
+                if (wasRunning && !isRunning) {
+                    fetchDatasetStats();
+                }
+            } catch(e) {}
+        }
+
+        function updateToolUiState(isRunning, activeTool) {
+            // Tab 2 (Capture)
+            const badgeCap = document.getElementById('badge-tool-capture');
+            const bannerCap = document.getElementById('banner-tool-capture-running');
+            const btnLaunchCap = document.getElementById('btn-launch-capture');
+            const btnStopCap = document.getElementById('btn-stop-capture');
+
+            // Tab 4 (Sort)
+            const badgeSort = document.getElementById('badge-tool-sort');
+            const bannerSort = document.getElementById('banner-tool-sort-running');
+            const btnLaunchSort = document.getElementById('btn-launch-sort');
+            const btnStopSort = document.getElementById('btn-stop-sort');
+
+            // Cập nhật Tab 2
+            if (isRunning && activeTool === 'capture') {
+                if (badgeCap) { badgeCap.className = 'sys-badge online'; badgeCap.innerText = '🔴 Đang mở cửa sổ Camera'; }
+                if (bannerCap) bannerCap.style.display = 'block';
+                if (btnLaunchCap) btnLaunchCap.style.display = 'none';
+                if (btnStopCap) btnStopCap.style.display = 'flex';
+            } else {
+                if (badgeCap) { badgeCap.className = 'sys-badge offline'; badgeCap.innerText = 'Chưa mở công cụ'; }
+                if (bannerCap) bannerCap.style.display = 'none';
+                if (btnLaunchCap) btnLaunchCap.style.display = 'flex';
+                if (btnStopCap) btnStopCap.style.display = 'none';
+            }
+
+            // Cập nhật Tab 4
+            if (isRunning && activeTool === 'sort') {
+                if (badgeSort) { badgeSort.className = 'sys-badge online'; badgeSort.innerText = '🟢 AI Auto Sort Đang Chạy'; }
+                if (bannerSort) bannerSort.style.display = 'block';
+                if (btnLaunchSort) btnLaunchSort.style.display = 'none';
+                if (btnStopSort) btnStopSort.style.display = 'flex';
+            } else {
+                if (badgeSort) { badgeSort.className = 'sys-badge offline'; badgeSort.innerText = 'Chưa khởi chạy'; }
+                if (bannerSort) bannerSort.style.display = 'none';
+                if (btnLaunchSort) btnLaunchSort.style.display = 'flex';
+                if (btnStopSort) btnStopSort.style.display = 'none';
+            }
+        }
+
+        async function handleLaunchCaptureTool() {
+            if (currentActiveTool && currentActiveTool !== 'capture') {
+                showToast("⚠️ Vui lòng dừng công cụ ở Tab kia trước để giải phóng Camera!");
+                return;
+            }
+            showToast("🔄 Đang mở cửa sổ capture_from_camera trên máy tính...");
+            try {
+                const res = await fetch('/api/tool/launch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ tool: 'capture', class_name: selectedDatasetClass })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ Đã mở cửa sổ Camera! Nhấn phím 'Q' trên cửa sổ để đóng.");
+                    checkToolStatus();
+                } else {
+                    showToast(`❌ ${data.error}`);
+                }
+            } catch(err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
+        async function handleLaunchSortTool() {
+            if (currentActiveTool && currentActiveTool !== 'sort') {
+                showToast("⚠️ Vui lòng dừng công cụ ở Tab kia trước để giải phóng Camera!");
+                return;
+            }
+            showToast("🔄 Đang khởi chạy dobot_auto_sort trên máy tính...");
+            const modelSel = document.getElementById('sel-vision-model');
+            const modelName = modelSel ? modelSel.value : '';
+            try {
+                const res = await fetch('/api/tool/launch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ tool: 'sort', model: modelName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ Đã khởi chạy Auto Sort! Nhấn phím 'Q' trên cửa sổ để dừng.");
+                    checkToolStatus();
+                } else {
+                    showToast(`❌ ${data.error}`);
+                }
+            } catch(err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
+        async function handleStopTool(toolName) {
+            showToast("🔄 Đang đóng công cụ & giải phóng camera...");
+            try {
+                const res = await fetch('/api/tool/stop', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ tool: toolName })
+                });
+                const data = await res.json();
+                showToast("✅ Đã đóng công cụ & Camera đã được giải phóng!");
+                checkToolStatus();
+                fetchDatasetStats();
+            } catch(err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
         // --- 1. CHUYỂN TAB WEB STUDIO ---
         function switchStudioTab(tabId) {
             currentStudioTab = tabId;
@@ -3286,47 +3667,55 @@
                 if (el) el.classList.toggle('active', id === tabId);
             });
 
-            // Tác vụ kích hoạt riêng từng tab
-            if (tabId === '3d') {
-                // Đang ở 3D Twin
-            } else if (tabId === 'data') {
-                fetchCameraDevices();
+            // Quản lý dữ liệu khi chuyển tab
+            if (tabId === 'data') {
                 fetchDatasetStats();
-                const img = document.getElementById('img-data-stream');
-                if (img) img.src = `/video_feed?mode=raw&t=${Date.now()}`;
+                checkToolStatus();
             } else if (tabId === 'train') {
                 fetchTrainStatus();
             } else if (tabId === 'sort') {
                 fetchVisionModels();
-                fetchVisionStatus();
-                const img = document.getElementById('img-sort-stream');
-                if (img) img.src = `/video_feed?mode=yolo&t=${Date.now()}`;
-                startVisionPolling();
-            }
-
-            if (tabId !== 'sort') {
-                stopVisionPolling();
+                checkToolStatus();
             }
         }
 
-        // --- 2. THU THẬP DỮ LIỆU (DATA COLLECTION) ---
-        async function fetchCameraDevices() {
+        // --- 2. THU THẬP DỮ LIỆU & CAMERA ---
+        function handleStreamError(elem) {
+            // Legacy no-op: WebSocket tự retry trong startVideoStream.onclose
+        }
+
+        async function fetchCameraDevices(forceRefresh = false) {
             try {
-                const res = await fetch('/api/camera');
+                let res;
+                if (forceRefresh) {
+                    showToast("🔄 Đang quét lại các cổng Camera...");
+                    res = await fetch('/api/camera', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refresh: true })
+                    });
+                } else {
+                    res = await fetch('/api/camera');
+                }
                 const data = await res.json();
-                const sel = document.getElementById('sel-camera-device');
+                const sel1 = document.getElementById('sel-camera-device');
+                const sel2 = document.getElementById('sel-camera-device-sort');
                 const navCamBadge = document.getElementById('nav-cam-badge');
                 const navCamText = document.getElementById('nav-cam-text');
 
-                if (data.status === 'ok') {
-                    if (sel && data.available_cameras) {
-                        sel.innerHTML = data.available_cameras.map(cam => 
-                            `<option value="${cam.id}" ${cam.is_current ? 'selected' : ''}>${cam.name}</option>`
-                        ).join('');
-                    }
+                if (data.status === 'ok' && data.available_cameras) {
+                    const optionsHtml = data.available_cameras.map(cam => 
+                        `<option value="${cam.id}" ${cam.is_current ? 'selected' : ''}>${cam.name}</option>`
+                    ).join('');
+
+                    if (sel1) sel1.innerHTML = optionsHtml;
+                    if (sel2) sel2.innerHTML = optionsHtml;
+
                     if (navCamBadge) {
+                        const isExt = (data.current_cam > 0);
+                        const label = isExt ? `Camera ngoài (ID ${data.current_cam}) ⭐` : `Camera máy tính (ID ${data.current_cam})`;
                         navCamBadge.className = data.is_opened ? 'sys-badge online' : 'sys-badge offline';
-                        navCamText.innerText = data.is_opened ? `Camera: Đang mở (ID ${data.current_cam})` : 'Camera: Không mở được';
+                        navCamText.innerText = data.is_opened ? `Camera: ${label}` : 'Camera: Không mở được';
                     }
                 }
             } catch (err) {
@@ -3336,22 +3725,24 @@
 
         async function changeCameraDevice(camId) {
             try {
-                showToast(`Đang chuyển sang Camera ${camId}...`);
+                showToast(`🔄 Đang chuyển sang Camera ID: ${camId}...`);
                 const res = await fetch('/api/camera', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cam_id: parseInt(camId) })
                 });
                 const data = await res.json();
-                if (data.status === 'ok') {
-                    showToast(`✅ Đã đổi sang Camera ${camId}`);
-                    const s1 = document.getElementById('img-data-stream');
-                    const s2 = document.getElementById('img-sort-stream');
-                    if (s1) s1.src = `/video_feed?mode=raw&t=${Date.now()}`;
-                    if (s2) s2.src = `/video_feed?mode=yolo&t=${Date.now()}`;
-                    fetchCameraDevices();
+                if (data.status === 'ok' && data.success) {
+                    showToast(`✅ Đã chuyển sang Camera ID ${camId}`);
+                    // Khởi động lại stream cho tab đang active
+                    if (currentStudioTab === 'data') {
+                        startVideoStream('img-data-stream', 'raw');
+                    } else if (currentStudioTab === 'sort') {
+                        startVideoStream('img-sort-stream', 'yolo');
+                    }
+                    fetchCameraDevices(false);
                 } else {
-                    showToast(`❌ Không thể mở Camera ${camId}`);
+                    showToast(`❌ Không thể mở Camera ID ${camId}`);
                 }
             } catch (err) {
                 showToast(`❌ Lỗi kết nối camera: ${err.message}`);
@@ -3403,6 +3794,10 @@
             document.querySelectorAll('.class-pill').forEach(pill => {
                 pill.classList.toggle('active', pill.innerText.includes(cls));
             });
+            const lblClass = document.getElementById('txt-current-capture-class');
+            const lblFolder = document.getElementById('txt-current-capture-folder');
+            if (lblClass) lblClass.innerText = cls;
+            if (lblFolder) lblFolder.innerText = cls;
             showToast(`🏷️ Đã chọn nhãn: ${cls}`);
         }
 
@@ -3899,6 +4294,7 @@
         updateTargetMarker();
         switchStudioTab('3d');
         fetchCameraDevices();
+        setInterval(checkToolStatus, 1500);
         animate();
     </script>
 </body>
