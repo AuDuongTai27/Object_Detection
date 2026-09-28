@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dobot Magician 3D Cartesian & Joint Twin</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; background: #14171d; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; }
+        #panel {
+            position: absolute; top: 15px; left: 15px; width: 380px;
+            background: rgba(18, 22, 31, 0.94); backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.08);
+            font-size: 13px; z-index: 10;
+            display: flex; flex-direction: column;
+            max-height: calc(100vh - 30px);
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .panel-header {
+            padding: 12px 14px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(13, 16, 23, 0.55);
+            flex-shrink: 0;
+        }
+        .panel-title {
+            font-size: 13.5px; font-weight: 800; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .btn-config-gear {
+            background: #232731; border: 1px solid #444; color: #adb5bd;
+            border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-config-gear:hover {
+            background: #339af0; color: #fff; border-color: #339af0;
+        }
+        
+        .status-badge {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 5px 10px; border-radius: 20px; font-weight: 600; font-size: 11.5px;
+            background: #2b303c; border: 1px solid #444;
+        }
+        .status-badge.live { background: rgba(46, 213, 115, 0.18); border-color: #2ed573; color: #2ed573; }
+        .status-badge.offline { background: rgba(255, 71, 87, 0.18); border-color: #ff4757; color: #ff4757; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+        .mode-toggle {
+            display: flex; background: #1a1e27; border-radius: 8px; padding: 2px;
+        }
+        .mode-btn {
+            flex: 1; padding: 6px; text-align: center; border: none; background: transparent;
+            color: #888; font-weight: 600; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 11.5px;
+        }
+        .mode-btn.active { background: #339af0; color: #fff; }
+
+        .nav-tabs {
+            display: flex; background: rgba(0, 0, 0, 0.35); border-radius: 8px;
+            padding: 3px; margin-top: 8px; gap: 3px;
+        }
+        .nav-tab {
+            flex: 1; padding: 6px 4px; text-align: center; border: none; background: transparent;
+            color: #94a3b8; font-weight: 600; font-size: 11px; border-radius: 6px;
+            cursor: pointer; transition: 0.15s; display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .nav-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+        .nav-tab.active {
+            background: #1c7ed6; color: #fff; box-shadow: 0 2px 6px rgba(28, 126, 214, 0.4);
+        }
+
+        .panel-body {
+            padding: 12px 14px;
+            overflow-y: auto;
+            max-height: calc(100vh - 220px);
+        }
+        .panel-body::-webkit-scrollbar { width: 5px; }
+        .panel-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+
+        .panel-footer {
+            padding: 10px 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(13, 16, 23, 0.7);
+            display: flex; gap: 6px;
+            flex-shrink: 0;
+        }
+        .btn-footer {
+            flex: 1; padding: 7px 5px; border-radius: 8px; font-weight: 700;
+            font-size: 11px; cursor: pointer; transition: 0.2s; border: 1px solid #444;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            white-space: nowrap;
+        }
+        .btn-clear-alarm {
+            background: #2b303c; color: #ff8787; border-color: rgba(255, 107, 107, 0.4);
+        }
+        .btn-clear-alarm:hover {
+            background: #e03131; color: #fff; border-color: #ff6b6b;
+        }
+        .btn-home {
+            background: #2b303c; color: #74c0fc; border-color: rgba(116, 192, 252, 0.4);
+        }
+        .btn-home:hover {
+            background: #1864ab; color: #fff; border-color: #339af0;
+        }
+        .btn-suction-toggle {
+            background: #2b303c; color: #e9ecef;
+        }
+        .btn-suction-toggle:hover {
+            background: #3a4254; color: #fff;
+        }
+        .btn-suction-toggle.active-suction {
+            background: #ff922b; color: #000; border-color: #ff922b;
+            box-shadow: 0 0 10px rgba(255, 146, 43, 0.4);
+        }
+
+        .sub-toggle {
+            display: flex; background: rgba(0, 0, 0, 0.35); border-radius: 6px;
+            padding: 2px; margin-bottom: 8px;
+        }
+        .sub-btn {
+            flex: 1; padding: 5px; text-align: center; border: none; background: transparent;
+            color: #94a3b8; font-weight: 600; font-size: 11px; border-radius: 5px; cursor: pointer; transition: 0.15s;
+        }
+        .sub-btn:hover { color: #fff; }
+        .sub-btn.active {
+            background: #2b303c; color: #4dabf7; font-weight: 700;
+        }
+
+        .coord-toggle {
+            display: flex; background: #2b303c; border-radius: 6px; padding: 2px; margin-bottom: 8px;
+        }
+        .coord-btn {
+            flex: 1; padding: 5px; text-align: center; border: none; background: transparent;
+            color: #bbb; font-weight: 600; font-size: 11px; border-radius: 5px; cursor: pointer;
+        }
+        .coord-btn.active { background: #ff922b; color: #000; }
+
+        .control-group { margin-bottom: 7px; }
+        .control-group label { display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; font-size: 12px; }
+        input[type=range] { width: 100%; accent-color: #339af0; cursor: pointer; }
+        select { width: 100%; padding: 6px 8px; border-radius: 6px; background: #2b2f3a; color: #fff; border: 1px solid #444; margin-top: 3px; font-size: 12px; }
+        
+        .jog-section {
+            background: rgba(30, 34, 45, 0.7); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 8px; margin-top: 8px; margin-bottom: 8px;
+        }
+        .step-selector {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+        }
+        .btn-step {
+            padding: 3px 7px; border-radius: 4px; border: 1px solid #495057;
+            background: #232731; color: #adb5bd; font-size: 11px; cursor: pointer; transition: 0.15s;
+        }
+        .btn-step:hover { background: #343a40; color: #fff; }
+        .btn-step.active {
+            background: #2f9e44; color: #fff; border-color: #40c057; font-weight: bold;
+        }
+
+        .jog-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 4px;
+        }
+        .btn-jog {
+            padding: 8px 0; border: 1px solid #495057; border-radius: 6px; background: #2b303c;
+            color: #fff; font-weight: bold; cursor: pointer; font-size: 11.5px; text-align: center; transition: 0.15s;
+        }
+        .btn-jog:hover { background: #3a4254; border-color: #339af0; }
+        .btn-jog:active { transform: scale(0.96); }
+        .btn-jog-z {
+            background: #1864ab !important; border-color: #339af0 !important; color: #fff !important; font-weight: 800 !important;
+        }
+        .btn-jog-z:hover { background: #1c7ed6 !important; }
+        .btn-jog-stop {
+            background: #c92a2a !important; border-color: #ff6b6b !important; color: #fff !important;
+        }
+        .btn-jog-stop:hover { background: #e03131 !important; }
+
+        .slider-row {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .btn-nudge {
+            width: 24px; height: 24px; border-radius: 4px; border: 1px solid #495057;
+            background: #2b303c; color: #fff; font-size: 13px; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .btn-nudge:hover { background: #3a4254; border-color: #339af0; }
+        .btn-nudge:active { background: #1c7ed6; }
+
+        .control-header-row {
+            display: flex; justify-content: space-between; align-items: center; margin-top: 10px; margin-bottom: 6px;
+        }
+        .btn-sync-pose {
+            padding: 3px 8px; font-size: 11px; background: #232731; border: 1px solid #339af0;
+            color: #4dabf7; border-radius: 4px; cursor: pointer; font-weight: 600; transition: 0.2s;
+        }
+        .btn-sync-pose:hover { background: #339af0; color: #fff; }
+        .badge-val { color: #51cf66; font-weight: bold; font-family: monospace; font-size: 12px; }
+
+        .auto-send-box {
+            display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: #adb5bd;
+        }
+        .auto-send-box input { accent-color: #2f9e44; cursor: pointer; }
+
+        .data-card {
+            background: rgba(0, 0, 0, 0.5); border-radius: 8px; padding: 10px 12px; margin-top: 10px;
+            border-left: 3px solid #ff922b;
+        }
+        .data-row { display: flex; justify-content: space-between; margin: 3px 0; font-family: monospace; font-size: 12.5px; }
+        .val { color: #51cf66; font-weight: bold; }
+        .val-sub { color: #ffd43b; }
+        
+        .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-action {
+            flex: 1; padding: 8px; border: none; border-radius: 6px; font-weight: 600; font-size: 11px;
+            cursor: pointer; transition: 0.2s; background: #2b303c; color: #fff; border: 1px solid #444;
+        }
+        .btn-action:hover { background: #3a4254; }
+        .btn-action.active-suction { background: #ff922b; color: #000; border-color: #ff922b; }
+        .btn-action.btn-send-move { background: #2f9e44; color: #fff; }
+        .btn-action.btn-send-move:hover { background: #2b8a3e; }
+
+        .goto-section {
+            background: rgba(30, 34, 45, 0.85); border: 1px solid rgba(255,146,43,0.35);
+            border-radius: 8px; padding: 10px; margin-top: 10px; margin-bottom: 8px;
+        }
+        .coord-input-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 6px;
+        }
+        .coord-field {
+            display: flex; align-items: center; background: #232731; border: 1px solid #444;
+            border-radius: 6px; overflow: hidden; padding: 2px 6px;
+        }
+        .coord-tag {
+            font-weight: 800; font-size: 11px; width: 18px; text-align: center;
+        }
+        .tag-x { color: #ff6b6b; }
+        .tag-y { color: #51cf66; }
+        .tag-z { color: #339af0; }
+        .tag-r { color: #ffd43b; }
+        .coord-field input {
+            width: 100%; background: transparent; border: none; color: #fff;
+            font-family: monospace; font-size: 13px; font-weight: bold; text-align: right;
+            padding: 3px; outline: none;
+        }
+        .coord-unit {
+            font-size: 10px; color: #888; margin-left: 4px;
+        }
+        .reach-badge {
+            padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-top: 6px; text-align: center;
+            font-weight: 600;
+        }
+        .reach-badge.valid { background: rgba(81, 207, 102, 0.15); color: #51cf66; border: 1px solid rgba(81, 207, 102, 0.3); }
+        .reach-badge.invalid { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; border: 1px solid rgba(255, 107, 107, 0.3); }
+
+        .btn-safe-jump {
+            background: #e8590c !important; color: #fff !important; font-weight: bold !important;
+        }
+        .btn-safe-jump:hover { background: #d9480f !important; }
+        .btn-direct-ptp {
+            background: #2b8a3e !important; color: #fff !important; font-weight: bold !important;
+        }
+        .btn-direct-ptp:hover { background: #237032 !important; }
+
+        .preset-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 4px;
+        }
+        .btn-preset {
+            padding: 5px 6px; background: #2b303c; border: 1px solid #444; border-radius: 4px;
+            color: #ccc; font-size: 11px; cursor: pointer; text-align: center; transition: 0.15s; font-weight: 500;
+        }
+        .btn-preset:hover { background: #343a40; border-color: #ff922b; color: #fff; }
+
+        .theme-select { margin-top: 10px; display: flex; gap: 6px; }
+        .btn-theme {
+            flex: 1; padding: 5px; font-size: 11px; background: #232731; border: 1px solid #444; color: #ccc; border-radius: 5px; cursor: pointer;
+        }
+        .btn-theme.active { background: #1c7ed6; color: #fff; border-color: #339af0; }
+
+        .note { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.4; text-align: center; }
+        
+        #hud-label {
+            position: absolute; color: #fff; font-family: monospace; font-size: 11.5px; font-weight: bold;
+            background: rgba(0, 0, 0, 0.75); border: 1px solid #ff922b; padding: 3px 7px; border-radius: 5px;
+            pointer-events: none; transform: translate(-50%, -130%); z-index: 5; white-space: nowrap;
+        }
+
+        #toast-container {
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999; pointer-events: none;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .toast-msg {
+            background: rgba(20, 24, 33, 0.95); border: 1px solid #51cf66; color: #51cf66;
+            padding: 9px 15px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6); transition: opacity 0.3s, transform 0.3s;
+            font-family: 'Segoe UI', Arial, sans-serif; pointer-events: auto;
+        }
+        .btn-click-pick {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1864ab;
+            border: 1px solid #339af0;
+            border-radius: 6px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 11.5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 6px;
+            transition: all 0.2s ease;
+        }
+        .btn-click-pick:hover {
+            background: #1c7ed6;
+            box-shadow: 0 0 10px rgba(51, 154, 240, 0.4);
+        }
+        .btn-click-pick.active {
+            background: #2b8a3e;
+            border-color: #51cf66;
+            box-shadow: 0 0 12px rgba(81, 207, 102, 0.6);
+            animation: pulse-border 1.5s infinite;
+        }
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 4px rgba(81, 207, 102, 0.4); }
+            50% { box-shadow: 0 0 14px rgba(81, 207, 102, 0.9); }
+            100% { box-shadow: 0 0 4px rgba(81, 207, 102, 0.4); }
+        }
+        .click-pick-options {
+            margin-top: 5px;
+            margin-bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .click-hint {
+            font-size: 10.5px;
+            color: #999;
+            line-height: 1.3;
+        }
+        .canvas-picking {
+            cursor: crosshair !important;
+        }
+        #hover-tooltip {
+            position: fixed;
+            display: none;
+            pointer-events: none;
+            z-index: 9998;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid #339af0;
+            color: #fff;
+            padding: 5px 9px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 11px;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+            transform: translate(14px, 14px);
+        }
+
+        /* 3D GIZMO STYLES */
+        .btn-gizmo {
+            width: 100%;
+            padding: 8px 10px;
+            background: #2b8a3e;
+            border: 1px solid #51cf66;
+            border-radius: 6px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 6px;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 10px rgba(81, 207, 102, 0.4);
+        }
+        .btn-gizmo:hover {
+            background: #237032;
+            box-shadow: 0 0 14px rgba(81, 207, 102, 0.7);
+        }
+        .btn-gizmo.inactive {
+            background: #2b303c;
+            border-color: #555;
+            color: #aaa;
+            box-shadow: none;
+        }
+        .gizmo-legend {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-top: 5px;
+            font-size: 10.5px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+        .gizmo-legend b {
+            color: #fff;
+        }
+        .color-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .dot-green { background: #51cf66; box-shadow: 0 0 6px #51cf66; }
+        .dot-red { background: #ff6b6b; box-shadow: 0 0 6px #ff6b6b; }
+        .dot-blue { background: #339af0; box-shadow: 0 0 6px #339af0; }
+
+        .gizmo-legend-pills {
+            display: flex; gap: 5px; justify-content: space-between; margin-top: 6px; margin-bottom: 6px;
+        }
+        .legend-pill {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 6px; padding: 4px 5px; font-size: 10px; color: #cbd5e1;
+        }
+        .tip-banner {
+            font-size: 10.5px; color: #94a3b8; background: rgba(51, 154, 240, 0.08);
+            border: 1px dashed rgba(51, 154, 240, 0.25); border-radius: 6px; padding: 5px 8px;
+            margin-bottom: 6px; text-align: center; line-height: 1.35;
+        }
+
+        .data-grid-2col {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 6px 0;
+        }
+        .data-metric {
+            background: rgba(0,0,0,0.3); border-radius: 6px; padding: 5px 8px;
+            display: flex; justify-content: space-between; align-items: center;
+            font-family: monospace; font-size: 11.5px; border: 1px solid rgba(255,255,255,0.05);
+        }
+        .data-metric .lbl { color: #94a3b8; font-weight: 600; }
+
+        #beacon-hud {
+            position: absolute;
+            display: none;
+            pointer-events: none;
+            z-index: 10;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid #51cf66;
+            color: #51cf66;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 11px;
+            font-weight: bold;
+            transform: translate(-50%, -150%);
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="TransformControls.js"></script>
+    <script>
+        if (typeof THREE.TransformControls === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"><\/script>');
+        }
+    </script>
+</head>
+<body>
+    <div id="hud-label">TCP: (210, 0, 66)</div>
+    <div id="beacon-hud">🎯 ĐÍCH: (250, 0, 30)</div>
+    <div id="hover-tooltip"></div>
+
+    <div id="panel">
+        <!-- 1. FIXED HEADER -->
+        <div class="panel-header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="panel-title">
+                    <span style="color: #339af0;">⚡ DOBOT</span> <span>MAGICIAN 3D</span>
+                </div>
+                <button class="btn-config-gear" onclick="configureServerUrl()" title="Cấu hình địa chỉ Server (Netlify / Remote)">⚙️</button>
+            </div>
+
+            <!-- Status badge -->
+            <div id="status-badge" class="status-badge offline" style="margin-top: 8px; margin-bottom: 8px;">
+                <span class="status-dot"></span>
+                <span id="status-text">Đang kết nối Server...</span>
+            </div>
+
+            <!-- BANNER CẢNH BÁO ĐÈN ĐỎ KHI CÓ LỖI -->
+            <div id="alarm-banner" style="display: none; background: rgba(224, 49, 49, 0.25); border: 1px solid #ff6b6b; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 11px; color: #ff8787;">
+                <div style="font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
+                    <span>🚨 ROBOT BÁO ĐỘNG ĐỎ (LỖI)</span>
+                    <button onclick="sendAction('clear_alarms')" style="background: #e03131; color: white; border: none; border-radius: 4px; padding: 2px 7px; font-size: 10px; cursor: pointer; font-weight: bold;">Khôi phục</button>
+                </div>
+                <div id="alarm-desc" style="margin-top: 3px; font-size: 10.5px; color: #ffc9c9;"></div>
+            </div>
+
+            <!-- Chế độ Đồng bộ Thật vs Mô phỏng -->
+            <div class="mode-toggle">
+                <button id="btn-mode-live" class="mode-btn active" onclick="setMode('live')">⚡ Đồng bộ thật (Live)</button>
+                <button id="btn-mode-manual" class="mode-btn" onclick="setMode('manual')">🎮 Mô phỏng (Manual)</button>
+            </div>
+
+            <!-- TAB NAVIGATION -->
+            <div class="nav-tabs">
+                <button id="tab-nav-target" class="nav-tab active" onclick="switchTab('target')">🎯 Điểm Đích</button>
+                <button id="tab-nav-jog" class="nav-tab" onclick="switchTab('jog')">🕹️ Điều Khiển</button>
+                <button id="tab-nav-monitor" class="nav-tab" onclick="switchTab('monitor')">📊 Giám Sát</button>
+            </div>
+        </div>
+
+        <!-- 2. SCROLLABLE TAB CONTENT BODY -->
+        <div class="panel-body">
+            <!-- TAB 1: CỤC ĐIỂM ĐÍCH 3D -->
+            <div id="tab-pane-target">
+                <!-- Nút bật tắt Cục Điểm Đích 3D -->
+                <button id="btn-toggle-gizmo" class="btn-gizmo active" onclick="toggleTargetGizmo()">
+                    🎯 CỤC ĐIỂM ĐÍCH 3D: ĐANG BẬT
+                </button>
+
+                <!-- Hướng dẫn mũi tên kéo 3D dạng viên nang compact -->
+                <div class="gizmo-legend-pills">
+                    <span class="legend-pill"><span class="color-dot dot-green"></span><b>Z</b> Lên/Xuống</span>
+                    <span class="legend-pill"><span class="color-dot dot-red"></span><b>X</b> Tới/Lùi</span>
+                    <span class="legend-pill"><span class="color-dot dot-blue"></span><b>Y</b> Trái/Phải</span>
+                </div>
+                <div class="tip-banner">💡 Kéo mũi tên trên 3D hoặc click mặt bàn để chọn điểm.</div>
+
+                <!-- 2x2 Tọa độ Đích -->
+                <div class="coord-input-grid">
+                    <div class="coord-field">
+                        <span class="coord-tag tag-x">X</span>
+                        <input type="number" id="inp-target-x" value="250" step="1" oninput="updateTargetMarker()">
+                        <span class="coord-unit">mm</span>
+                    </div>
+                    <div class="coord-field">
+                        <span class="coord-tag tag-y">Y</span>
+                        <input type="number" id="inp-target-y" value="0" step="1" oninput="updateTargetMarker()">
+                        <span class="coord-unit">mm</span>
+                    </div>
+                    <div class="coord-field">
+                        <span class="coord-tag tag-z">Z</span>
+                        <input type="number" id="inp-target-z" value="30" step="1" oninput="updateTargetMarker()">
+                        <span class="coord-unit">mm</span>
+                    </div>
+                    <div class="coord-field">
+                        <span class="coord-tag tag-r">R</span>
+                        <input type="number" id="inp-target-r" value="0" step="1" oninput="updateTargetMarker()">
+                        <span class="coord-unit">°</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 11px; color: #cbd5e1;">
+                        <input type="checkbox" id="chk-auto-move-drag">
+                        <span>Tự chạy khi thả chuột</span>
+                    </label>
+                    <button class="btn-sync-pose" onclick="copyCurrentPoseToTargetInputs()" title="Lấy tọa độ hiện tại của robot nạp vào đích">📍 Lấy vị trí này</button>
+                </div>
+
+                <div id="target-reachability-badge" class="reach-badge valid" style="margin-top: 8px;">
+                    ✅ Trong tầm với an toàn (Bán kính: 250.0 mm)
+                </div>
+
+                <div class="btn-row" style="margin-top: 8px;">
+                    <button class="btn-action btn-safe-jump" onclick="executeGoToPoint('safe')" title="Nhấc đầu hút lên cao -> Bay ngang -> Hạ xuống đích">📦 Nhấc An Toàn (Safe Jump)</button>
+                    <button class="btn-action btn-direct-ptp" onclick="executeGoToPoint('direct')" title="Bay thẳng trực tiếp tới điểm">🚀 Bay Thẳng (Direct)</button>
+                </div>
+
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 10px; margin-bottom: 5px; font-weight: 600;">⚡ ĐIỂM MẪU NHANH:</div>
+                <div class="preset-grid">
+                    <button class="btn-preset" onclick="setTargetPreset(240, 0, 50, 0)">🏠 Home (240, 0, 50)</button>
+                    <button class="btn-preset" onclick="setTargetPreset(220, 120, 20, 0)">📦 Lấy Hàng (A)</button>
+                    <button class="btn-preset" onclick="setTargetPreset(220, -120, 20, 0)">🎯 Thả Hàng (B)</button>
+                    <button class="btn-preset" onclick="setTargetPreset(250, 0, 0, 0)">🏓 Mặt Bàn (Z=0)</button>
+                </div>
+            </div>
+
+            <!-- TAB 2: ĐIỀU KHIỂN (JOG & THANH TRƯỢT) -->
+            <div id="tab-pane-jog" style="display: none;">
+                <!-- Sub-toggle: Jog Nhanh vs Thanh Trượt -->
+                <div class="sub-toggle">
+                    <button id="subtab-jog" class="sub-btn active" onclick="switchControlSubTab('jog')">🕹️ Phím Jog Nhanh</button>
+                    <button id="subtab-slider" class="sub-btn" onclick="switchControlSubTab('slider')">🎛️ Thanh Trượt</button>
+                </div>
+
+                <!-- 1. JOG VIEW -->
+                <div id="jog-view">
+                    <div class="step-selector">
+                        <span style="font-weight: 600; color: #94a3b8; font-size: 11px;">Bước di chuyển:</span>
+                        <div style="display: flex; gap: 3px;">
+                            <button class="btn-step" data-step="1" onclick="setJogStep(1)">1mm</button>
+                            <button class="btn-step" data-step="5" onclick="setJogStep(5)">5mm</button>
+                            <button class="btn-step active" data-step="10" onclick="setJogStep(10)">10mm</button>
+                            <button class="btn-step" data-step="20" onclick="setJogStep(20)">20mm</button>
+                            <button class="btn-step" data-step="50" onclick="setJogStep(50)">50mm</button>
+                        </div>
+                    </div>
+
+                    <div class="jog-grid">
+                        <button class="btn-jog" onclick="doJog('x', 1)" title="Tiến tới">+X (Tới)</button>
+                        <button class="btn-jog" onclick="doJog('y', 1)" title="Sang trái">+Y (Trái)</button>
+                        <button class="btn-jog btn-jog-z" onclick="doJog('z', 1)" title="Nâng đầu hút lên cao">▲ +Z (LÊN)</button>
+                        <button class="btn-jog" onclick="doJog('x', -1)" title="Lùi lại">-X (Lùi)</button>
+                        <button class="btn-jog" onclick="doJog('y', -1)" title="Sang phải">-Y (Phải)</button>
+                        <button class="btn-jog btn-jog-z" onclick="doJog('z', -1)" title="Hạ đầu hút xuống thấp">▼ -Z (XUỐNG)</button>
+                        <button class="btn-jog" onclick="doJog('r', 1)" title="Xoay ngược chiều kim đồng hồ">↺ R+</button>
+                        <button class="btn-jog" onclick="doJog('r', -1)" title="Xoay theo chiều kim đồng hồ">↻ R-</button>
+                        <button class="btn-jog btn-jog-stop" onclick="sendAction('emergency_stop')" title="Dừng khẩn cấp">🛑 DỪNG</button>
+                    </div>
+                </div>
+
+                <!-- 2. SLIDER VIEW -->
+                <div id="slider-view" style="display: none;">
+                    <div class="coord-toggle">
+                        <button id="btn-coord-cartesian" class="coord-btn active" onclick="setCoordSystem('cartesian')">📐 Tọa độ XYZ</button>
+                        <button id="btn-coord-joint" class="coord-btn" onclick="setCoordSystem('joint')">🔄 Góc Khớp (J1-J4)</button>
+                    </div>
+
+                    <!-- CARTESIAN SLIDERS -->
+                    <div id="cartesian-controls">
+                        <div class="control-header-row" style="margin-top: 0;">
+                            <span style="font-weight: 600; color: #ff922b; font-size: 11px;">Tọa độ mục tiêu:</span>
+                            <button class="btn-sync-pose" onclick="syncSlidersWithCurrentPose()">🔄 Đọc từ Robot</button>
+                        </div>
+
+                        <div class="control-group">
+                            <label><span>Trục X (Tới / Lùi):</span> <span class="badge-val" id="cart-x-val">210 mm</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-x', -1)">-</button>
+                                <input type="range" id="cart-x" min="130" max="330" value="210" step="1">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-x', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label><span>Trục Y (Trái / Phải):</span> <span class="badge-val" id="cart-y-val">0 mm</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-y', -1)">-</button>
+                                <input type="range" id="cart-y" min="-230" max="230" value="0" step="1">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-y', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label><span>Trục Z (Độ cao mũi hút):</span> <span class="badge-val" id="cart-z-val">66 mm</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-z', -1)">-</button>
+                                <input type="range" id="cart-z" min="-120" max="150" value="66" step="1">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-z', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label><span>Trục R (Góc xoay):</span> <span class="badge-val" id="cart-r-val">0.0°</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-r', -1)">-</button>
+                                <input type="range" id="cart-r" min="-135" max="135" value="0" step="1">
+                                <button class="btn-nudge" onclick="nudgeSlider('cart-r', 1)">+</button>
+                            </div>
+                        </div>
+
+                        <div class="auto-send-box">
+                            <input type="checkbox" id="chk-auto-send" checked>
+                            <label for="chk-auto-send">Tự gửi lệnh khi nhả chuột</label>
+                        </div>
+
+                        <button class="btn-action btn-send-move" style="width: 100%; margin-top: 8px;" onclick="sendMoveToRobot()">🚀 GỬI TỚI ROBOT THẬT (PTP)</button>
+                    </div>
+
+                    <!-- JOINT SLIDERS -->
+                    <div id="joint-controls" style="display: none;">
+                        <div class="control-header-row" style="margin-top: 0;">
+                            <span style="font-weight: 600; color: #ff922b; font-size: 11px;">Góc Khớp:</span>
+                            <button class="btn-sync-pose" onclick="syncSlidersWithCurrentPose()">🔄 Đọc từ Robot</button>
+                        </div>
+
+                        <div class="control-group">
+                            <label><span>Khớp J1 (Đế):</span> <span class="badge-val" id="j1-val">0.0°</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('j1', -1)">-</button>
+                                <input type="range" id="j1" min="-90" max="90" value="0" step="0.5">
+                                <button class="btn-nudge" onclick="nudgeSlider('j1', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label><span>Khớp J2 (Cánh sau):</span> <span class="badge-val" id="j2-val">0.0°</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('j2', -1)">-</button>
+                                <input type="range" id="j2" min="0" max="85" value="0" step="0.5">
+                                <button class="btn-nudge" onclick="nudgeSlider('j2', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label><span>Khớp J3 (Cẳng trước):</span> <span class="badge-val" id="j3-val">0.0°</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('j3', -1)">-</button>
+                                <input type="range" id="j3" min="-15" max="90" value="0" step="0.5">
+                                <button class="btn-nudge" onclick="nudgeSlider('j3', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label><span>Khớp J4 (Xoay đầu):</span> <span class="badge-val" id="j4-val">0.0°</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeSlider('j4', -1)">-</button>
+                                <input type="range" id="j4" min="-135" max="135" value="0" step="0.5">
+                                <button class="btn-nudge" onclick="nudgeSlider('j4', 1)">+</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-action btn-send-move" style="width: 100%; margin-top: 8px;" onclick="sendMoveToRobot()">🚀 GỬI GÓC KHỚP TỚI ROBOT THẬT</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: GIÁM SÁT & CÀI ĐẶT -->
+            <div id="tab-pane-monitor" style="display: none;">
+                <!-- BẢNG THEO DÕI TỌA ĐỘ VỊ TRÍ ĐẦU HÚT -->
+                <div class="data-card" style="margin-top: 0;">
+                    <div style="font-weight: bold; margin-bottom: 6px; color: #ff922b; display: flex; justify-content: space-between; align-items: center;">
+                        <span>VỊ TRÍ ĐẦU HÚT (TCP)</span>
+                        <button class="btn-sync-pose" onclick="toggleProjectionLines()" style="padding: 2px 7px;">👁️ Gióng 3D</button>
+                    </div>
+                    <div class="data-grid-2col">
+                        <div class="data-metric"><span class="lbl">X:</span> <span class="val" id="tcp-x">210.00 mm</span></div>
+                        <div class="data-metric"><span class="lbl">Y:</span> <span class="val" id="tcp-y">0.00 mm</span></div>
+                        <div class="data-metric"><span class="lbl">Z:</span> <span class="val" id="tcp-z">66.74 mm</span></div>
+                        <div class="data-metric"><span class="lbl">R:</span> <span class="val" id="tcp-r">0.00°</span></div>
+                    </div>
+                    <hr style="border: 0; border-top: 1px dashed rgba(255,255,255,0.12); margin: 6px 0;">
+                    <div class="data-row"><span>Bán kính ngang (R):</span> <span class="val-sub" id="tcp-radius">210.00 mm</span></div>
+                    <div class="data-row"><span>Khoảng cách 3D (D):</span> <span class="val-sub" id="tcp-dist3d">220.35 mm</span></div>
+                    <div class="data-row"><span>Cao độ so mặt bàn:</span> <span class="val-sub" id="tcp-floor">204.74 mm</span></div>
+                </div>
+
+                <div class="control-group" style="margin-top: 10px;">
+                    <label style="color: #94a3b8; font-size: 11px;">Công cụ đầu cuối (End-Effector):</label>
+                    <select id="tool-select">
+                        <option value="suction">Giác hút khí nén (Suction: -59.5mm)</option>
+                        <option value="gripper">Tay kẹp khí nén (Gripper: -68.0mm)</option>
+                        <option value="flange">Mặt bích chuẩn (Flange: 0mm)</option>
+                    </select>
+                </div>
+
+                <div class="control-group" style="margin-top: 10px;">
+                    <label style="color: #94a3b8; font-size: 11px;">Hiệu chuẩn gốc (Zero / Homing Calibration):</label>
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px; margin-top: 4px;">
+                        <div style="font-size: 11px; color: #adb5bd; line-height: 1.4; margin-bottom: 6px;">
+                            Đưa các khớp về chạm cảm biến quang học để xác định mốc tọa độ tuyệt đối (Nên chạy khi mới bật nguồn).
+                        </div>
+                        <button class="btn-action" style="width: 100%; background: #1864ab; border-color: #339af0; padding: 7px; font-weight: 700; color: #fff;" onclick="triggerHoming()">
+                            🏠 BẮT ĐẦU CHẠY HOMING
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-group" style="margin-top: 10px;">
+                    <label style="color: #94a3b8; font-size: 11px;">Chủ đề không gian 3D:</label>
+                    <div class="theme-select" style="margin-top: 4px;">
+                        <button id="btn-sim-theme" class="btn-theme active" onclick="switchTheme('sim')">🌿 Simulator</button>
+                        <button id="btn-dark-theme" class="btn-theme" onclick="switchTheme('dark')">🌌 Studio Dark</button>
+                    </div>
+                </div>
+
+                <div class="note" style="margin-top: 10px;">
+                    💡 Gạt sang "Manual" ở phía trên để kéo thanh trượt mô phỏng robot!
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. STICKY FOOTER -->
+        <div class="panel-footer">
+            <button class="btn-footer btn-clear-alarm" onclick="sendAction('clear_alarms')" title="Xóa cờ lỗi & khôi phục robot khi bị đèn đỏ">
+                🔔 Xóa Lỗi
+            </button>
+            <button class="btn-footer btn-home" onclick="triggerHoming()" title="Đưa 4 khớp robot về vị trí cữ 0° chuẩn (Homing)">
+                🏠 Về Gốc
+            </button>
+            <button id="btn-suction" class="btn-footer btn-suction-toggle" onclick="toggleSuction()">
+                💨 Giác Hút
+            </button>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        const L1_BASE = 138;
+        const L2_REAR = 135;
+        const L3_FORE = 147;
+        const L4_WRIST = 59;
+        
+        let toolOffset = 59.5;
+        let currentMode = "live";
+        let coordSystem = "cartesian";
+        let isSuctionOn = false;
+        let currentToolType = "suction";
+        let showProjections = true;
+        let ws = null;
+        let currentX = 210, currentY = 0, currentZ = 66, currentR = 0;
+        let isInteractingWithSliders = false;
+        let lastRawJoints = { j1: 0, j2: 0, j3: 0, j4: 0 };
+        let jogStep = 10;
+
+        // --- Three.js Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        scene.background = new THREE.Color(0xb4d7ec);
+        scene.fog = new THREE.Fog(0xb4d7ec, 600, 2400);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 4000);
+        camera.position.set(450, 280, 400);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(80, 110, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.update();
+
+        // Ánh sáng
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x556b2f, 0.85);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.15);
+        dirLight.position.set(250, 500, 300);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        const d = 350;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xa5c9eb, 0.45);
+        fillLight.position.set(-300, 200, -200);
+        scene.add(fillLight);
+
+        // Sàn Simulator
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x3d7a46, roughness: 0.8, metalness: 0.1 });
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.5;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(1000, 40, 0x8ce99a, 0x2b5733);
+        gridHelper.position.y = 0;
+        scene.add(gridHelper);
+
+        const globalAxes = new THREE.AxesHelper(140);
+        globalAxes.position.set(0, 0.5, 0);
+        scene.add(globalAxes);
+
+        // --- VẬT LIỆU ---
+        const matBlackArm = new THREE.MeshStandardMaterial({ color: 0x24282e, roughness: 0.45, metalness: 0.55 });
+        const matBodyWhite = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.25, metalness: 0.15 });
+        const matAluSilver = new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.3, metalness: 0.8 });
+        const matDarkMotor = new THREE.MeshStandardMaterial({ color: 0x1f2328, roughness: 0.5, metalness: 0.4 });
+        const matDobotBlue = new THREE.MeshStandardMaterial({ color: 0x1864ab, roughness: 0.3, metalness: 0.5 });
+        const matSiliconeWhite = new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.95 });
+        const matBrass = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.35, metalness: 0.85 });
+        const matTube = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, transparent: true, opacity: 0.85 });
+
+        // --- CƠ CẤU ROBOT ---
+        const robotRoot = new THREE.Group();
+        scene.add(robotRoot);
+
+        // 1. CHÂN ĐẾ (BASE)
+        const baseGroup = new THREE.Group();
+        robotRoot.add(baseGroup);
+
+        const pedestal = new THREE.Mesh(new THREE.BoxGeometry(158, 48, 158), matBodyWhite);
+        pedestal.position.y = 24;
+        pedestal.castShadow = true;
+        pedestal.receiveShadow = true;
+        baseGroup.add(pedestal);
+
+        for (let sx of [-65, 65]) {
+            for (let sz of [-65, 65]) {
+                const foot = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 4, 16), matDarkMotor);
+                foot.position.set(sx, 2, sz);
+                baseGroup.add(foot);
+            }
+        }
+
+        // 2. KHỐI XOAY TRỤC ĐẾ J1
+        const j1Group = new THREE.Group();
+        j1Group.position.y = 48;
+        baseGroup.add(j1Group);
+
+        const tower = new THREE.Mesh(new THREE.CylinderGeometry(56, 72, 86, 36), matBodyWhite);
+        tower.position.y = 43;
+        tower.castShadow = true;
+        j1Group.add(tower);
+
+        for (let side of [-1, 1]) {
+            const motorGroup = new THREE.Group();
+            motorGroup.position.set(0, 88, side * 58);
+
+            const motorBody = new THREE.Mesh(new THREE.BoxGeometry(42, 42, 30), matDarkMotor);
+            motorBody.castShadow = true;
+            motorGroup.add(motorBody);
+
+            const motorCap = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 6, 24), matDobotBlue);
+            motorCap.rotation.x = Math.PI / 2;
+            motorCap.position.z = side * 17;
+            motorGroup.add(motorCap);
+
+            j1Group.add(motorGroup);
+        }
+
+        for (let side of [-1, 1]) {
+            const disc = new THREE.Mesh(new THREE.CylinderGeometry(28, 28, 6, 32), matAluSilver);
+            disc.rotation.x = Math.PI / 2;
+            disc.position.set(0, 90, side * 34);
+            j1Group.add(disc);
+
+            const centerPin = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 8, 20), matDobotBlue);
+            centerPin.rotation.x = Math.PI / 2;
+            centerPin.position.set(0, 90, side * 36);
+            j1Group.add(centerPin);
+        }
+
+        // 3. CÁNH TAY SAU (REAR ARM / J2)
+        const j2Group = new THREE.Group();
+        j2Group.position.set(0, 90, 0); // 48 + 90 = 138mm
+        j1Group.add(j2Group);
+
+        const rearArmAssembly = new THREE.Group();
+        j2Group.add(rearArmAssembly);
+
+        for (let side of [-1, 1]) {
+            const armBeam = new THREE.Mesh(new THREE.BoxGeometry(24, L2_REAR, 8), matBlackArm);
+            armBeam.position.set(0, L2_REAR / 2, side * 22);
+            armBeam.castShadow = true;
+            rearArmAssembly.add(armBeam);
+        }
+        const crossBrace = new THREE.Mesh(new THREE.BoxGeometry(16, 22, 40), matAluSilver);
+        crossBrace.position.set(0, L2_REAR * 0.45, 0);
+        rearArmAssembly.add(crossBrace);
+
+        const rearParallelRod = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, L2_REAR, 16), matAluSilver);
+        rearParallelRod.position.set(-16, L2_REAR / 2, 18);
+        rearArmAssembly.add(rearParallelRod);
+
+        // 4. KHỚP KHUỶU VÀ CẲNG TAY TRƯỚC (FOREARM / J3)
+        const j3Group = new THREE.Group();
+        j3Group.position.set(0, L2_REAR, 0);
+        j2Group.add(j3Group);
+
+        for (let side of [-1, 1]) {
+            const elbowDisc = new THREE.Mesh(new THREE.CylinderGeometry(24, 24, 6, 28), matBlackArm);
+            elbowDisc.rotation.x = Math.PI / 2;
+            elbowDisc.position.set(0, 0, side * 24);
+            j3Group.add(elbowDisc);
+
+            const elbowPin = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 8, 20), matAluSilver);
+            elbowPin.rotation.x = Math.PI / 2;
+            elbowPin.position.set(0, 0, side * 26);
+            j3Group.add(elbowPin);
+        }
+
+        const foreArmAssembly = new THREE.Group();
+        j3Group.add(foreArmAssembly);
+
+        for (let side of [-1, 1]) {
+            const plate = new THREE.Mesh(new THREE.BoxGeometry(L3_FORE, 36, 6), matBlackArm);
+            plate.position.set(L3_FORE / 2, 4, side * 18);
+            plate.castShadow = true;
+            foreArmAssembly.add(plate);
+        }
+
+        const topCover = new THREE.Mesh(new THREE.BoxGeometry(L3_FORE * 0.6, 12, 38), matBodyWhite);
+        topCover.position.set(L3_FORE * 0.45, 23, 0);
+        topCover.castShadow = true;
+        foreArmAssembly.add(topCover);
+
+        const teachBtn = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 4, 20), matDobotBlue);
+        teachBtn.position.set(L3_FORE * 0.35, 30, 0);
+        foreArmAssembly.add(teachBtn);
+
+        const foreParallelRod = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, L3_FORE, 16), matAluSilver);
+        foreParallelRod.rotation.z = Math.PI / 2;
+        foreParallelRod.position.set(L3_FORE / 2, -15, -14);
+        foreArmAssembly.add(foreParallelRod);
+
+        // 5. CỔ TAY (WRIST / L4 = 59mm)
+        const wristGroup = new THREE.Group();
+        wristGroup.position.set(L3_FORE, 0, 0);
+        j3Group.add(wristGroup);
+
+        const wristBracket = new THREE.Mesh(new THREE.BoxGeometry(L4_WRIST, 16, 32), matBlackArm);
+        wristBracket.position.set(L4_WRIST / 2, 0, 0);
+        wristBracket.castShadow = true;
+        wristGroup.add(wristBracket);
+
+        // 6. CỤM CÔNG CỤ ĐẦU CUỐI
+        const toolGroup = new THREE.Group();
+        toolGroup.position.set(L4_WRIST, 0, 0);
+        wristGroup.add(toolGroup);
+
+        // ĐẦU HÚT KHÍ NÉN
+        const suctionAssembly = new THREE.Group();
+        toolGroup.add(suctionAssembly);
+
+        const j4Motor = new THREE.Mesh(new THREE.BoxGeometry(32, 34, 32), matDarkMotor);
+        j4Motor.position.y = 22;
+        j4Motor.castShadow = true;
+        suctionAssembly.add(j4Motor);
+
+        const motorLabel = new THREE.Mesh(new THREE.PlaneGeometry(18, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        motorLabel.position.set(0, 22, 16.5);
+        suctionAssembly.add(motorLabel);
+
+        const quickReleaseRing = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 6, 24), matAluSilver);
+        quickReleaseRing.position.y = 2;
+        suctionAssembly.add(quickReleaseRing);
+
+        const stemHolder = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 26, 24), matDarkMotor);
+        stemHolder.position.y = -14;
+        stemHolder.castShadow = true;
+        suctionAssembly.add(stemHolder);
+
+        const metalStem = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.5, 18, 20), matAluSilver);
+        metalStem.position.y = -32;
+        suctionAssembly.add(metalStem);
+
+        const hexNut = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 6, 6), matAluSilver);
+        hexNut.position.y = -42;
+        suctionAssembly.add(hexNut);
+
+        const barbFitting = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 12, 16), matBrass);
+        barbFitting.rotation.z = Math.PI / 2;
+        barbFitting.position.set(6, -42, 0);
+        suctionAssembly.add(barbFitting);
+
+        const suckerNeck = new THREE.Mesh(new THREE.CylinderGeometry(6, 10, 6, 24), matSiliconeWhite);
+        suckerNeck.position.y = -47;
+        suctionAssembly.add(suckerNeck);
+
+        const suckerBellows = new THREE.Mesh(new THREE.CylinderGeometry(10, 16, 7, 24), matSiliconeWhite);
+        suckerBellows.position.y = -53;
+        suctionAssembly.add(suckerBellows);
+
+        const suckerLip = new THREE.Mesh(new THREE.CylinderGeometry(16, 20, 3.5, 28), matSiliconeWhite);
+        suckerLip.position.y = -58;
+        suctionAssembly.add(suckerLip);
+
+        const tubeCurve = new THREE.CubicBezierCurve3(
+            new THREE.Vector3(-L4_WRIST * 0.8, 10, 18),
+            new THREE.Vector3(-10, -50, 35),
+            new THREE.Vector3(5, -60, 20),
+            new THREE.Vector3(12, -42, 0)
+        );
+        const tubeGeo = new THREE.TubeGeometry(tubeCurve, 24, 2.2, 10, false);
+        const tubeMesh = new THREE.Mesh(tubeGeo, matTube);
+        toolGroup.add(tubeMesh);
+
+        // CỤM TAY KẸP
+        const gripperAssembly = new THREE.Group();
+        gripperAssembly.visible = false;
+        toolGroup.add(gripperAssembly);
+
+        const gripperBody = new THREE.Mesh(new THREE.BoxGeometry(32, 28, 30), matDarkMotor);
+        gripperBody.position.y = -14;
+        gripperAssembly.add(gripperBody);
+
+        const fingerMat = new THREE.MeshStandardMaterial({ color: 0x222, roughness: 0.7 });
+        const leftFinger = new THREE.Mesh(new THREE.BoxGeometry(6, 42, 10), fingerMat);
+        leftFinger.position.set(-10, -44, 0);
+        gripperAssembly.add(leftFinger);
+
+        const rightFinger = new THREE.Mesh(new THREE.BoxGeometry(6, 42, 10), fingerMat);
+        rightFinger.position.set(10, -44, 0);
+        gripperAssembly.add(rightFinger);
+
+        // HỆ TRỤC RGB VÀ ĐƯỜNG GIÓNG TẠI MŨI HÚT
+        const tcpAxes = new THREE.AxesHelper(45);
+        tcpAxes.position.y = -toolOffset;
+        toolGroup.add(tcpAxes);
+
+        const tcpMarker = new THREE.Mesh(new THREE.SphereGeometry(4.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff3333 }));
+        scene.add(tcpMarker);
+
+        const dropLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
+        const dropLineMat = new THREE.LineDashedMaterial({ color: 0x339af0, dashSize: 6, gapSize: 4, linewidth: 2 });
+        const dropLine = new THREE.Line(dropLineGeo, dropLineMat);
+        scene.add(dropLine);
+
+        const groundReticle = new THREE.Mesh(
+            new THREE.RingGeometry(10, 14, 32),
+            new THREE.MeshBasicMaterial({ color: 0xff922b, side: THREE.DoubleSide })
+        );
+        groundReticle.rotation.x = -Math.PI / 2;
+        groundReticle.position.y = 0.5;
+        scene.add(groundReticle);
+
+        const groundPoint = new THREE.Mesh(
+            new THREE.CircleGeometry(5, 20),
+            new THREE.MeshBasicMaterial({ color: 0xff922b })
+        );
+        groundPoint.rotation.x = -Math.PI / 2;
+        groundPoint.position.y = 0.5;
+        scene.add(groundPoint);
+
+        const radiusLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(0, 0.5, 0)]);
+        const radiusLineMat = new THREE.LineBasicMaterial({ color: 0xffd43b, opacity: 0.6, transparent: true });
+        const radiusLine = new THREE.Line(radiusLineGeo, radiusLineMat);
+        scene.add(radiusLine);
+
+        // ========================================================
+        // CỤC ĐIỂM ĐÍCH 3D (TARGET BEACON & GIZMO)
+        // ========================================================
+        const targetBeaconGroup = new THREE.Group();
+        scene.add(targetBeaconGroup);
+
+        const beaconBoxGeo = new THREE.BoxGeometry(18, 18, 18);
+        const beaconBoxMat = new THREE.MeshStandardMaterial({
+            color: 0x51cf66,
+            emissive: 0x2f9e44,
+            emissiveIntensity: 0.65,
+            roughness: 0.25,
+            metalness: 0.5,
+            transparent: true,
+            opacity: 0.88
+        });
+        const beaconBox = new THREE.Mesh(beaconBoxGeo, beaconBoxMat);
+        targetBeaconGroup.add(beaconBox);
+
+        const beaconEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(beaconBoxGeo),
+            new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })
+        );
+        targetBeaconGroup.add(beaconEdges);
+
+        const beaconCore = new THREE.Mesh(
+            new THREE.SphereGeometry(4.5, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        targetBeaconGroup.add(beaconCore);
+
+        // Vòng tâm ngắm ở mặt sàn
+        const targetFloorReticle = new THREE.Mesh(
+            new THREE.RingGeometry(8, 14, 32),
+            new THREE.MeshBasicMaterial({ color: 0x51cf66, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
+        );
+        targetFloorReticle.rotation.x = -Math.PI / 2;
+        targetFloorReticle.position.y = 0.6;
+        scene.add(targetFloorReticle);
+
+        // Đường gióng rơi thẳng đứng từ cục điểm đích xuống sàn
+        const targetDropLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
+        const targetDropLineMat = new THREE.LineDashedMaterial({ color: 0x51cf66, dashSize: 6, gapSize: 4, opacity: 0.85, transparent: true });
+        const targetDropLine = new THREE.Line(targetDropLineGeo, targetDropLineMat);
+        scene.add(targetDropLine);
+
+        let transformControl;
+        let isDraggingGizmo = false;
+        let isTargetGizmoActive = true;
+
+        // ========================================================
+        // VÙNG LÀM VIỆC AN TOÀN TRÊN BÀN (SAFE WORKSPACE ZONE)
+        // ========================================================
+        const workspaceZoneGroup = new THREE.Group();
+        scene.add(workspaceZoneGroup);
+
+        const zoneMat = new THREE.MeshBasicMaterial({
+            color: 0x1971c2,
+            transparent: true,
+            opacity: 0.12,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const zoneMesh = new THREE.Mesh(new THREE.RingGeometry(140, 330, 64), zoneMat);
+        zoneMesh.rotation.x = -Math.PI / 2;
+        zoneMesh.position.y = 0.2;
+        workspaceZoneGroup.add(zoneMesh);
+
+        // Vòng biên trong R=140mm (Cảnh báo gần thân robot)
+        const innerLimitRing = new THREE.Mesh(
+            new THREE.RingGeometry(138.5, 140.5, 64),
+            new THREE.MeshBasicMaterial({ color: 0xff6b6b, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+        );
+        innerLimitRing.rotation.x = -Math.PI / 2;
+        innerLimitRing.position.y = 0.3;
+        workspaceZoneGroup.add(innerLimitRing);
+
+        // Vòng biên ngoài R=330mm (Tầm với tối đa)
+        const outerLimitRing = new THREE.Mesh(
+            new THREE.RingGeometry(329, 331, 64),
+            new THREE.MeshBasicMaterial({ color: 0x339af0, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+        );
+        outerLimitRing.rotation.x = -Math.PI / 2;
+        outerLimitRing.position.y = 0.3;
+        workspaceZoneGroup.add(outerLimitRing);
+
+        // ========================================================
+        // TÂM NGẮM CHUỘT HOVER KHI CHỌN ĐIỂM (HOVER RETICLE)
+        // ========================================================
+        const hoverReticle = new THREE.Group();
+        scene.add(hoverReticle);
+
+        const hoverRing = new THREE.Mesh(
+            new THREE.RingGeometry(7, 10, 32),
+            new THREE.MeshBasicMaterial({ color: 0x339af0, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+        );
+        hoverRing.rotation.x = -Math.PI / 2;
+        hoverReticle.add(hoverRing);
+
+        const hoverDot = new THREE.Mesh(
+            new THREE.CircleGeometry(2.5, 16),
+            new THREE.MeshBasicMaterial({ color: 0x339af0, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+        );
+        hoverDot.rotation.x = -Math.PI / 2;
+        hoverReticle.add(hoverDot);
+        hoverReticle.visible = false;
+
+        // ========================================================
+        // GIẢI THUẬT INVERSE KINEMATICS (IK) MỀM DẺO
+        // ========================================================
+        function solveIK(targetX, targetY, targetZ_TCP) {
+            const targetZ_Flange = targetZ_TCP + toolOffset;
+            const j1Rad = Math.atan2(targetY, targetX);
+
+            const rTotal = Math.sqrt(targetX * targetX + targetY * targetY);
+            const r = rTotal - L4_WRIST;
+            const z = targetZ_Flange;
+
+            const D = Math.sqrt(r * r + z * z);
+            const maxReach = (L2_REAR + L3_FORE) * 0.995;
+            const minReach = Math.abs(L2_REAR - L3_FORE) * 1.005;
+
+            // Clamping nhẹ nhàng nếu hơi quá tầm
+            const clampedD = Math.max(minReach, Math.min(maxReach, D));
+
+            let cosAlpha = (L2_REAR * L2_REAR + clampedD * clampedD - L3_FORE * L3_FORE) / (2 * L2_REAR * clampedD);
+            cosAlpha = Math.max(-1.0, Math.min(1.0, cosAlpha));
+            const alpha = Math.acos(cosAlpha);
+            const beta = Math.atan2(z, r);
+
+            const phi2 = beta + alpha;
+            const j2Rad = Math.PI / 2 - phi2;
+
+            const x3 = r - L2_REAR * Math.sin(j2Rad);
+            const y3 = z - L2_REAR * Math.cos(j2Rad);
+            const j3Rad = Math.atan2(-y3, x3);
+
+            return {
+                j1: THREE.MathUtils.radToDeg(j1Rad),
+                j2: THREE.MathUtils.radToDeg(j2Rad),
+                j3: THREE.MathUtils.radToDeg(j3Rad)
+            };
+        }
+
+        // ========================================================
+        // CẬP NHẬT MÔ HÌNH VÀ TỌA ĐỘ
+        // ========================================================
+        function renderRobot(j1Deg, j2Deg, j3Deg, j4Deg, rawX=null, rawY=null, rawZ=null) {
+            document.getElementById('j1-val').innerText = j1Deg.toFixed(1) + '°';
+            document.getElementById('j2-val').innerText = j2Deg.toFixed(1) + '°';
+            document.getElementById('j3-val').innerText = j3Deg.toFixed(1) + '°';
+            document.getElementById('j4-val').innerText = j4Deg.toFixed(1) + '°';
+
+            const j1Rad = THREE.MathUtils.degToRad(j1Deg);
+            const j2Rad = THREE.MathUtils.degToRad(j2Deg);
+            const j3Rad = THREE.MathUtils.degToRad(j3Deg);
+            const j4Rad = THREE.MathUtils.degToRad(j4Deg);
+
+            j1Group.rotation.y = j1Rad;
+            j2Group.rotation.z = -j2Rad;
+            j3Group.rotation.z = j2Rad - j3Rad;
+            wristGroup.rotation.z = j3Rad;
+            toolGroup.rotation.y = j4Rad;
+
+            suctionAssembly.visible = (currentToolType === 'suction');
+            gripperAssembly.visible = (currentToolType === 'gripper');
+            tcpAxes.position.y = -toolOffset;
+
+            let x, y, zRobot, zTcp, rDeg;
+            if (rawX !== null && rawY !== null && rawZ !== null) {
+                x = rawX;
+                y = rawY;
+                zRobot = rawZ;
+                zTcp = zRobot - toolOffset;
+                rDeg = j1Deg + j4Deg;
+            } else {
+                const r = L2_REAR * Math.sin(j2Rad) + L3_FORE * Math.cos(j3Rad) + L4_WRIST;
+                x = r * Math.cos(j1Rad);
+                y = r * Math.sin(j1Rad);
+                zRobot = L2_REAR * Math.cos(j2Rad) - L3_FORE * Math.sin(j3Rad);
+                zTcp = zRobot - toolOffset;
+                rDeg = j1Deg + j4Deg;
+            }
+
+            lastRawJoints = { j1: j1Deg, j2: j2Deg, j3: j3Deg, j4: j4Deg };
+            currentX = x; currentY = y; currentZ = zTcp; currentR = rDeg;
+
+            document.getElementById('tcp-x').innerText = x.toFixed(2) + ' mm';
+            document.getElementById('tcp-y').innerText = y.toFixed(2) + ' mm';
+            document.getElementById('tcp-z').innerText = zTcp.toFixed(2) + ' mm';
+            document.getElementById('tcp-r').innerText = rDeg.toFixed(2) + '°';
+
+            const radiusHoriz = Math.sqrt(x * x + y * y);
+            const dist3D = Math.sqrt(x * x + y * y + zTcp * zTcp);
+            const floorHeight = L1_BASE + zTcp;
+
+            document.getElementById('tcp-radius').innerText = radiusHoriz.toFixed(2) + ' mm';
+            document.getElementById('tcp-dist3d').innerText = dist3D.toFixed(2) + ' mm';
+            document.getElementById('tcp-floor').innerText = floorHeight.toFixed(2) + ' mm';
+
+            // Cập nhật giá trị hiển thị trên thanh trượt khi ở Live mode và người dùng không đang giữ chuột kéo
+            if (currentMode === 'live' && !isInteractingWithSliders) {
+                document.getElementById('cart-x').value = x;
+                document.getElementById('cart-y').value = y;
+                document.getElementById('cart-z').value = zTcp;
+                document.getElementById('cart-r').value = rDeg;
+                document.getElementById('cart-x-val').innerText = x.toFixed(0) + ' mm';
+                document.getElementById('cart-y-val').innerText = y.toFixed(0) + ' mm';
+                document.getElementById('cart-z-val').innerText = zTcp.toFixed(0) + ' mm';
+                document.getElementById('cart-r-val').innerText = rDeg.toFixed(1) + '°';
+
+                document.getElementById('j1').value = j1Deg;
+                document.getElementById('j2').value = j2Deg;
+                document.getElementById('j3').value = j3Deg;
+                document.getElementById('j4').value = j4Deg;
+                document.getElementById('j1-val').innerText = j1Deg.toFixed(1) + '°';
+                document.getElementById('j2-val').innerText = j2Deg.toFixed(1) + '°';
+                document.getElementById('j3-val').innerText = j3Deg.toFixed(1) + '°';
+                document.getElementById('j4-val').innerText = j4Deg.toFixed(1) + '°';
+            }
+
+            const tcpWorldPos = new THREE.Vector3(x, floorHeight, -y);
+            tcpMarker.position.copy(tcpWorldPos);
+
+            if (showProjections) {
+                const pts = [tcpWorldPos, new THREE.Vector3(x, 0.5, -y)];
+                dropLine.geometry.setFromPoints(pts);
+                dropLine.computeLineDistances();
+                dropLine.visible = true;
+
+                groundReticle.position.set(x, 0.5, -y);
+                groundPoint.position.set(x, 0.5, -y);
+                groundReticle.visible = true;
+                groundPoint.visible = true;
+
+                radiusLine.geometry.setFromPoints([new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(x, 0.5, -y)]);
+                radiusLine.visible = true;
+            } else {
+                dropLine.visible = false;
+                groundReticle.visible = false;
+                groundPoint.visible = false;
+                radiusLine.visible = false;
+            }
+
+            updateHudLabel(tcpWorldPos, x, y, zTcp);
+        }
+
+        function updateHudLabel(worldPos, x, y, z) {
+            const label = document.getElementById('hud-label');
+            const pos = worldPos.clone();
+            pos.project(camera);
+            
+            if (pos.z < 1) {
+                const sx = (pos.x * 0.5 + 0.5) * window.innerWidth;
+                const sy = (-(pos.y * 0.5) + 0.5) * window.innerHeight;
+                label.style.left = `${sx}px`;
+                label.style.top = `${sy}px`;
+                label.style.display = 'block';
+                label.innerText = `TCP: (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`;
+            } else {
+                label.style.display = 'none';
+            }
+        }
+
+        // --- CÁC HÀM XỬ LÝ SỰ KIỆN GIAO DIỆN ---
+        function onCartesianInput() {
+            const x = parseFloat(document.getElementById('cart-x').value);
+            const y = parseFloat(document.getElementById('cart-y').value);
+            const z = parseFloat(document.getElementById('cart-z').value);
+            const r = parseFloat(document.getElementById('cart-r').value);
+
+            document.getElementById('cart-x-val').innerText = x.toFixed(0) + ' mm';
+            document.getElementById('cart-y-val').innerText = y.toFixed(0) + ' mm';
+            document.getElementById('cart-z-val').innerText = z.toFixed(0) + ' mm';
+            document.getElementById('cart-r-val').innerText = r.toFixed(1) + '°';
+
+            if (currentMode === 'manual') {
+                const ik = solveIK(x, y, z);
+                if (ik) {
+                    document.getElementById('j1').value = ik.j1;
+                    document.getElementById('j2').value = ik.j2;
+                    document.getElementById('j3').value = ik.j3;
+                    document.getElementById('j4').value = r - ik.j1;
+                    document.getElementById('j1-val').innerText = ik.j1.toFixed(1) + '°';
+                    document.getElementById('j2-val').innerText = ik.j2.toFixed(1) + '°';
+                    document.getElementById('j3-val').innerText = ik.j3.toFixed(1) + '°';
+                    document.getElementById('j4-val').innerText = (r - ik.j1).toFixed(1) + '°';
+                    renderRobot(ik.j1, ik.j2, ik.j3, r - ik.j1);
+                }
+            }
+        }
+
+        function onJointInput() {
+            const j1 = parseFloat(document.getElementById('j1').value);
+            const j2 = parseFloat(document.getElementById('j2').value);
+            const j3 = parseFloat(document.getElementById('j3').value);
+            const j4 = parseFloat(document.getElementById('j4').value);
+
+            document.getElementById('j1-val').innerText = j1.toFixed(1) + '°';
+            document.getElementById('j2-val').innerText = j2.toFixed(1) + '°';
+            document.getElementById('j3-val').innerText = j3.toFixed(1) + '°';
+            document.getElementById('j4-val').innerText = j4.toFixed(1) + '°';
+
+            if (currentMode === 'manual') {
+                renderRobot(j1, j2, j3, j4);
+            }
+        }
+
+        // Bắt sự kiện kéo chuột trên thanh trượt
+        ['cart-x', 'cart-y', 'cart-z', 'cart-r', 'j1', 'j2', 'j3', 'j4'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('mousedown', () => { isInteractingWithSliders = true; });
+            el.addEventListener('touchstart', () => { isInteractingWithSliders = true; });
+            if (id.startsWith('cart-')) {
+                el.addEventListener('input', onCartesianInput);
+            } else {
+                el.addEventListener('input', onJointInput);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isInteractingWithSliders) {
+                isInteractingWithSliders = false;
+                const auto = document.getElementById('chk-auto-send');
+                if (auto && auto.checked) {
+                    sendMoveToRobot();
+                }
+            }
+        });
+
+        window.addEventListener('touchend', () => {
+            if (isInteractingWithSliders) {
+                isInteractingWithSliders = false;
+                const auto = document.getElementById('chk-auto-send');
+                if (auto && auto.checked) {
+                    sendMoveToRobot();
+                }
+            }
+        });
+
+        // --- BÀN PHÍM JOG NHANH VÀ NUDGE ---
+        function setJogStep(step) {
+            jogStep = step;
+            document.querySelectorAll('.btn-step').forEach(btn => {
+                btn.classList.toggle('active', parseFloat(btn.dataset.step) === step);
+            });
+            showToast(`Đã chọn bước Jog: ${step} mm`);
+        }
+
+        function doJog(axis, dir) {
+            const stepVal = dir * jogStep;
+            console.log(`[JOG] ${axis.toUpperCase()} ${stepVal > 0 ? '+' : ''}${stepVal} mm`);
+            sendAction('jog', { axis: axis, step: stepVal });
+            showToast(`⚡ Đang Jog ${axis.toUpperCase()}: ${stepVal > 0 ? '+' : ''}${stepVal} mm`);
+        }
+
+        function nudgeSlider(id, dir) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const step = parseFloat(el.step || 1);
+            let val = parseFloat(el.value) + dir * step;
+            val = Math.max(parseFloat(el.min), Math.min(parseFloat(el.max), val));
+            el.value = val;
+            if (id.startsWith('cart-')) {
+                onCartesianInput();
+            } else {
+                onJointInput();
+            }
+            const auto = document.getElementById('chk-auto-send');
+            if (auto && auto.checked) {
+                sendMoveToRobot();
+            }
+        }
+
+        function syncSlidersWithCurrentPose() {
+            document.getElementById('cart-x').value = currentX;
+            document.getElementById('cart-y').value = currentY;
+            document.getElementById('cart-z').value = currentZ;
+            document.getElementById('cart-r').value = currentR;
+            document.getElementById('cart-x-val').innerText = currentX.toFixed(0) + ' mm';
+            document.getElementById('cart-y-val').innerText = currentY.toFixed(0) + ' mm';
+            document.getElementById('cart-z-val').innerText = currentZ.toFixed(0) + ' mm';
+            document.getElementById('cart-r-val').innerText = currentR.toFixed(1) + '°';
+
+            if (lastRawJoints) {
+                document.getElementById('j1').value = lastRawJoints.j1;
+                document.getElementById('j2').value = lastRawJoints.j2;
+                document.getElementById('j3').value = lastRawJoints.j3;
+                document.getElementById('j4').value = lastRawJoints.j4;
+                document.getElementById('j1-val').innerText = lastRawJoints.j1.toFixed(1) + '°';
+                document.getElementById('j2-val').innerText = lastRawJoints.j2.toFixed(1) + '°';
+                document.getElementById('j3-val').innerText = lastRawJoints.j3.toFixed(1) + '°';
+                document.getElementById('j4-val').innerText = lastRawJoints.j4.toFixed(1) + '°';
+            }
+            showToast('🔄 Đã đồng bộ thanh trượt từ vị trí robot thật');
+        }
+
+        function switchTab(tabId) {
+            const tabs = ['target', 'jog', 'monitor'];
+            tabs.forEach(t => {
+                const navBtn = document.getElementById(`tab-nav-${t}`);
+                const pane = document.getElementById(`tab-pane-${t}`);
+                if (navBtn) navBtn.classList.toggle('active', t === tabId);
+                if (pane) pane.style.display = (t === tabId) ? 'block' : 'none';
+            });
+        }
+
+        function switchControlSubTab(sub) {
+            const isJog = (sub === 'jog');
+            const btnJog = document.getElementById('subtab-jog');
+            const btnSlider = document.getElementById('subtab-slider');
+            const jogView = document.getElementById('jog-view');
+            const sliderView = document.getElementById('slider-view');
+            if (btnJog) btnJog.classList.toggle('active', isJog);
+            if (btnSlider) btnSlider.classList.toggle('active', !isJog);
+            if (jogView) jogView.style.display = isJog ? 'block' : 'none';
+            if (sliderView) sliderView.style.display = !isJog ? 'block' : 'none';
+        }
+
+        function setCoordSystem(sys) {
+            coordSystem = sys;
+            document.getElementById('btn-coord-cartesian').classList.toggle('active', sys === 'cartesian');
+            document.getElementById('btn-coord-joint').classList.toggle('active', sys === 'joint');
+            document.getElementById('cartesian-controls').style.display = (sys === 'cartesian') ? 'block' : 'none';
+            document.getElementById('joint-controls').style.display = (sys === 'joint') ? 'block' : 'none';
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('btn-mode-live').classList.toggle('active', mode === 'live');
+            document.getElementById('btn-mode-manual').classList.toggle('active', mode === 'manual');
+            
+            if (mode === 'manual') {
+                syncSlidersWithCurrentPose();
+                showToast('🎮 Chế độ Manual: Kéo thanh trượt để xem trước mô phỏng');
+            } else {
+                showToast('⚡ Chế độ Live: Mô hình 3D theo dõi chuyển động thực tế');
+            }
+        }
+
+        function toggleProjectionLines() {
+            showProjections = !showProjections;
+            renderRobot(parseFloat(document.getElementById('j1').value), parseFloat(document.getElementById('j2').value), parseFloat(document.getElementById('j3').value), parseFloat(document.getElementById('j4').value));
+        }
+
+        document.getElementById('tool-select').addEventListener('change', (e) => {
+            currentToolType = e.target.value;
+            if (currentToolType === 'suction') toolOffset = 59.5;
+            else if (currentToolType === 'gripper') toolOffset = 68.0;
+            else toolOffset = 0.0;
+            if (currentMode === 'manual') {
+                if (coordSystem === 'cartesian') onCartesianInput();
+                else onJointInput();
+            }
+        });
+
+        function switchTheme(theme) {
+            document.getElementById('btn-sim-theme').classList.toggle('active', theme === 'sim');
+            document.getElementById('btn-dark-theme').classList.toggle('active', theme === 'dark');
+
+            if (theme === 'sim') {
+                scene.background = new THREE.Color(0xb4d7ec);
+                scene.fog = new THREE.Fog(0xb4d7ec, 600, 2400);
+                floorMat.color.setHex(0x3d7a46);
+                gridHelper.material.color.setHex(0x8ce99a);
+            } else {
+                scene.background = new THREE.Color(0x13161c);
+                scene.fog = new THREE.FogExp2(0x13161c, 0.0014);
+                floorMat.color.setHex(0x1a1e26);
+                gridHelper.material.color.setHex(0x339af0);
+            }
+        }
+
+        // ========================================================
+        // ĐIỀU KHIỂN CỤC ĐIỂM ĐÍCH 3D (TARGET BEACON & GIZMO)
+        // ========================================================
+        function initTransformGizmo() {
+            if (typeof THREE.TransformControls !== 'undefined') {
+                transformControl = new THREE.TransformControls(camera, renderer.domElement);
+                transformControl.size = 0.85;
+                transformControl.setMode('translate');
+                transformControl.attach(targetBeaconGroup);
+                scene.add(transformControl);
+
+                transformControl.addEventListener('dragging-changed', function (event) {
+                    controls.enabled = !event.value; // Tạm khóa OrbitControls khi đang kéo mũi tên
+                    isDraggingGizmo = event.value;
+                    if (!event.value) {
+                        onTargetGizmoDragEnd();
+                    }
+                });
+
+                transformControl.addEventListener('change', function () {
+                    if (transformControl.object && isDraggingGizmo) {
+                        onTargetGizmoChange();
+                    }
+                });
+            } else {
+                console.warn("TransformControls is not available.");
+            }
+        }
+
+        function toggleTargetGizmo() {
+            isTargetGizmoActive = !isTargetGizmoActive;
+            targetBeaconGroup.visible = isTargetGizmoActive;
+            targetFloorReticle.visible = isTargetGizmoActive;
+            targetDropLine.visible = isTargetGizmoActive;
+            if (transformControl) {
+                transformControl.enabled = isTargetGizmoActive;
+                transformControl.visible = isTargetGizmoActive;
+            }
+            const hud = document.getElementById('beacon-hud');
+            if (hud && !isTargetGizmoActive) hud.style.display = 'none';
+
+            const btn = document.getElementById('btn-toggle-gizmo');
+            if (btn) {
+                btn.className = `btn-gizmo ${isTargetGizmoActive ? 'active' : 'inactive'}`;
+                btn.innerHTML = isTargetGizmoActive ? 
+                    '🎯 CỤC ĐIỂM ĐÍCH 3D: ĐANG BẬT' : 
+                    '🎯 CỤC ĐIỂM ĐÍCH 3D: ĐANG TẮT (Click để bật)';
+            }
+            showToast(isTargetGizmoActive ? '🎯 Đã hiện cục điểm đích! Kéo mũi tên xanh lá để chỉnh Z, đỏ/xanh dương để chỉnh XY' : 'Đã ẩn cục điểm đích 3D');
+        }
+
+        function onTargetGizmoChange() {
+            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
+            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+
+            document.getElementById('inp-target-x').value = x.toFixed(1);
+            document.getElementById('inp-target-y').value = y.toFixed(1);
+            document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+
+            updateTargetAncillaries(x, y, zTcp);
+        }
+
+        function onTargetGizmoDragEnd() {
+            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
+            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+
+            document.getElementById('inp-target-x').value = x.toFixed(1);
+            document.getElementById('inp-target-y').value = y.toFixed(1);
+            document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+
+            updateTargetAncillaries(x, y, zTcp);
+
+            const rHoriz = Math.sqrt(x * x + y * y);
+            if (rHoriz < 140 || rHoriz > 330 || zTcp < -120 || zTcp > 150) {
+                showToast(`⚠️ Điểm đích (X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}) nằm ngoài vùng an toàn!`);
+                return;
+            }
+
+            const autoMove = document.getElementById('chk-auto-move-drag');
+            if (autoMove && autoMove.checked) {
+                showToast(`🎯 Thả chuột ➔ Robot đang di chuyển tới X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                executeGoToPoint('safe');
+            } else {
+                showToast(`📍 Đã ghim điểm: X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
+                const btnSafe = document.querySelector('.btn-safe-jump');
+                if (btnSafe) {
+                    btnSafe.style.transform = 'scale(1.05)';
+                    setTimeout(() => { btnSafe.style.transform = ''; }, 400);
+                }
+            }
+        }
+
+        function updateTargetAncillaries(x, y, zTcp) {
+            const floorHeight = L1_BASE + zTcp;
+
+            // Vòng tâm ngắm ở mặt sàn
+            targetFloorReticle.position.set(x, 0.6, -y);
+
+            // Đường gióng rơi thẳng đứng
+            const pts = [new THREE.Vector3(x, floorHeight, -y), new THREE.Vector3(x, 0.6, -y)];
+            targetDropLine.geometry.setFromPoints(pts);
+            targetDropLine.computeLineDistances();
+
+            // Kiểm tra an toàn
+            const rHoriz = Math.sqrt(x * x + y * y);
+            let isValid = true;
+            let msg = `✅ Trong tầm với an toàn (Bán kính: ${rHoriz.toFixed(1)} mm, Z: ${zTcp.toFixed(1)} mm)`;
+
+            if (rHoriz < 140.0) {
+                isValid = false;
+                msg = `⚠️ Quá gần thân robot (${rHoriz.toFixed(1)}mm < 140mm)!`;
+            } else if (rHoriz > 330.0) {
+                isValid = false;
+                msg = `⚠️ Vượt quá tầm với tối đa (${rHoriz.toFixed(1)}mm > 330mm)!`;
+            } else if (zTcp < -120.0) {
+                isValid = false;
+                msg = `⚠️ Cao độ Z quá thấp (${zTcp.toFixed(1)}mm < -120mm)!`;
+            } else if (zTcp > 150.0) {
+                isValid = false;
+                msg = `⚠️ Cao độ Z quá cao (${zTcp.toFixed(1)}mm > 150mm)!`;
+            }
+
+            const badge = document.getElementById('target-reachability-badge');
+            if (badge) {
+                badge.className = `reach-badge ${isValid ? 'valid' : 'invalid'}`;
+                badge.innerText = msg;
+            }
+
+            const colorHex = isValid ? 0x51cf66 : 0xff6b6b;
+            const emissiveHex = isValid ? 0x2f9e44 : 0xc92a2a;
+            beaconBoxMat.color.setHex(colorHex);
+            beaconBoxMat.emissive.setHex(emissiveHex);
+            targetFloorReticle.material.color.setHex(colorHex);
+            targetDropLineMat.color.setHex(colorHex);
+
+            updateBeaconHudLabel(targetBeaconGroup.position, x, y, zTcp, isValid);
+        }
+
+        function updateBeaconHudLabel(pos, x, y, zTcp, isValid) {
+            const label = document.getElementById('beacon-hud');
+            if (!label) return;
+            if (!isTargetGizmoActive) {
+                label.style.display = 'none';
+                return;
+            }
+
+            const p = pos.clone();
+            p.project(camera);
+            if (p.z < 1) {
+                const sx = (p.x * 0.5 + 0.5) * window.innerWidth;
+                const sy = (-(p.y * 0.5) + 0.5) * window.innerHeight;
+                label.style.left = `${sx}px`;
+                label.style.top = `${sy}px`;
+                label.style.display = 'block';
+                label.style.borderColor = isValid ? '#51cf66' : '#ff6b6b';
+                label.style.color = isValid ? '#51cf66' : '#ff6b6b';
+                label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
+            } else {
+                label.style.display = 'none';
+            }
+        }
+
+        function updateTargetMarker() {
+            const x = parseFloat(document.getElementById('inp-target-x').value) || 0;
+            const y = parseFloat(document.getElementById('inp-target-y').value) || 0;
+            const zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
+
+            const floorHeight = L1_BASE + zTcp;
+            targetBeaconGroup.position.set(x, floorHeight, -y);
+
+            updateTargetAncillaries(x, y, zTcp);
+        }
+
+        function copyCurrentPoseToTargetInputs() {
+            document.getElementById('inp-target-x').value = currentX.toFixed(1);
+            document.getElementById('inp-target-y').value = currentY.toFixed(1);
+            document.getElementById('inp-target-z').value = currentZ.toFixed(1);
+            document.getElementById('inp-target-r').value = currentR.toFixed(1);
+            updateTargetMarker();
+            showToast('📍 Đã nạp vị trí thực tế của đầu hút vào ô nhập!');
+        }
+
+        function setTargetPreset(x, y, z, r) {
+            document.getElementById('inp-target-x').value = x;
+            document.getElementById('inp-target-y').value = y;
+            document.getElementById('inp-target-z').value = z;
+            document.getElementById('inp-target-r').value = r;
+            updateTargetMarker();
+            showToast(`🎯 Đã chọn điểm đích: X=${x}, Y=${y}, Z=${z}`);
+        }
+
+        function executeGoToPoint(mode) {
+            const x = parseFloat(document.getElementById('inp-target-x').value);
+            const y = parseFloat(document.getElementById('inp-target-y').value);
+            const zTcp = parseFloat(document.getElementById('inp-target-z').value);
+            const r = parseFloat(document.getElementById('inp-target-r').value);
+
+            const rHoriz = Math.sqrt(x * x + y * y);
+            if (rHoriz < 140.0 || rHoriz > 330.0 || zTcp < -120.0 || zTcp > 150.0) {
+                alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: 140 - 330mm)\nZ đầu hút: ${zTcp.toFixed(1)}mm (hợp lệ: -120 - 150mm)`);
+                return;
+            }
+
+            const zFlange = zTcp + toolOffset;
+            if (mode === 'safe') {
+                sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
+                showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+            } else {
+                sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
+                showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+            }
+        }
+
+        // ========================================================
+        // TƯƠNG TÁC CHUỘT SNAP VÀ DI CHUỘT TRÊN MẶT BÀN
+        // ========================================================
+        const raycaster = new THREE.Raycaster();
+        const mouseVec = new THREE.Vector2();
+        let mouseDownTime = 0;
+        let mouseDownPos = { x: 0, y: 0 };
+
+        function get3DPointFromMouse(event) {
+            const container = document.getElementById('canvas-container');
+            const rect = container.getBoundingClientRect();
+            mouseVec.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouseVec.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouseVec, camera);
+
+            // Cao độ mặt phẳng chọn điểm (Robot Z = targetZ, tính theo Three.js Y = L1_BASE + targetZ)
+            const targetZ = parseFloat(document.getElementById('inp-target-z').value) || 0;
+            const planeY = L1_BASE + targetZ;
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY);
+            const hit = new THREE.Vector3();
+            const result = raycaster.ray.intersectPlane(plane, hit);
+
+            if (result) {
+                return {
+                    x: Math.round(hit.x * 10) / 10,
+                    y: Math.round(-hit.z * 10) / 10,
+                    z: targetZ,
+                    worldPos: hit
+                };
+            }
+            return null;
+        }
+
+        function applyPickedPoint(rawX, rawY, rawZ) {
+            // Giữ nguyên độ cao Z hiện tại, chỉ snap X, Y
+            const curZ = parseFloat(document.getElementById('inp-target-z').value) || 0;
+            document.getElementById('inp-target-x').value = rawX.toFixed(1);
+            document.getElementById('inp-target-y').value = rawY.toFixed(1);
+
+            updateTargetMarker();
+
+            const rHoriz = Math.sqrt(rawX * rawX + rawY * rawY);
+            if (rHoriz < 140.0) {
+                showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) quá gần đế robot (< 140mm)!`);
+                return;
+            }
+            if (rHoriz > 330.0) {
+                showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) vượt quá tầm với (> 330mm)!`);
+                return;
+            }
+
+            const autoMove = document.getElementById('chk-auto-move-drag');
+            if (autoMove && autoMove.checked) {
+                showToast(`🎯 Click chọn ➔ Robot đang di chuyển tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}, Z=${curZ.toFixed(0)}`);
+                executeGoToPoint('safe');
+            } else {
+                showToast(`📍 Đã ghim điểm đích tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}. Kéo mũi tên xanh lá để chỉnh Z!`);
+            }
+        }
+
+        // Bắt phím Shift để đổi con trỏ
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Shift') {
+                document.getElementById('canvas-container').classList.add('canvas-picking');
+                zoneMat.opacity = 0.32;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') {
+                document.getElementById('canvas-container').classList.remove('canvas-picking');
+                zoneMat.opacity = 0.12;
+                hoverReticle.visible = false;
+                document.getElementById('hover-tooltip').style.display = 'none';
+            }
+        });
+
+        // Xử lý Mouse Down / Up phân biệt giữa Click snap điểm và Drag xoay camera
+        window.addEventListener('mousedown', (e) => {
+            mouseDownTime = Date.now();
+            mouseDownPos = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            const elapsed = Date.now() - mouseDownTime;
+            const dx = e.clientX - mouseDownPos.x;
+            const dy = e.clientY - mouseDownPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Nếu đang kéo gizmo hoặc kéo xoay camera thì bỏ qua
+            if (isDraggingGizmo || dist > 8 || elapsed > 800) return;
+
+            // Bỏ qua nếu click trên sidebar menu hoặc toast
+            if (e.target.closest('#panel') || e.target.closest('#toast-container')) return;
+
+            // Click snap điểm trên mặt bàn
+            if (e.shiftKey || (isTargetGizmoActive && e.button === 0)) {
+                const pt = get3DPointFromMouse(e);
+                if (pt) {
+                    applyPickedPoint(pt.x, pt.y, pt.z);
+                }
+            }
+        });
+
+        // Xử lý di chuột Hover
+        window.addEventListener('mousemove', (e) => {
+            if (e.target.closest('#panel') || isDraggingGizmo) {
+                hoverReticle.visible = false;
+                document.getElementById('hover-tooltip').style.display = 'none';
+                return;
+            }
+
+            if (e.shiftKey) {
+                const pt = get3DPointFromMouse(e);
+                const tooltip = document.getElementById('hover-tooltip');
+                if (pt) {
+                    const rHoriz = Math.sqrt(pt.x * pt.x + pt.y * pt.y);
+                    const isValid = (rHoriz >= 140 && rHoriz <= 330);
+
+                    hoverReticle.position.set(pt.worldPos.x, pt.worldPos.y + 0.5, pt.worldPos.z);
+                    hoverReticle.visible = true;
+
+                    const colorHex = isValid ? 0x51cf66 : 0xff6b6b;
+                    hoverRing.material.color.setHex(colorHex);
+                    hoverDot.material.color.setHex(colorHex);
+
+                    tooltip.style.left = `${e.clientX}px`;
+                    tooltip.style.top = `${e.clientY}px`;
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `🎯 <b>X:</b> ${pt.x.toFixed(0)} mm | <b>Y:</b> ${pt.y.toFixed(0)} mm <span style="color:${isValid ? '#51cf66' : '#ff6b6b'}">(${isValid ? 'Hợp lệ' : 'Ngoài tầm ⚠️'})</span>`;
+                } else {
+                    hoverReticle.visible = false;
+                    tooltip.style.display = 'none';
+                }
+            } else {
+                hoverReticle.visible = false;
+                document.getElementById('hover-tooltip').style.display = 'none';
+            }
+        });
+
+        // --- Gửi lệnh di chuyển tới Robot thật ---
+        function sendMoveToRobot() {
+            if (coordSystem === 'cartesian') {
+                const x = parseFloat(document.getElementById('cart-x').value);
+                const y = parseFloat(document.getElementById('cart-y').value);
+                const zTcp = parseFloat(document.getElementById('cart-z').value);
+                const zFlange = zTcp + toolOffset;
+                const r = parseFloat(document.getElementById('cart-r').value);
+                console.log(`Gửi lệnh PTP XYZ: X=${x}, Y=${y}, Z=${zFlange}, R=${r}`);
+                sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
+                showToast(`🚀 Đang gửi PTP: X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+            } else {
+                const j1 = parseFloat(document.getElementById('j1').value);
+                const j2 = parseFloat(document.getElementById('j2').value);
+                const j3 = parseFloat(document.getElementById('j3').value);
+                const j4 = parseFloat(document.getElementById('j4').value);
+                console.log(`Gửi lệnh Joint: J1=${j1}, J2=${j2}, J3=${j3}, J4=${j4}`);
+                sendAction('move_joint', { j1: j1, j2: j2, j3: j3, j4: j4, mode: 4 });
+                showToast(`🔄 Đang gửi góc khớp: J1=${j1.toFixed(1)}°, J2=${j2.toFixed(1)}°`);
+            }
+        }
+
+        // --- Toast Notification ---
+        function showToast(msg) {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                document.body.appendChild(container);
+            }
+            const toast = document.createElement('div');
+            toast.className = 'toast-msg';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        function configureServerUrl() {
+            const current = localStorage.getItem('dobot_ws_url') || "";
+            const input = prompt("⚙️ CẤU HÌNH KẾT NỐI ROBOT (Publish Web/Tunnel):\n\nNhập địa chỉ WebSocket Server của Robot (Ví dụ:\nwss://your-tunnel.trycloudflare.com/ws\nhoặc wss://abc.ngrok-free.app/ws\nhoặc ws://localhost:8080/ws).\n\nĐể trống để tự động dò tìm:", current);
+            if (input !== null) {
+                if (input.trim() === "") {
+                    localStorage.removeItem('dobot_ws_url');
+                    showToast("🔄 Đã xóa cấu hình riêng, chuyển về tự động dò tìm");
+                } else {
+                    localStorage.setItem('dobot_ws_url', input.trim());
+                    showToast("💾 Đã lưu địa chỉ Server mới!");
+                }
+                if (ws) {
+                    try { ws.close(); } catch(e){}
+                }
+                initWebSocket();
+            }
+        }
+
+        const DEFAULT_ROBOT_CLOUD_WS = "wss://rebuild-thinner-spur.ngrok-free.dev/ws";
+
+        // --- WebSocket Connection ---
+        function initWebSocket() {
+            const loc = window.location;
+            let wsUrl = localStorage.getItem('dobot_ws_url');
+
+            if (!wsUrl) {
+                // Nếu đang host trên Netlify / Vercel / GitHub Pages
+                if (loc.hostname.includes("netlify.app") || loc.hostname.includes("vercel.app") || loc.hostname.includes("github.io")) {
+                    wsUrl = DEFAULT_ROBOT_CLOUD_WS;
+                } else if (loc.protocol === "http:" || loc.protocol === "https:") {
+                    const proto = (loc.protocol === "https:") ? "wss:" : "ws:";
+                    wsUrl = `${proto}//${loc.host}/ws`;
+                } else {
+                    wsUrl = "ws://localhost:8080/ws";
+                }
+            }
+
+            try {
+                ws = new WebSocket(wsUrl);
+            } catch (err) {
+                console.warn("WebSocket init error:", err);
+                return;
+            }
+
+            const badge = document.getElementById('status-badge');
+            const statusText = document.getElementById('status-text');
+
+            ws.onopen = () => {
+                console.log("WebSocket connected to:", wsUrl);
+                badge.style.background = "";
+                badge.style.borderColor = "";
+                badge.style.color = "";
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === "pose") {
+                    if (msg.connected && msg.data) {
+                        badge.className = "status-badge live";
+                        badge.style.background = "";
+                        badge.style.borderColor = "";
+                        badge.style.color = "";
+                        statusText.innerText = `● Đang đồng bộ thật (${msg.port})`;
+                        if (currentMode === "live") {
+                            renderRobot(msg.data.j1, msg.data.j2, msg.data.j3, msg.data.j4, msg.data.x, msg.data.y, msg.data.z);
+                        }
+                    } else {
+                        badge.className = "status-badge offline";
+                        statusText.innerText = "○ Chưa cắm USB hoặc Robot đang tắt";
+                    }
+
+                    // Hiển thị hoặc ẩn banner báo động lỗi
+                    const alarmBanner = document.getElementById('alarm-banner');
+                    const alarmDesc = document.getElementById('alarm-desc');
+                    if (alarmBanner && alarmDesc) {
+                        if (msg.has_alarm && msg.alarms && msg.alarms.length > 0) {
+                            alarmBanner.style.display = "block";
+                            const errs = msg.alarms.map(a => `• [${a.hex}] ${a.desc}`).join("<br>");
+                            alarmDesc.innerHTML = errs;
+                        } else {
+                            alarmBanner.style.display = "none";
+                        }
+                    }
+                } else if (msg.type === "feedback") {
+                    showToast(msg.msg);
+                }
+            };
+
+            ws.onclose = () => {
+                badge.className = "status-badge offline";
+                statusText.innerText = "○ Chưa bật Server hoặc chưa cắm USB (Tự thử lại...)";
+                setTimeout(initWebSocket, 2500);
+            };
+
+            ws.onerror = () => {
+                try { ws.close(); } catch(e){}
+            };
+        }
+
+        function sendAction(action, payload=null) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                let data = { action: action };
+                if (payload && typeof payload === 'object') {
+                    data = Object.assign(data, payload);
+                } else if (payload !== null) {
+                    data.value = payload;
+                }
+                ws.send(JSON.stringify(data));
+            }
+        }
+
+        function toggleSuction() {
+            isSuctionOn = !isSuctionOn;
+            const btn = document.getElementById('btn-suction');
+            btn.classList.toggle('active-suction', isSuctionOn);
+            btn.innerText = isSuctionOn ? "💨 Tắt Giác Hút" : "💨 Giác Hút";
+            sendAction('suction', isSuctionOn);
+        }
+
+        function triggerHoming() {
+            const confirmed = confirm(
+                "⚠️ CẢNH BÁO AN TOÀN KHI HOMING:\n\n" +
+                "• Cánh tay robot sẽ tự động quay để tìm công tắc hành trình của từng khớp.\n" +
+                "• Hãy chắc chắn không gian xung quanh cánh tay hoàn toàn thoáng đãng, không có vật cản!\n\n" +
+                "Bạn có muốn tiếp tục chạy Homing ngay bây giờ?"
+            );
+            if (confirmed) {
+                sendAction('home');
+                showToast('🏠 Đang thực hiện Homing về gốc tọa độ chuẩn...');
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+
+            // Cập nhật vị trí nhãn HUD nổi bám theo cục điểm đích 3D
+            if (isTargetGizmoActive && targetBeaconGroup) {
+                const x = targetBeaconGroup.position.x;
+                const y = -targetBeaconGroup.position.z;
+                const zTcp = targetBeaconGroup.position.y - L1_BASE;
+                const rHoriz = Math.sqrt(x * x + y * y);
+                const isValid = (rHoriz >= 140 && rHoriz <= 330 && zTcp >= -120 && zTcp <= 150);
+                updateBeaconHudLabel(targetBeaconGroup.position, x, y, zTcp, isValid);
+            }
+        }
+
+        setMode('live');
+        setCoordSystem('cartesian');
+        switchTab('target');
+        switchControlSubTab('jog');
+        initWebSocket();
+        initTransformGizmo();
+        updateTargetMarker();
+        animate();
+    </script>
+</body>
+</html>

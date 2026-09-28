@@ -1,0 +1,20 @@
+=== HƯỚNG DẪN CÁC LỆNH ĐIỀU KHIỂN DOBOT MAGICIAN ===
+
+1. Di chuyển đầu hút đến 1 điểm chỉ định (CLI):
+   python3 move_to_point.py --x 250 --y 0 --z 30
+   python3 move_to_point.py --x 220 --y 100 --z 20 --suck on
+
+2. Menu kiểm tra phần cứng tương tác:
+   python3 test_dobot.py
+
+3. Mở Server Web 3D Digital Twin nội bộ (Local):
+   python3 dobot_live_server.py
+   -> Mở trình duyệt xem: http://localhost:8080
+
+4. Mở Server Web 3D ĐIỀU KHIỂN TỪ XA QUA INTERNET (Mở trên điện thoại, 4G, gửi link cho người khác):
+   ./start_online.sh
+   -> Script tự động cấp 1 đường link https://xxxx.trycloudflare.com
+
+5. Đăng web Demo / Mô phỏng lên Netlify (Web tĩnh):
+   Kéo thả thư mục: /home/danh/FABLAB/dist_netlify
+   vào trang web: https://app.netlify.com/drop
