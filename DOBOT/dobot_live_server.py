@@ -1199,6 +1199,51 @@ class ApiCalibInfoHandler(tornado.web.RequestHandler):
         self.write({"status": "ok", "calibrated": False, "message": "Chưa có file homography_dobot.json"})
 
 
+class ApiDropTargetsHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def get(self):
+        drop_file = BASE_DIR / "drop_targets.json"
+        if drop_file.exists():
+            try:
+                with open(drop_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.write({"status": "ok", "data": data})
+                return
+            except Exception:
+                pass
+        default_data = {
+            "mode": "all",
+            "default": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Mặc Định"},
+            "by_color": {
+                "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Đỏ"},
+                "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Lục"},
+                "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Dương"},
+                "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Vàng"}
+            }
+        }
+        self.write({"status": "ok", "data": default_data})
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body)
+            drop_file = BASE_DIR / "drop_targets.json"
+            with open(drop_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            if HAS_WEB_STUDIO and vision_engine:
+                try:
+                    import web_vision_engine
+                    web_vision_engine.load_drop_targets()
+                except Exception:
+                    pass
+            print(f"[LiveServer] 💾 Đã lưu cấu hình khay thả: {drop_file}")
+            self.write({"status": "ok", "message": "Đã lưu vị trí thả đồ thành công!"})
+        except Exception as e:
+            self.write({"status": "error", "message": str(e)})
+
+
 def find_available_port(preferred_port=8080):
     import socket
     for p in [preferred_port, 8081, 8082, 8088]:
@@ -1245,6 +1290,7 @@ def main():
         (r"/api/vision/pick", ApiVisionPickHandler),
         (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
         (r"/api/vision/models", ApiVisionModelsHandler),
+        (r"/api/vision/drop_targets", ApiDropTargetsHandler),
         (r"/api/calib/info", ApiCalibInfoHandler),
     ])
     

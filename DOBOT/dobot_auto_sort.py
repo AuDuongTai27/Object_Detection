@@ -45,9 +45,11 @@ HOMOGRAPHY_NPY_PATH = BASE_DIR / "homography_dobot.npy"
 MODEL_DIR = PROJECT_ROOT / "models"
 
 # Độ cao chuẩn làm việc của Dobot (Z_Flange = Z_TCP + 59.5)
-# Đã hạ tiếp 0.2 cm (2.0 mm): Z_TCP = -111.2 mm -> Z_Flange = -51.7 mm
-Z_PICK_FLANGE = -51.7
+# Đã hạ tiếp 0.5 cm (5.0 mm): Mức tiếp xúc Z_TCP = -109.2 mm -> Hạ xuống Z_TCP = -114.2 mm (Z_Flange = -54.7 mm)
+Z_PICK_FLANGE = -54.7
 Z_SAFE_FLANGE = 35.0
+
+DROP_TARGETS_JSON_PATH = BASE_DIR / "drop_targets.json"
 
 # Tọa độ điểm thả mặc định cho mọi khối màu theo cấu hình của bạn:
 DEFAULT_DROP_TARGET = {
@@ -57,14 +59,35 @@ DEFAULT_DROP_TARGET = {
     "name": "Khay Thả (49.2, -230.1)"
 }
 
-# Tùy chọn: Tọa độ phân loại riêng biệt cho từng màu (nếu muốn xếp riêng từng khay)
-# Mặc định gom về (49.2, -230.1) theo cấu hình mới của bạn
 DROP_TARGETS_BY_COLOR = {
     "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Đỏ (49.2, -230.1)"},
     "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Lục (49.2, -230.1)"},
     "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Dương (49.2, -230.1)"},
     "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Vàng (49.2, -230.1)"},
 }
+
+DROP_TARGETS_MODE = "all"
+
+def load_drop_targets():
+    """Tự động nạp tọa độ khay thả & Z gắp từ file drop_targets.json do Web Studio thiết lập."""
+    global DEFAULT_DROP_TARGET, DROP_TARGETS_BY_COLOR, DROP_TARGETS_MODE, Z_PICK_FLANGE
+    if DROP_TARGETS_JSON_PATH.exists():
+        try:
+            with open(DROP_TARGETS_JSON_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if "pick_z" in data:
+                Z_PICK_FLANGE = float(data["pick_z"])
+            if "mode" in data:
+                DROP_TARGETS_MODE = data["mode"]
+            if "default" in data:
+                DEFAULT_DROP_TARGET.update(data["default"])
+            if "by_color" in data:
+                DROP_TARGETS_BY_COLOR.update(data["by_color"])
+            print(f"[+] Đã nạp cấu hình vị trí thả đồ (Chế độ: {DROP_TARGETS_MODE}, Z_Pick={Z_PICK_FLANGE}mm) từ: {DROP_TARGETS_JSON_PATH}")
+        except Exception as e:
+            print(f"[!] Lỗi khi nạp drop_targets.json: {e}")
+
+load_drop_targets()
 
 # Độ bù trừ vị trí hút phôi (mm):
 # Sau khi calib lại 4 điểm chuẩn xác (sai số 0.00 mm), đặt bù trừ về 0.0 mm
@@ -234,7 +257,10 @@ class DobotExecutor:
 
     def _pick_and_place_worker(self, pick_x, pick_y, cube_name, on_complete):
         self.is_busy = True
-        target = DROP_TARGETS_BY_COLOR.get(cube_name, self.drop_target)
+        if DROP_TARGETS_MODE == "all":
+            target = self.drop_target
+        else:
+            target = DROP_TARGETS_BY_COLOR.get(cube_name, self.drop_target)
         place_x = target.get("x", self.drop_target["x"])
         place_y = target.get("y", self.drop_target["y"])
         place_z = target.get("z", self.drop_target["z"])
@@ -326,9 +352,9 @@ def main():
                         help="Mô hình YOLO chỉ định (Mặc định: ưu tiên best_v8_more_augmentation.pt)")
     parser.add_argument("--width", type=int, default=1280, help="Độ rộng khung hình (1280)")
     parser.add_argument("--height", type=int, default=720, help="Độ cao khung hình (720)")
-    parser.add_argument("--drop_x", type=float, default=49.2, help="Tọa độ X điểm thả (default: 49.2)")
-    parser.add_argument("--drop_y", type=float, default=-230.1, help="Tọa độ Y điểm thả (default: -230.1)")
-    parser.add_argument("--drop_z", type=float, default=-44.0, help="Tọa độ Z_Flange điểm thả (default: -44.0)")
+    parser.add_argument("--drop_x", type=float, default=None, help="Tọa độ X điểm thả (mặc định lấy từ drop_targets.json)")
+    parser.add_argument("--drop_y", type=float, default=None, help="Tọa độ Y điểm thả (mặc định lấy từ drop_targets.json)")
+    parser.add_argument("--drop_z", type=float, default=None, help="Tọa độ Z_Flange điểm thả (mặc định lấy từ drop_targets.json)")
     parser.add_argument("--pick_z", type=float, default=Z_PICK_FLANGE,
                         help=f"Độ cao Z_Flange khi hút (default: {Z_PICK_FLANGE} mm)")
     parser.add_argument("--offset_x", type=float, default=OFFSET_PICK_X,
@@ -337,11 +363,15 @@ def main():
                         help=f"Độ bù trừ trục Y lúc hút (mm, default: {OFFSET_PICK_Y} mm)")
     args = parser.parse_args()
 
+    drop_x = args.drop_x if args.drop_x is not None else DEFAULT_DROP_TARGET["x"]
+    drop_y = args.drop_y if args.drop_y is not None else DEFAULT_DROP_TARGET["y"]
+    drop_z = args.drop_z if args.drop_z is not None else DEFAULT_DROP_TARGET["z"]
+
     drop_target = {
-        "x": args.drop_x,
-        "y": args.drop_y,
-        "z": args.drop_z,
-        "name": f"Khay Thả ({args.drop_x:.1f}, {args.drop_y:.1f})"
+        "x": drop_x,
+        "y": drop_y,
+        "z": drop_z,
+        "name": f"Khay Thả ({drop_x:.1f}, {drop_y:.1f})"
     }
 
     # Nạp ma trận Homography

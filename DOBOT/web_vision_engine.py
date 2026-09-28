@@ -32,8 +32,11 @@ HOMOGRAPHY_JSON_PATH = BASE_DIR / "homography_dobot.json"
 MODELS_DIR = PROJECT_ROOT / "models"
 
 # Độ cao chuẩn Dobot (mm)
-Z_PICK_FLANGE = -51.7
+# Đã hạ tiếp 0.5 cm (5.0 mm): Mức tiếp xúc Z_TCP = -109.2 mm -> Hạ xuống Z_TCP = -114.2 mm (Z_Flange = -54.7 mm)
+Z_PICK_FLANGE = -54.7
 Z_SAFE_FLANGE = 35.0
+
+DROP_TARGETS_JSON_PATH = BASE_DIR / "drop_targets.json"
 
 # Tọa độ khay thả mặc định
 DEFAULT_DROP_TARGET = {
@@ -49,6 +52,29 @@ DROP_TARGETS_BY_COLOR = {
     "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Dương (49.2, -230.1)"},
     "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Vàng (49.2, -230.1)"},
 }
+
+DROP_TARGETS_MODE = "all"
+
+def load_drop_targets():
+    """Tự động nạp tọa độ khay thả & Z gắp từ file drop_targets.json."""
+    global DEFAULT_DROP_TARGET, DROP_TARGETS_BY_COLOR, DROP_TARGETS_MODE, Z_PICK_FLANGE
+    if DROP_TARGETS_JSON_PATH.exists():
+        try:
+            with open(DROP_TARGETS_JSON_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if "pick_z" in data:
+                Z_PICK_FLANGE = float(data["pick_z"])
+            if "mode" in data:
+                DROP_TARGETS_MODE = data["mode"]
+            if "default" in data:
+                DEFAULT_DROP_TARGET.update(data["default"])
+            if "by_color" in data:
+                DROP_TARGETS_BY_COLOR.update(data["by_color"])
+            print(f"[VisionEngine] Đã nạp cấu hình vị trí thả đồ (Chế độ: {DROP_TARGETS_MODE}, Z_Pick={Z_PICK_FLANGE}mm) từ: {DROP_TARGETS_JSON_PATH}")
+        except Exception as e:
+            print(f"[VisionEngine] Lỗi nạp drop_targets.json: {e}")
+
+load_drop_targets()
 
 COLOR_MAP = {
     "cube_red":    (0, 0, 255),
@@ -476,7 +502,10 @@ class WebVisionEngine:
         def _worker():
             self.is_picking = True
             try:
-                target_tray = DROP_TARGETS_BY_COLOR.get(cube_name, DEFAULT_DROP_TARGET)
+                if DROP_TARGETS_MODE == "all":
+                    target_tray = DEFAULT_DROP_TARGET
+                else:
+                    target_tray = DROP_TARGETS_BY_COLOR.get(cube_name, DEFAULT_DROP_TARGET)
                 drop_x = target_tray["x"]
                 drop_y = target_tray["y"]
                 drop_z = target_tray["z"]

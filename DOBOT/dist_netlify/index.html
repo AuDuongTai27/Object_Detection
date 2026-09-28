@@ -1734,7 +1734,7 @@
                         </div>
 
                         <div style="margin-top: 10px; font-size: 11px; color: #64748b; line-height: 1.4; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 10px;">
-                            📍 Tọa độ khay phân loại: <b>X = 49.2 mm, Y = -230.1 mm</b> | Z gắp: <b>-51.7 mm</b> | Chuyển đổi tọa độ: <b>Homography Matrix chuẩn</b>.
+                            📍 Tọa độ khay: <b id="lbl-info-drop-coords">X = 49.2 mm, Y = -230.1 mm</b> | Z gắp: <b id="lbl-info-pick-z">-54.7 mm (Mũi hút TCP: -114.2 mm)</b> | Chuyển đổi: <b>Homography Matrix chuẩn</b>.
                         </div>
                     </div>
 
@@ -1791,6 +1791,97 @@
                         <span id="txt-conf-val" style="color: #38bdf8; font-weight: bold; font-family: monospace;">45%</span>
                     </label>
                     <input type="range" id="rng-conf-threshold" min="20" max="90" value="45" step="5" oninput="document.getElementById('txt-conf-val').innerText = this.value + '%'" style="width: 100%; margin-top: 4px;">
+                </div>
+
+                <!-- CẤU HÌNH VỊ TRÍ KHAY THẢ ĐỒ (DROP TARGETS) -->
+                <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: #38bdf8;">
+                            <span>🎯</span> <span>VỊ TRÍ KHAY THẢ ĐỒ (DROP TARGETS)</span>
+                        </div>
+                        <span id="badge-drop-mode" style="font-size: 10.5px; padding: 2px 7px; border-radius: 4px; background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; font-weight: 700;">Chung 1 khay</span>
+                    </div>
+
+                    <!-- Lựa chọn Chế độ thả: Chung 1 khay HOẶC Phân loại theo màu -->
+                    <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                        <button type="button" id="btn-mode-drop-all" onclick="handleSetDropMode('all')" style="flex: 1; padding: 6px 8px; font-size: 11.5px; font-weight: 700; border-radius: 6px; border: 1px solid #38bdf8; background: #0284c7; color: #fff; cursor: pointer; transition: all 0.2s;">
+                            📦 Chung 1 Khay
+                        </button>
+                        <button type="button" id="btn-mode-drop-color" onclick="handleSetDropMode('color')" style="flex: 1; padding: 6px 8px; font-size: 11.5px; font-weight: 700; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: #94a3b8; cursor: pointer; transition: all 0.2s;">
+                            🎨 Phân Khay Theo Màu
+                        </button>
+                    </div>
+
+                    <!-- Chọn khay cần chỉnh sửa -->
+                    <div style="margin-bottom: 10px;">
+                        <label for="sel-drop-tray" style="display: block; font-size: 11.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Khay đang chọn chỉnh sửa:</label>
+                        <select id="sel-drop-tray" onchange="handleSelectDropTray(this.value)" style="width: 100%; background: #1e293b; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 7px 10px; font-size: 12px; font-weight: 600; outline: none; cursor: pointer;">
+                            <option value="default">📦 Khay Mặc Định (Tất cả các màu)</option>
+                            <option value="cube_red">🔴 Khay Đỏ (cube_red)</option>
+                            <option value="cube_green">🟢 Khay Xanh Lục (cube_green)</option>
+                            <option value="cube_blue">🔵 Khay Xanh Dương (cube_blue)</option>
+                            <option value="cube_yellow">🟡 Khay Vàng (cube_yellow)</option>
+                        </select>
+                    </div>
+
+                    <!-- Ô nhập tọa độ X, Y, Z (mm) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #f87171; margin-bottom: 3px;">Tọa độ X (mm):</label>
+                            <input type="number" id="inp-drop-x" step="0.1" value="49.2" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #4ade80; margin-bottom: 3px;">Tọa độ Y (mm):</label>
+                            <input type="number" id="inp-drop-y" step="0.1" value="-230.1" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 3px;">Tọa độ Z (mm):</label>
+                            <input type="number" id="inp-drop-z" step="0.1" value="-44.0" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                        </div>
+                    </div>
+
+                    <!-- Cấu hình độ cao Z gắp phôi (Pick Z) -->
+                    <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(250, 204, 21, 0.25); border-radius: 8px; padding: 9px 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label for="inp-pick-z" style="font-size: 11.5px; font-weight: 700; color: #facc15; display: flex; align-items: center; gap: 5px;">
+                                <span>🦾</span> <span>Độ cao Z khi gắp phôi (Pick Z):</span>
+                            </label>
+                            <span style="font-size: 11px; color: #38bdf8; font-family: monospace;">Mũi hút TCP: <b id="lbl-pick-tcp-val">-114.2 mm</b></span>
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="number" id="inp-pick-z" step="0.5" value="-54.7" oninput="handlePickZChange(this.value)" style="flex: 1; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #facc15; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;" title="Tọa độ Z gửi robot. Mũi hút dài 59.5mm nên Z_TCP = Z_Flange - 59.5">
+                            <button type="button" onclick="handleAutoFillPickZ()" style="background: rgba(250, 204, 21, 0.15); border: 1px solid #facc15; color: #facc15; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="Cho Dobot chạm vào khối phôi, bấm nút này để tự động lấy Z và hạ 0.5 cm!">
+                                <span>📍</span> <span>Lấy Z Từ Dobot</span>
+                            </button>
+                        </div>
+                        <div style="font-size: 10px; color: #94a3b8; margin-top: 4px; line-height: 1.35;">
+                            💡 Mức tiếp xúc phôi là ~<b>-109.2 mm</b> (TCP). Đã hạ 0.5 cm (-5 mm) ➔ <b>-114.2 mm</b> (Z = <b>-54.7 mm</b>) để giác hút ấn dính chặt.
+                        </div>
+                    </div>
+
+                    <!-- Các nút hành động: Nhập tọa độ tự động từ robot, Lưu, Thử bay tới -->
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <button type="button" onclick="handleAutoFillDropCoordinates()" style="padding: 8px 12px; background: linear-gradient(135deg, #0284c7, #0369a1); border: 1px solid #38bdf8; color: #fff; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 8px rgba(2,132,199,0.3); transition: all 0.2s;" title="Di chuyển cánh tay Dobot tới vị trí khay thả mong muốn, sau đó bấm nút này để tự động lấy tọa độ X, Y, Z!">
+                            <span>📍</span> <span>LẤY TỌA ĐỘ DOBOT HIỆN TẠI (TỰ ĐỘNG)</span>
+                        </button>
+
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" onclick="handleSaveDropTargets()" style="flex: 1; padding: 8px 10px; background: linear-gradient(135deg, #16a34a, #15803d); border: 1px solid #4ade80; color: #fff; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;">
+                                <span>💾</span> <span>Lưu Vị Trí Khay</span>
+                            </button>
+                            <button type="button" onclick="handleTestMoveToDropTarget()" style="flex: 1; padding: 8px 10px; background: linear-gradient(135deg, #7c3aed, #6d28d9); border: 1px solid #c084fc; color: #fff; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" title="Dobot sẽ nhấc lên cao an toàn rồi bay thử tới tọa độ khay này">
+                                <span>🎯</span> <span>Thử Bay Tới Khay</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mini status grid hiển thị tọa độ các khay đã lưu -->
+                    <div style="margin-top: 10px; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 5px;">
+                        📌 TỌA ĐỘ CÁC KHAY ĐÃ CẤU HÌNH (Bấm để chọn sửa):
+                    </div>
+                    <div id="drop-targets-summary" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10.5px;">
+                        <!-- Rendered by JS -->
+                    </div>
                 </div>
 
                 <div style="font-size: 12px; font-weight: 700; color: #94a3b8; margin-top: 4px; margin-bottom: 6px;">
@@ -3948,6 +4039,7 @@
                 fetchVisionModels();
                 fetchCameraDevices();
                 checkToolStatus();
+                fetchDropTargets();
             } else if (tabId === 'calib') {
                 fetchCameraDevices();
                 checkToolStatus();
@@ -4688,6 +4780,341 @@
             }
         }
 
+        // =====================================================================
+        // --- 4. CẤU HÌNH VỊ TRÍ KHAY THẢ ĐỒ (DROP TARGETS) ---
+        // =====================================================================
+        let dropTargetsConfig = {
+            mode: "all",
+            default: { x: 49.2, y: -230.1, z: -44.0, name: "Khay Mặc Định" },
+            by_color: {
+                cube_red:    { x: 49.2, y: -230.1, z: -44.0, name: "Khay Đỏ" },
+                cube_green:  { x: 49.2, y: -230.1, z: -44.0, name: "Khay Xanh Lục" },
+                cube_blue:   { x: 49.2, y: -230.1, z: -44.0, name: "Khay Xanh Dương" },
+                cube_yellow: { x: 49.2, y: -230.1, z: -44.0, name: "Khay Vàng" }
+            }
+        };
+
+        async function fetchDropTargets() {
+            try {
+                const res = await fetch('/api/vision/drop_targets');
+                const data = await res.json();
+                if (data.status === 'ok' && data.data) {
+                    dropTargetsConfig = data.data;
+                    if (!dropTargetsConfig.default) {
+                        dropTargetsConfig.default = { x: 49.2, y: -230.1, z: -44.0, name: "Khay Mặc Định" };
+                    }
+                    if (!dropTargetsConfig.by_color) {
+                        dropTargetsConfig.by_color = {};
+                    }
+                    renderDropTargetsUI();
+                }
+            } catch (err) {
+                console.warn("fetchDropTargets error:", err);
+            }
+        }
+
+        function renderDropTargetsUI() {
+            const mode = dropTargetsConfig.mode || 'all';
+            const btnAll = document.getElementById('btn-mode-drop-all');
+            const btnColor = document.getElementById('btn-mode-drop-color');
+            const badgeMode = document.getElementById('badge-drop-mode');
+
+            if (btnAll && btnColor) {
+                if (mode === 'all') {
+                    btnAll.style.background = '#0284c7';
+                    btnAll.style.borderColor = '#38bdf8';
+                    btnAll.style.color = '#fff';
+                    btnColor.style.background = '#1e293b';
+                    btnColor.style.borderColor = '#475569';
+                    btnColor.style.color = '#94a3b8';
+                    if (badgeMode) {
+                        badgeMode.innerText = "Chung 1 khay";
+                        badgeMode.style.color = "#38bdf8";
+                        badgeMode.style.borderColor = "#38bdf8";
+                    }
+                } else {
+                    btnColor.style.background = '#0284c7';
+                    btnColor.style.borderColor = '#38bdf8';
+                    btnColor.style.color = '#fff';
+                    btnAll.style.background = '#1e293b';
+                    btnAll.style.borderColor = '#475569';
+                    btnAll.style.color = '#94a3b8';
+                    if (badgeMode) {
+                        badgeMode.innerText = "Phân theo 4 màu";
+                        badgeMode.style.color = "#a855f7";
+                        badgeMode.style.borderColor = "#c084fc";
+                    }
+                }
+            }
+
+            const selTray = document.getElementById('sel-drop-tray');
+            const currentSelected = selTray ? selTray.value : 'default';
+            handleSelectDropTray(currentSelected);
+
+            const inpPickZ = document.getElementById('inp-pick-z');
+            const pickZ = (dropTargetsConfig.pick_z !== undefined) ? dropTargetsConfig.pick_z : -54.7;
+            if (inpPickZ) {
+                inpPickZ.value = pickZ;
+                handlePickZChange(pickZ);
+            }
+
+            renderDropTargetsSummary();
+        }
+
+        function handlePickZChange(val) {
+            const zNum = parseFloat(val);
+            const lblTcp = document.getElementById('lbl-pick-tcp-val');
+            const lblInfo = document.getElementById('lbl-info-pick-z');
+            if (!isNaN(zNum)) {
+                const tcpZ = (zNum - 59.5).toFixed(1);
+                if (lblTcp) lblTcp.innerText = tcpZ + ' mm';
+                if (lblInfo) lblInfo.innerText = `${zNum} mm (Mũi hút TCP: ${tcpZ} mm)`;
+            }
+        }
+
+        async function handleAutoFillPickZ() {
+            try {
+                showToast("🔍 Đang đọc tọa độ Z tiếp xúc từ Dobot...");
+                const res = await fetch('/api/cmd');
+                const data = await res.json();
+                if (data.status === 'ok' && data.pose && (data.pose.z !== undefined)) {
+                    // Robot đang chạm phôi tại pose.z. Hạ tiếp 5.0 mm (0.5 cm) để hút chặt
+                    const contactZ = Number(data.pose.z);
+                    const targetZ = Math.round((contactZ - 5.0) * 10) / 10;
+                    const inpPickZ = document.getElementById('inp-pick-z');
+                    if (inpPickZ) {
+                        inpPickZ.value = targetZ;
+                        handlePickZChange(targetZ);
+                    }
+                    showToast(`📍 Dobot đang ở Z=${contactZ.toFixed(1)} mm. Đã tính độ sâu gắp: Z=${targetZ} mm (TCP: ${(targetZ - 59.5).toFixed(1)} mm)!`);
+                } else {
+                    showToast("⚠️ Chưa đọc được tọa độ robot! Hãy kết nối Dobot trước.");
+                }
+            } catch(e) {
+                showToast(`❌ Lỗi: ${e.message}`);
+            }
+        }
+
+        function handleSelectDropTray(trayKey) {
+            let target;
+            if (trayKey === 'default') {
+                target = dropTargetsConfig.default;
+            } else {
+                target = (dropTargetsConfig.by_color && dropTargetsConfig.by_color[trayKey]) 
+                         ? dropTargetsConfig.by_color[trayKey] 
+                         : dropTargetsConfig.default;
+            }
+
+            if (target) {
+                const inpX = document.getElementById('inp-drop-x');
+                const inpY = document.getElementById('inp-drop-y');
+                const inpZ = document.getElementById('inp-drop-z');
+                if (inpX) inpX.value = (target.x !== undefined) ? target.x : 49.2;
+                if (inpY) inpY.value = (target.y !== undefined) ? target.y : -230.1;
+                if (inpZ) inpZ.value = (target.z !== undefined) ? target.z : -44.0;
+            }
+        }
+
+        function selectTrayAndEdit(trayKey) {
+            const sel = document.getElementById('sel-drop-tray');
+            if (sel) {
+                sel.value = trayKey;
+                handleSelectDropTray(trayKey);
+                const optName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : trayKey;
+                showToast(`✏️ Đang sửa tọa độ: ${optName}`);
+            }
+        }
+
+        async function handleSetDropMode(mode) {
+            dropTargetsConfig.mode = mode;
+            renderDropTargetsUI();
+            try {
+                await fetch('/api/vision/drop_targets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dropTargetsConfig)
+                });
+                showToast(mode === 'all' 
+                    ? "📦 Đã đổi sang chế độ: Dùng chung 1 khay cho mọi màu!" 
+                    : "🎨 Đã đổi sang chế độ: Phân khay theo màu riêng biệt!");
+            } catch (err) {
+                console.warn(err);
+            }
+        }
+
+        async function handleAutoFillDropCoordinates() {
+            try {
+                showToast("🔍 Đang đọc tọa độ hiện tại từ robot Dobot...");
+                const res = await fetch('/api/cmd');
+                const data = await res.json();
+                if (data.status === 'ok' && data.pose && (data.pose.x !== undefined)) {
+                    const x = Math.round(Number(data.pose.x) * 10) / 10;
+                    const y = Math.round(Number(data.pose.y) * 10) / 10;
+                    const z = Math.round(Number(data.pose.z) * 10) / 10;
+
+                    const inpX = document.getElementById('inp-drop-x');
+                    const inpY = document.getElementById('inp-drop-y');
+                    const inpZ = document.getElementById('inp-drop-z');
+                    if (inpX) inpX.value = x;
+                    if (inpY) inpY.value = y;
+                    if (inpZ) inpZ.value = z;
+
+                    showToast(`📍 Đã lấy tọa độ Dobot: X=${x}, Y=${y}, Z=${z}! Nhớ nhấn "Lưu Vị Trí Khay".`);
+                } else {
+                    showToast("⚠️ Chưa đọc được tọa độ! Hãy kiểm tra kết nối Dobot ở góc trên bên phải.");
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi đọc tọa độ Dobot: ${err.message}`);
+            }
+        }
+
+        async function handleSaveDropTargets() {
+            const inpX = document.getElementById('inp-drop-x');
+            const inpY = document.getElementById('inp-drop-y');
+            const inpZ = document.getElementById('inp-drop-z');
+            const selTray = document.getElementById('sel-drop-tray');
+
+            const x = parseFloat(inpX ? inpX.value : '');
+            const y = parseFloat(inpY ? inpY.value : '');
+            const z = parseFloat(inpZ ? inpZ.value : '');
+
+            if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                showToast("⚠️ Vui lòng nhập số hợp lệ cho cả 3 trục X, Y, Z!");
+                return;
+            }
+
+            const selKey = selTray ? selTray.value : 'default';
+            if (selKey === 'default') {
+                dropTargetsConfig.default = { x, y, z, name: "Khay Mặc Định" };
+                // Nếu đang dùng mode 'all', đồng bộ luôn cả 4 màu
+                if (dropTargetsConfig.mode === 'all' && dropTargetsConfig.by_color) {
+                    for (const k of Object.keys(dropTargetsConfig.by_color)) {
+                        dropTargetsConfig.by_color[k].x = x;
+                        dropTargetsConfig.by_color[k].y = y;
+                        dropTargetsConfig.by_color[k].z = z;
+                    }
+                }
+            } else {
+                const names = {
+                    'cube_red': 'Khay Đỏ',
+                    'cube_green': 'Khay Xanh Lục',
+                    'cube_blue': 'Khay Xanh Dương',
+                    'cube_yellow': 'Khay Vàng'
+                };
+                if (!dropTargetsConfig.by_color) dropTargetsConfig.by_color = {};
+                dropTargetsConfig.by_color[selKey] = {
+                    x, y, z,
+                    name: names[selKey] || selKey
+                };
+            }
+
+            const inpPickZ = document.getElementById('inp-pick-z');
+            if (inpPickZ) {
+                const pz = parseFloat(inpPickZ.value);
+                if (!isNaN(pz)) {
+                    dropTargetsConfig.pick_z = pz;
+                }
+            }
+
+            try {
+                showToast("💾 Đang lưu vị trí khay thả & độ cao Z gắp...");
+                const res = await fetch('/api/vision/drop_targets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dropTargetsConfig)
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast("✅ Đã lưu vị trí thả đồ thành công!");
+                    renderDropTargetsUI();
+                } else {
+                    showToast(`❌ Lỗi lưu: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi mạng: ${err.message}`);
+            }
+        }
+
+        async function handleTestMoveToDropTarget() {
+            const inpX = document.getElementById('inp-drop-x');
+            const inpY = document.getElementById('inp-drop-y');
+            const inpZ = document.getElementById('inp-drop-z');
+
+            const x = parseFloat(inpX ? inpX.value : '');
+            const y = parseFloat(inpY ? inpY.value : '');
+            const z = parseFloat(inpZ ? inpZ.value : '');
+
+            if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                showToast("⚠️ Vui lòng nhập tọa độ hợp lệ trước khi bay thử!");
+                return;
+            }
+
+            if (!confirm(`Bạn có chắc chắn muốn Dobot bay thử đến tọa độ khay: (X=${x}, Y=${y}, Z=${z}) mm?\nRobot sẽ tự động nhấc lên cao an toàn trước khi di chuyển.`)) {
+                return;
+            }
+
+            try {
+                showToast(`🚀 Đang điều khiển Dobot bay an toàn tới (${x}, ${y}, ${z})...`);
+                const res = await fetch('/api/cmd', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'safe_jump',
+                        x: x,
+                        y: y,
+                        z: z,
+                        r: 0,
+                        safe_z: 35.0
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast("✅ Dobot đã bay tới vị trí khay thả an toàn!");
+                } else {
+                    showToast("❌ Không thể di chuyển robot! Vui lòng kiểm tra kết nối.");
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
+        function renderDropTargetsSummary() {
+            const sumEl = document.getElementById('drop-targets-summary');
+            if (!sumEl) return;
+            const mode = dropTargetsConfig.mode || 'all';
+            const def = dropTargetsConfig.default || { x: 49.2, y: -230.1, z: -44.0 };
+            const byColor = dropTargetsConfig.by_color || {};
+
+            const items = [
+                { key: 'cube_red', name: 'Đỏ', col: '#ef4444', data: byColor.cube_red || def },
+                { key: 'cube_green', name: 'Lục', col: '#22c55e', data: byColor.cube_green || def },
+                { key: 'cube_blue', name: 'Dương', col: '#3b82f6', data: byColor.cube_blue || def },
+                { key: 'cube_yellow', name: 'Vàng', col: '#eab308', data: byColor.cube_yellow || def }
+            ];
+
+            sumEl.innerHTML = items.map(it => {
+                const t = (mode === 'all') ? def : it.data;
+                return `
+                    <div onclick="selectTrayAndEdit('${it.key}')" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 5px 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;" title="Nhấp để xem hoặc sửa tọa độ khay ${it.name}">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${it.col};"></span>
+                            <span style="color: #cbd5e1; font-weight: 600;">${it.name}:</span>
+                        </div>
+                        <span style="color: #38bdf8; font-family: monospace; font-weight: 700;">(${t.x}, ${t.y})</span>
+                    </div>
+                `;
+            }).join('');
+
+            const infoEl = document.getElementById('lbl-info-drop-coords');
+            if (infoEl) {
+                if (mode === 'all') {
+                    infoEl.innerText = `X = ${def.x} mm, Y = ${def.y} mm`;
+                } else {
+                    infoEl.innerText = `Theo từng màu (Đỏ, Lục, Dương, Vàng)`;
+                }
+            }
+        }
+
         // --- PHÍM TẮT BÀN PHÍM TÍCH HỢP ---
         window.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -4716,6 +5143,7 @@
         updateTargetMarker();
         switchStudioTab('3d');
         fetchCameraDevices();
+        fetchDropTargets();
         setInterval(checkToolStatus, 1500);
         animate();
     </script>
