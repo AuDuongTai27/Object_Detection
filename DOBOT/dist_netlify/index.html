@@ -15,28 +15,182 @@
             font-size: 13px; z-index: 10;
             display: flex; flex-direction: column;
             max-height: calc(100vh - 30px);
+            min-height: 48px;
+            min-width: 300px;
+            max-width: calc(100vw - 30px);
             overflow: hidden;
             box-sizing: border-box;
+            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        #panel.is-dragging, #panel.is-resizing {
+            transition: none !important;
+            user-select: none !important;
+        }
+        #panel.collapsed {
+            min-height: auto;
+            max-height: none;
+            height: auto !important;
+            resize: none !important;
+        }
+        #panel.collapsed .panel-header-content,
+        #panel.collapsed .panel-body,
+        #panel.collapsed .panel-footer,
+        #panel.collapsed .panel-resize-handle,
+        #panel.collapsed .panel-resize-edge-r,
+        #panel.collapsed .panel-resize-edge-b {
+            display: none !important;
+        }
+        #panel.collapsed .panel-header {
+            border-bottom: none;
+            padding-bottom: 10px;
+        }
+        #panel.maximized {
+            width: 540px !important;
+        }
+
         .panel-header {
-            padding: 12px 14px 10px;
+            padding: 10px 14px 10px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(13, 16, 23, 0.55);
+            background: rgba(13, 16, 23, 0.65);
             flex-shrink: 0;
+        }
+        .panel-title-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: grab;
+            user-select: none;
+            padding-bottom: 2px;
+        }
+        .panel-title-bar:active {
+            cursor: grabbing;
         }
         .panel-title {
             font-size: 13.5px; font-weight: 800; letter-spacing: 0.5px;
             display: flex; align-items: center; gap: 6px;
+            pointer-events: none;
         }
-        .btn-config-gear {
-            background: #232731; border: 1px solid #444; color: #adb5bd;
-            border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer;
-            transition: 0.2s;
+        .drag-grip {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.35);
+            margin-right: 2px;
+            letter-spacing: -2px;
+            cursor: grab;
         }
-        .btn-config-gear:hover {
-            background: #339af0; color: #fff; border-color: #339af0;
+        .window-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
-        
+        .btn-win-ctrl {
+            background: rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #adb5bd;
+            border-radius: 6px;
+            width: 26px;
+            height: 26px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            padding: 0;
+            line-height: 1;
+        }
+        .btn-win-ctrl:hover {
+            background: #339af0;
+            color: #fff;
+            border-color: #339af0;
+            transform: scale(1.05);
+        }
+        .btn-win-ctrl.btn-win-close:hover {
+            background: #e03131;
+            color: #fff;
+            border-color: #ff6b6b;
+        }
+
+        #floating-toggle-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 999;
+            background: rgba(18, 22, 31, 0.94);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(51, 154, 240, 0.45);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        #floating-toggle-btn:hover {
+            background: #1c7ed6;
+            border-color: #339af0;
+            box-shadow: 0 10px 28px rgba(28, 126, 214, 0.5);
+            transform: translateY(-1px);
+        }
+        .floating-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2ed573;
+            box-shadow: 0 0 8px #2ed573;
+        }
+        .key-badge {
+            font-size: 10px;
+            color: #94a3b8;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .panel-resize-handle {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            cursor: nwse-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.35);
+            user-select: none;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        .panel-resize-handle:hover {
+            color: #339af0;
+        }
+        .panel-resize-edge-r {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            cursor: ew-resize;
+            z-index: 15;
+        }
+        .panel-resize-edge-b {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            cursor: ns-resize;
+            z-index: 15;
+        }
+
         .status-badge {
             display: flex; align-items: center; justify-content: center; gap: 8px;
             padding: 5px 10px; border-radius: 20px; font-weight: 600; font-size: 11.5px;
@@ -72,7 +226,8 @@
         .panel-body {
             padding: 12px 14px;
             overflow-y: auto;
-            max-height: calc(100vh - 220px);
+            flex: 1 1 auto;
+            min-height: 80px;
         }
         .panel-body::-webkit-scrollbar { width: 5px; }
         .panel-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
@@ -467,42 +622,57 @@
     <div id="beacon-hud">🎯 ĐÍCH: (250, 0, 30)</div>
     <div id="hover-tooltip"></div>
 
+    <!-- Nút nổi mở menu khi menu đang ẩn -->
+    <button id="floating-toggle-btn" onclick="showPanel()" title="Mở bảng điều khiển 3D (Phím tắt: M)">
+        <span class="floating-dot" id="floating-dot"></span>
+        <span>☰ Menu Dobot 3D</span>
+        <span class="key-badge">M</span>
+    </button>
+
     <div id="panel">
-        <!-- 1. FIXED HEADER -->
-        <div class="panel-header">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+        <!-- 1. FIXED HEADER (DRAGGABLE) -->
+        <div class="panel-header" id="panel-header">
+            <div class="panel-title-bar" id="panel-title-bar" title="Nhấn giữ để kéo menu di chuyển khắp màn hình">
                 <div class="panel-title">
+                    <span class="drag-grip" title="Kéo để di chuyển">⋮⋮</span>
                     <span style="color: #339af0;">⚡ DOBOT</span> <span>MAGICIAN 3D</span>
                 </div>
-                <button class="btn-config-gear" onclick="configureServerUrl()" title="Cấu hình địa chỉ Server (Netlify / Remote)">⚙️</button>
-            </div>
-
-            <!-- Status badge -->
-            <div id="status-badge" class="status-badge offline" style="margin-top: 8px; margin-bottom: 8px;">
-                <span class="status-dot"></span>
-                <span id="status-text">Đang kết nối Server...</span>
-            </div>
-
-            <!-- BANNER CẢNH BÁO ĐÈN ĐỎ KHI CÓ LỖI -->
-            <div id="alarm-banner" style="display: none; background: rgba(224, 49, 49, 0.25); border: 1px solid #ff6b6b; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 11px; color: #ff8787;">
-                <div style="font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
-                    <span>🚨 ROBOT BÁO ĐỘNG ĐỎ (LỖI)</span>
-                    <button onclick="sendAction('clear_alarms')" style="background: #e03131; color: white; border: none; border-radius: 4px; padding: 2px 7px; font-size: 10px; cursor: pointer; font-weight: bold;">Khôi phục</button>
+                <div class="window-controls">
+                    <button class="btn-win-ctrl btn-config-gear" onclick="configureServerUrl()" title="Cấu hình địa chỉ Server">⚙️</button>
+                    <button class="btn-win-ctrl" id="btn-win-size" onclick="togglePanelMaximize()" title="Phóng to / Thu nhỏ chiều rộng (380px ⇄ 540px)">⤢</button>
+                    <button class="btn-win-ctrl" id="btn-win-collapse" onclick="togglePanelCollapse()" title="Thu gọn / Mở rộng menu">─</button>
+                    <button class="btn-win-ctrl btn-win-close" onclick="hidePanel()" title="Ẩn menu (Phím tắt: M)">✕</button>
                 </div>
-                <div id="alarm-desc" style="margin-top: 3px; font-size: 10.5px; color: #ffc9c9;"></div>
             </div>
 
-            <!-- Chế độ Đồng bộ Thật vs Mô phỏng -->
-            <div class="mode-toggle">
-                <button id="btn-mode-live" class="mode-btn active" onclick="setMode('live')">⚡ Đồng bộ thật (Live)</button>
-                <button id="btn-mode-manual" class="mode-btn" onclick="setMode('manual')">🎮 Mô phỏng (Manual)</button>
-            </div>
+            <div class="panel-header-content" id="panel-header-content">
+                <!-- Status badge -->
+                <div id="status-badge" class="status-badge offline" style="margin-top: 8px; margin-bottom: 8px;">
+                    <span class="status-dot"></span>
+                    <span id="status-text">Đang kết nối Server...</span>
+                </div>
 
-            <!-- TAB NAVIGATION -->
-            <div class="nav-tabs">
-                <button id="tab-nav-target" class="nav-tab active" onclick="switchTab('target')">🎯 Điểm Đích</button>
-                <button id="tab-nav-jog" class="nav-tab" onclick="switchTab('jog')">🕹️ Điều Khiển</button>
-                <button id="tab-nav-monitor" class="nav-tab" onclick="switchTab('monitor')">📊 Giám Sát</button>
+                <!-- BANNER CẢNH BÁO ĐÈN ĐỎ KHI CÓ LỖI -->
+                <div id="alarm-banner" style="display: none; background: rgba(224, 49, 49, 0.25); border: 1px solid #ff6b6b; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 11px; color: #ff8787;">
+                    <div style="font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
+                        <span>🚨 ROBOT BÁO ĐỘNG ĐỎ (LỖI)</span>
+                        <button onclick="sendAction('clear_alarms')" style="background: #e03131; color: white; border: none; border-radius: 4px; padding: 2px 7px; font-size: 10px; cursor: pointer; font-weight: bold;">Khôi phục</button>
+                    </div>
+                    <div id="alarm-desc" style="margin-top: 3px; font-size: 10.5px; color: #ffc9c9;"></div>
+                </div>
+
+                <!-- Chế độ Đồng bộ Thật vs Mô phỏng -->
+                <div class="mode-toggle">
+                    <button id="btn-mode-live" class="mode-btn active" onclick="setMode('live')">⚡ Đồng bộ thật (Live)</button>
+                    <button id="btn-mode-manual" class="mode-btn" onclick="setMode('manual')">🎮 Mô phỏng (Manual)</button>
+                </div>
+
+                <!-- TAB NAVIGATION -->
+                <div class="nav-tabs">
+                    <button id="tab-nav-target" class="nav-tab active" onclick="switchTab('target')">🎯 Điểm Đích</button>
+                    <button id="tab-nav-jog" class="nav-tab" onclick="switchTab('jog')">🕹️ Điều Khiển</button>
+                    <button id="tab-nav-monitor" class="nav-tab" onclick="switchTab('monitor')">📊 Giám Sát</button>
+                </div>
             </div>
         </div>
 
@@ -773,6 +943,15 @@
             <button id="btn-suction" class="btn-footer btn-suction-toggle" onclick="toggleSuction()">
                 💨 Giác Hút
             </button>
+        </div>
+
+        <!-- RESIZE HANDLES (KÉO THAY ĐỔI KÍCH THƯỚC) -->
+        <div class="panel-resize-edge-r" id="panel-resize-r" title="Kéo cạnh này để đổi chiều rộng"></div>
+        <div class="panel-resize-edge-b" id="panel-resize-b" title="Kéo cạnh này để đổi chiều cao"></div>
+        <div class="panel-resize-handle" id="panel-resize-corner" title="Kéo góc này để phóng to / thu nhỏ menu">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M8 2L2 8M8 5L5 8M8 8L8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
         </div>
     </div>
 
@@ -1895,8 +2074,8 @@
             // Nếu đang kéo gizmo hoặc kéo xoay camera thì bỏ qua
             if (isDraggingGizmo || dist > 8 || elapsed > 800) return;
 
-            // Bỏ qua nếu click trên sidebar menu hoặc toast
-            if (e.target.closest('#panel') || e.target.closest('#toast-container')) return;
+            // Bỏ qua nếu click trên sidebar menu, nút nổi hoặc toast
+            if (e.target.closest('#panel') || e.target.closest('#floating-toggle-btn') || e.target.closest('#toast-container')) return;
 
             // Click snap điểm trên mặt bàn
             if (e.shiftKey || (isTargetGizmoActive && e.button === 0)) {
@@ -1909,7 +2088,7 @@
 
         // Xử lý di chuột Hover
         window.addEventListener('mousemove', (e) => {
-            if (e.target.closest('#panel') || isDraggingGizmo) {
+            if (e.target.closest('#panel') || e.target.closest('#floating-toggle-btn') || isDraggingGizmo) {
                 hoverReticle.visible = false;
                 document.getElementById('hover-tooltip').style.display = 'none';
                 return;
@@ -2136,6 +2315,210 @@
                 updateBeaconHudLabel(targetBeaconGroup.position, x, y, zTcp, isValid);
             }
         }
+
+        // =====================================================================
+        // QUẢN LÝ MENU BẢNG ĐIỀU KHIỂN: KÉO (DRAG), RESIZE, BẬT TẮT, THU GỌN
+        // =====================================================================
+        const panelEl = document.getElementById('panel');
+        const panelTitleBar = document.getElementById('panel-title-bar');
+        const floatingToggleBtn = document.getElementById('floating-toggle-btn');
+        const btnWinCollapse = document.getElementById('btn-win-collapse');
+        const btnWinSize = document.getElementById('btn-win-size');
+        const resizeCorner = document.getElementById('panel-resize-corner');
+        const resizeEdgeR = document.getElementById('panel-resize-r');
+        const resizeEdgeB = document.getElementById('panel-resize-b');
+
+        let isPanelCollapsed = false;
+        let isPanelMaximized = false;
+
+        function showPanel() {
+            panelEl.style.display = 'flex';
+            floatingToggleBtn.style.display = 'none';
+        }
+
+        function hidePanel() {
+            panelEl.style.display = 'none';
+            floatingToggleBtn.style.display = 'flex';
+            showToast("Đã ẩn menu. Bấm nút nổi hoặc nhấn phím 'M' để mở lại.");
+        }
+
+        function togglePanel() {
+            if (panelEl.style.display === 'none') {
+                showPanel();
+            } else {
+                hidePanel();
+            }
+        }
+
+        function togglePanelCollapse() {
+            isPanelCollapsed = !isPanelCollapsed;
+            if (isPanelCollapsed) {
+                panelEl.classList.add('collapsed');
+                btnWinCollapse.innerHTML = '▲';
+                btnWinCollapse.title = 'Mở rộng menu';
+            } else {
+                panelEl.classList.remove('collapsed');
+                btnWinCollapse.innerHTML = '─';
+                btnWinCollapse.title = 'Thu gọn menu';
+            }
+        }
+
+        function togglePanelMaximize() {
+            if (isPanelCollapsed) togglePanelCollapse();
+            isPanelMaximized = !isPanelMaximized;
+            if (isPanelMaximized) {
+                panelEl.classList.add('maximized');
+                btnWinSize.innerHTML = '⤡';
+                btnWinSize.title = 'Thu nhỏ về kích thước chuẩn (380px)';
+            } else {
+                panelEl.classList.remove('maximized');
+                panelEl.style.width = '380px';
+                btnWinSize.innerHTML = '⤢';
+                btnWinSize.title = 'Phóng to chiều rộng (540px)';
+            }
+        }
+
+        // --- KÉO THẢ DI CHUYỂN MENU (DRAGGABLE) ---
+        (function initDraggablePanel() {
+            let isDragging = false;
+            let startX = 0, startY = 0;
+            let initialLeft = 0, initialTop = 0;
+
+            panelTitleBar.addEventListener('mousedown', (e) => {
+                // Không kéo nếu click vào các nút điều khiển
+                if (e.target.closest('button') || e.target.closest('input')) return;
+                
+                isDragging = true;
+                panelEl.classList.add('is-dragging');
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = panelEl.getBoundingClientRect();
+                initialLeft = rect.left;
+                initialTop = rect.top;
+
+                panelTitleBar.style.cursor = 'grabbing';
+                e.preventDefault();
+                e.stopPropagation();
+
+                function onMouseMove(moveEvent) {
+                    if (!isDragging) return;
+                    const dx = moveEvent.clientX - startX;
+                    const dy = moveEvent.clientY - startY;
+
+                    let newLeft = initialLeft + dx;
+                    let newTop = initialTop + dy;
+
+                    // Giới hạn biên màn hình
+                    const maxLeft = window.innerWidth - panelEl.offsetWidth - 10;
+                    const maxTop = window.innerHeight - 50;
+                    newLeft = Math.max(10, Math.min(maxLeft, newLeft));
+                    newTop = Math.max(10, Math.min(maxTop, newTop));
+
+                    panelEl.style.left = newLeft + 'px';
+                    panelEl.style.top = newTop + 'px';
+                    panelEl.style.right = 'auto';
+                    panelEl.style.bottom = 'auto';
+                }
+
+                function onMouseUp() {
+                    isDragging = false;
+                    panelEl.classList.remove('is-dragging');
+                    panelTitleBar.style.cursor = 'grab';
+                    window.removeEventListener('mousemove', onMouseMove);
+                    window.removeEventListener('mouseup', onMouseUp);
+                }
+
+                window.addEventListener('mousemove', onMouseMove);
+                window.addEventListener('mouseup', onMouseUp);
+            });
+
+            // Hỗ trợ cảm ứng màn hình
+            panelTitleBar.addEventListener('touchstart', (e) => {
+                if (e.target.closest('button')) return;
+                const touch = e.touches[0];
+                isDragging = true;
+                panelEl.classList.add('is-dragging');
+                startX = touch.clientX;
+                startY = touch.clientY;
+                const rect = panelEl.getBoundingClientRect();
+                initialLeft = rect.left;
+                initialTop = rect.top;
+
+                function onTouchMove(te) {
+                    if (!isDragging) return;
+                    const t = te.touches[0];
+                    let newLeft = initialLeft + (t.clientX - startX);
+                    let newTop = initialTop + (t.clientY - startY);
+                    newLeft = Math.max(10, Math.min(window.innerWidth - panelEl.offsetWidth - 10, newLeft));
+                    newTop = Math.max(10, Math.min(window.innerHeight - 50, newTop));
+                    panelEl.style.left = newLeft + 'px';
+                    panelEl.style.top = newTop + 'px';
+                }
+
+                function onTouchEnd() {
+                    isDragging = false;
+                    panelEl.classList.remove('is-dragging');
+                    window.removeEventListener('touchmove', onTouchMove);
+                    window.removeEventListener('touchend', onTouchEnd);
+                }
+
+                window.addEventListener('touchmove', onTouchMove);
+                window.addEventListener('touchend', onTouchEnd);
+            }, { passive: false });
+        })();
+
+        // --- KÉO THAY ĐỔI KÍCH THƯỚC (RESIZABLE) ---
+        (function initResizablePanel() {
+            function handleResizeDrag(handleEl, resizeWidth, resizeHeight) {
+                if (!handleEl) return;
+                handleEl.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    panelEl.classList.add('is-resizing');
+                    panelEl.classList.remove('maximized'); // Hủy cờ maximized nếu tự tay resize
+
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startWidth = panelEl.offsetWidth;
+                    const startHeight = panelEl.offsetHeight;
+
+                    function onMouseMove(moveEvent) {
+                        if (resizeWidth) {
+                            const newW = startWidth + (moveEvent.clientX - startX);
+                            const clampedW = Math.max(300, Math.min(window.innerWidth - panelEl.offsetLeft - 10, newW));
+                            panelEl.style.width = clampedW + 'px';
+                        }
+                        if (resizeHeight) {
+                            const newH = startHeight + (moveEvent.clientY - startY);
+                            const clampedH = Math.max(180, Math.min(window.innerHeight - panelEl.offsetTop - 10, newH));
+                            panelEl.style.height = clampedH + 'px';
+                        }
+                    }
+
+                    function onMouseUp() {
+                        panelEl.classList.remove('is-resizing');
+                        window.removeEventListener('mousemove', onMouseMove);
+                        window.removeEventListener('mouseup', onMouseUp);
+                    }
+
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', onMouseUp);
+                });
+            }
+
+            handleResizeDrag(resizeCorner, true, true);
+            handleResizeDrag(resizeEdgeR, true, false);
+            handleResizeDrag(resizeEdgeB, false, true);
+        })();
+
+        // Phím tắt bàn phím: M để bật/tắt menu
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === 'm' || e.key === 'M') {
+                togglePanel();
+            }
+        });
 
         setMode('live');
         setCoordSystem('cartesian');
