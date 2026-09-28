@@ -607,6 +607,456 @@
             white-space: nowrap;
             box-shadow: 0 4px 12px rgba(0,0,0,0.6);
         }
+
+        /* =====================================================================
+           TOP NAVBAR STYLES (FABLAB WEB STUDIO)
+        ===================================================================== */
+        #top-navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 52px;
+            background: rgba(13, 17, 23, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 1000;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13.5px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+        }
+        .nav-brand-badge {
+            background: linear-gradient(135deg, #1c7ed6, #0c8599);
+            color: #fff;
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-size: 10.5px;
+            font-weight: 700;
+        }
+        .nav-studio-tabs {
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 4px;
+        }
+        .nav-studio-tab {
+            padding: 6px 14px;
+            border: none;
+            background: transparent;
+            color: #94a3b8;
+            font-weight: 600;
+            font-size: 12px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .nav-studio-tab:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .nav-studio-tab.active {
+            background: #1c7ed6;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(28, 126, 214, 0.4);
+        }
+        .nav-system-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sys-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 11.5px;
+            font-weight: 600;
+            background: #232731;
+            border: 1px solid #444;
+        }
+        .sys-badge.online { background: rgba(46, 213, 115, 0.15); border-color: #2ed573; color: #2ed573; }
+        .sys-badge.offline { background: rgba(255, 71, 87, 0.15); border-color: #ff4757; color: #ff4757; }
+        .sys-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+        /* STUDIO VIEWS */
+        .studio-view {
+            display: none;
+            position: absolute;
+            top: 52px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .studio-view.active {
+            display: flex;
+        }
+
+        /* TAB 2 & TAB 3 & TAB 4 COMMON STYLES */
+        .studio-content-grid {
+            display: grid;
+            grid-template-columns: 1.35fr 1fr;
+            gap: 16px;
+            padding: 16px;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            background: #0f131a;
+        }
+        .studio-card {
+            background: rgba(18, 22, 31, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .card-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .card-title-text {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .video-box-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 280px;
+        }
+        .video-stream-img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            user-select: none;
+        }
+        .video-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 32px;
+            height: 32px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0.35;
+        }
+        .video-flash-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s ease-out;
+        }
+        .video-flash-overlay.flash {
+            opacity: 0.85;
+            transition: none;
+        }
+        .capture-action-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .btn-capture-big {
+            flex: 1;
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-capture-snap {
+            background: linear-gradient(135deg, #1c7ed6, #228be6);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(28, 126, 214, 0.4);
+        }
+        .btn-capture-snap:hover {
+            background: linear-gradient(135deg, #1864ab, #1c7ed6);
+            transform: translateY(-1px);
+        }
+        .btn-capture-record {
+            background: #2b303c;
+            border: 1px solid #444;
+            color: #ff6b6b;
+        }
+        .btn-capture-record.recording {
+            background: #c92a2a;
+            color: #fff;
+            border-color: #ff6b6b;
+            animation: pulse-record 1.2s infinite;
+        }
+        @keyframes pulse-record {
+            0% { box-shadow: 0 0 0 0 rgba(201, 42, 42, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(201, 42, 42, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(201, 42, 42, 0); }
+        }
+
+        /* CLASS SELECTION PILLS */
+        .class-pills-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .class-pill-btn {
+            padding: 9px 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+        }
+        .class-pill-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        .class-pill-btn.active {
+            background: #1c7ed6;
+            color: #fff;
+            border-color: #339af0;
+            box-shadow: 0 2px 8px rgba(28, 126, 214, 0.4);
+        }
+
+        /* DATASET STATS PROGRESS BARS */
+        .stats-list {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            margin-bottom: 12px;
+            overflow-y: auto;
+            max-height: 220px;
+        }
+        .stats-item {
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 6px;
+            padding: 7px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .stats-item-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11.5px;
+            margin-bottom: 4px;
+        }
+        .stats-bar-track {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .stats-bar-fill {
+            height: 100%;
+            background: #339af0;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        /* THUMBNAILS GALLERY STRIP */
+        .recent-gallery-strip {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 6px 0;
+            min-height: 56px;
+        }
+        .recent-thumb-card {
+            position: relative;
+            width: 70px;
+            height: 52px;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .recent-thumb-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .btn-delete-thumb {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(224, 49, 49, 0.85);
+            color: #fff;
+            font-size: 10px;
+            border: none;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .recent-thumb-card:hover .btn-delete-thumb {
+            display: flex;
+        }
+
+        /* TAB 3: TRAINING DASHBOARD */
+        .train-metric-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .train-metric-card {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .train-metric-val {
+            font-size: 20px;
+            font-weight: 800;
+            color: #38bdf8;
+            font-family: monospace;
+            margin-top: 4px;
+        }
+        .train-progress-bar-wrap {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            height: 14px;
+            overflow: hidden;
+            margin: 10px 0;
+            position: relative;
+        }
+        .train-progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1c7ed6, #38bdf8);
+            border-radius: 8px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .terminal-log-box {
+            background: #080b10;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            color: #94a3b8;
+            height: 220px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        /* TAB 4: AUTO SORT STYLES */
+        .detected-cube-card {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-left: 3px solid #38bdf8;
+        }
+        .btn-pick-single {
+            background: #2b8a3e;
+            border: none;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .btn-pick-single:hover {
+            background: #237032;
+        }
+        .toggle-switch-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+        }
+        .switch-input {
+            width: 44px;
+            height: 24px;
+            position: relative;
+            appearance: none;
+            background: #334155;
+            border-radius: 12px;
+            cursor: pointer;
+            outline: none;
+            transition: 0.2s;
+        }
+        .switch-input:checked {
+            background: #22c55e;
+        }
+        .switch-input::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+        .switch-input:checked::after {
+            left: 22px;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -618,7 +1068,48 @@
     </script>
 </head>
 <body>
-    <div id="hud-label">TCP: (210, 0, 66)</div>
+    <!-- =====================================================================
+         TOP NAVBAR (FABLAB AI & DOBOT WEB STUDIO)
+    ====================================================================== -->
+    <header id="top-navbar">
+        <div class="nav-brand">
+            <span style="color: #38bdf8; font-size: 16px;">⚡</span>
+            <span>FABLAB AI & DOBOT</span>
+            <span class="nav-brand-badge">STUDIO</span>
+        </div>
+
+        <nav class="nav-studio-tabs">
+            <button class="nav-studio-tab active" id="btn-tab-3d" onclick="switchStudioTab('3d')">
+                <span>🧊</span> <span>1. Bản Sao Số 3D</span>
+            </button>
+            <button class="nav-studio-tab" id="btn-tab-data" onclick="switchStudioTab('data')">
+                <span>📸</span> <span>2. Thu Thập Dữ Liệu</span>
+            </button>
+            <button class="nav-studio-tab" id="btn-tab-train" onclick="switchStudioTab('train')">
+                <span>🧠</span> <span>3. Huấn Luyện AI</span>
+            </button>
+            <button class="nav-studio-tab" id="btn-tab-sort" onclick="switchStudioTab('sort')">
+                <span>🦾</span> <span>4. AI Vision & Phân Loại</span>
+            </button>
+        </nav>
+
+        <div class="nav-system-status">
+            <div id="nav-robot-badge" class="sys-badge offline">
+                <span class="sys-dot"></span>
+                <span id="nav-robot-text">Robot: Đang dò...</span>
+            </div>
+            <div id="nav-cam-badge" class="sys-badge offline">
+                <span class="sys-dot"></span>
+                <span id="nav-cam-text">Camera: Offline</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- =====================================================================
+         TAB 1 VIEW: BẢN SAO SỐ 3D (DIGITAL TWIN)
+    ====================================================================== -->
+    <main id="view-3d-twin" class="studio-view active">
+        <div id="hud-label">TCP: (210, 0, 66)</div>
     <div id="beacon-hud">🎯 ĐÍCH: (250, 0, 30)</div>
     <div id="hover-tooltip"></div>
 
@@ -955,7 +1446,235 @@
         </div>
     </div>
 
-    <div id="canvas-container"></div>
+        <div id="canvas-container" style="top: 0; left: 0; width: 100%; height: 100%; position: absolute;"></div>
+    </main>
+
+    <!-- =====================================================================
+         TAB 2 VIEW: THU THẬP DỮ LIỆU CAMERA (DATA COLLECTION)
+    ====================================================================== -->
+    <main id="view-data-collection" class="studio-view">
+        <div class="studio-content-grid">
+            <!-- Left: Video feed & Actions -->
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="card-title-text">
+                        <span>📸 Luồng Camera Trực Tiếp</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="sel-camera-device" onchange="changeCameraDevice(this.value)" style="width: auto; margin-top: 0; padding: 4px 8px; font-size: 11px;">
+                            <option value="0">Camera 0</option>
+                        </select>
+                        <button onclick="fetchCameraDevices()" class="btn-config-gear" title="Tìm lại camera">🔄</button>
+                    </div>
+                </div>
+
+                <div class="video-box-container">
+                    <img id="img-data-stream" class="video-stream-img" src="/video_feed?mode=raw" alt="Camera Stream">
+                    <svg class="video-crosshair" viewBox="0 0 40 40">
+                        <circle cx="20" cy="20" r="16" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 2"/>
+                        <line x1="20" y1="0" x2="20" y2="40" stroke="#38bdf8" stroke-width="1.5"/>
+                        <line x1="0" y1="20" x2="40" y2="20" stroke="#38bdf8" stroke-width="1.5"/>
+                    </svg>
+                    <div id="data-flash-overlay" class="video-flash-overlay"></div>
+                </div>
+
+                <div class="capture-action-row">
+                    <button class="btn-capture-big btn-capture-snap" onclick="triggerSingleCapture()">
+                        <span>📸</span> <span>CHỤP 1 ẢNH (SPACE)</span>
+                    </button>
+                    <button id="btn-toggle-record" class="btn-capture-big btn-capture-record" onclick="toggleContinuousRecording()">
+                        <span>🔴</span> <span>LƯU LIÊN TỤC (R)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Class Selection, Stats & Gallery -->
+            <div class="studio-card" style="overflow-y: auto;">
+                <div class="card-header-bar">
+                    <div class="card-title-text">
+                        <span>🏷️ Chọn Nhãn Huấn Luyện (Class)</span>
+                    </div>
+                    <span id="badge-total-images" style="font-size: 11px; color: #38bdf8; font-weight: 700; background: rgba(56, 189, 248, 0.1); padding: 3px 8px; border-radius: 6px;">Tổng: 0 ảnh</span>
+                </div>
+
+                <div class="class-pills-grid" id="class-pills-container">
+                    <!-- Dynamic class buttons -->
+                </div>
+
+                <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                    <input type="text" id="inp-new-class" placeholder="Nhập tên nhãn mới..." style="flex: 1; background: #232731; border: 1px solid #444; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px;">
+                    <button onclick="handleAddNewClass()" class="btn-sync-pose" style="white-space: nowrap;">+ Thêm Nhãn</button>
+                </div>
+
+                <div style="font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">📊 TIẾN ĐỘ THU THẬP TỪNG NHÃN:</div>
+                <div class="stats-list" id="stats-list-container">
+                    <!-- Progress bars -->
+                </div>
+
+                <div style="font-size: 12px; font-weight: 700; color: #94a3b8; margin-top: 10px; margin-bottom: 6px;">🖼️ ẢNH MỚI CHỤP GẦN ĐÂY:</div>
+                <div class="recent-gallery-strip" id="recent-gallery-container">
+                    <!-- Thumbnails -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =====================================================================
+         TAB 3 VIEW: HUẤN LUYỆN AI 1-CLICK (AI TRAINER)
+    ====================================================================== -->
+    <main id="view-ai-trainer" class="studio-view">
+        <div class="studio-content-grid">
+            <!-- Left: Training Setup & Guide -->
+            <div class="studio-card" style="overflow-y: auto;">
+                <div class="card-header-bar">
+                    <div class="card-title-text">
+                        <span>🧠 Thiết Lập Huấn Luyện YOLO</span>
+                    </div>
+                </div>
+
+                <div class="control-group" style="margin-bottom: 12px;">
+                    <label style="color: #cbd5e1; font-weight: 600; font-size: 12px;">Mô hình nền tảng (Base Architecture):</label>
+                    <select id="sel-train-model" style="background: #232731; border: 1px solid #444; border-radius: 6px; color: #fff; padding: 8px; width: 100%; margin-top: 4px;">
+                        <option value="yolov8n.pt" selected>YOLOv8 Nano (yolov8n.pt - Khuyến nghị siêu nhẹ, 30-60 FPS)</option>
+                        <option value="yolo11n.pt">YOLO11 Nano (yolo11n.pt - Thế hệ mới nhất)</option>
+                    </select>
+                </div>
+
+                <div class="control-group" style="margin-bottom: 12px;">
+                    <label style="color: #cbd5e1; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between;">
+                        <span>Số lượng vòng lặp (Epochs):</span>
+                        <span id="txt-epochs-val" style="color: #38bdf8; font-weight: bold; font-family: monospace;">30</span>
+                    </label>
+                    <input type="range" id="rng-train-epochs" min="10" max="60" value="30" step="5" oninput="document.getElementById('txt-epochs-val').innerText = this.value" style="width: 100%; margin-top: 6px;">
+                </div>
+
+                <div class="control-group" style="margin-bottom: 16px;">
+                    <label style="color: #cbd5e1; font-weight: 600; font-size: 12px;">Kích thước Batch (Batch Size):</label>
+                    <select id="sel-train-batch" style="background: #232731; border: 1px solid #444; border-radius: 6px; color: #fff; padding: 8px; width: 100%; margin-top: 4px;">
+                        <option value="16" selected>16 (Cân bằng tốc độ & độ chính xác)</option>
+                        <option value="8">8 (Cho máy cấu hình cơ bản)</option>
+                        <option value="32">32 (Cho máy có GPU mạnh)</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button id="btn-start-train" class="btn-capture-big btn-capture-snap" style="padding: 12px;" onclick="handleStartTraining()">
+                        <span>🚀</span> <span>BẮT ĐẦU HUẤN LUYỆN 1-CLICK (CỤC BỘ)</span>
+                    </button>
+                    <button id="btn-export-colab" class="btn-capture-big btn-capture-record" style="color: #38bdf8; border-color: #38bdf8;" onclick="handleExportColab()">
+                        <span>📦</span> <span>XUẤT GÓI GOOGLE COLAB (.ZIP)</span>
+                    </button>
+                    <button id="btn-stop-train" class="btn-capture-big" style="background: #e03131; color: #fff; display: none;" onclick="handleStopTraining()">
+                        <span>🛑</span> <span>DỪNG HUẤN LUYỆN</span>
+                    </button>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-top: 14px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+                    💡 <b>Mẹo cho học sinh:</b><br>
+                    • Nếu máy tính có card đồ họa NVIDIA (GPU): Bấm <b>Huấn luyện 1-Click</b>, mô hình sẽ hoàn thành sau 1-2 phút.<br>
+                    • Nếu máy chỉ có CPU: Bấm <b>Xuất gói Google Colab</b> để tải file <code>yolo_dataset.zip</code> lên Colab train miễn phí 100%.
+                </div>
+            </div>
+
+            <!-- Right: Real-time Live Training Dashboard -->
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="card-title-text">
+                        <span>📈 Bảng Theo Dõi Tiến Độ Thời Gian Thực</span>
+                    </div>
+                    <span id="train-status-badge" class="sys-badge offline">Chưa chạy</span>
+                </div>
+
+                <div class="train-metric-row">
+                    <div class="train-metric-card">
+                        <div style="font-size: 11px; color: #94a3b8;">SAI SỐ (LOSS)</div>
+                        <div class="train-metric-val" id="metric-loss">0.000</div>
+                    </div>
+                    <div class="train-metric-card">
+                        <div style="font-size: 11px; color: #94a3b8;">ĐỘ CHÍNH XÁC (mAP50)</div>
+                        <div class="train-metric-val" id="metric-map" style="color: #4ade80;">0.0%</div>
+                    </div>
+                    <div class="train-metric-card">
+                        <div style="font-size: 11px; color: #94a3b8;">CÒN LẠI (ETA)</div>
+                        <div class="train-metric-val" id="metric-eta" style="color: #fbbf24;">--</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-top: 4px;">
+                    <span id="txt-train-status-msg">Hệ thống sẵn sàng...</span>
+                    <span id="txt-train-progress-pct" style="color: #38bdf8;">0%</span>
+                </div>
+                <div class="train-progress-bar-wrap">
+                    <div class="train-progress-bar-fill" id="bar-train-fill"></div>
+                </div>
+
+                <div style="font-size: 11.5px; font-weight: 700; color: #94a3b8; margin-top: 6px; margin-bottom: 4px;">NHẬT KÝ HUẤN LUYỆN (CONSOLE):</div>
+                <div class="terminal-log-box" id="train-log-box">Chờ lệnh khởi chạy...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =====================================================================
+         TAB 4 VIEW: AI VISION & TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)
+    ====================================================================== -->
+    <main id="view-auto-sort" class="studio-view">
+        <div class="studio-content-grid">
+            <!-- Left: Annotated Video Feed with Click-to-Pick -->
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="card-title-text">
+                        <span>🦾 Nhận Diện AI & Nhấp Chuột Để Gắp (Click-to-Pick)</span>
+                    </div>
+                    <span style="font-size: 11px; color: #4ade80; font-weight: 700; background: rgba(74, 222, 128, 0.1); padding: 3px 8px; border-radius: 6px;">Live Inference</span>
+                </div>
+
+                <div class="video-box-container" style="cursor: crosshair;" onclick="handleVideoClickToPick(event)" title="Nhấp vào khối màu để Dobot tự động bay tới gắp!">
+                    <img id="img-sort-stream" class="video-stream-img" src="/video_feed?mode=yolo" alt="YOLO Stream">
+                    <div style="position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 4px 8px; font-size: 11px; color: #f1f5f9; pointer-events: none;">
+                        💡 <b>Click-to-Pick:</b> Nhấp chuột trực tiếp lên khối màu để robot gắp!
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11.5px; color: #94a3b8;">
+                    <span>Khay thả đích: <b>Khay (X=49.2, Y=-230.1)</b></span>
+                    <span>Tọa độ tính theo: <b>Homography Hand-Eye Matrix</b></span>
+                </div>
+            </div>
+
+            <!-- Right: Auto Sort Switch & Detections List -->
+            <div class="studio-card" style="overflow-y: auto;">
+                <div class="toggle-switch-row">
+                    <div>
+                        <div style="font-size: 13.5px; font-weight: 800; color: #fff;">⚡ TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)</div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">Dobot tự động phát hiện và lần lượt gắp các khối màu về khay</div>
+                    </div>
+                    <input type="checkbox" id="chk-auto-sort" class="switch-input" onchange="handleToggleAutoSort(this.checked)">
+                </div>
+
+                <div class="control-group" style="margin-bottom: 10px;">
+                    <label style="color: #cbd5e1; font-weight: 600; font-size: 12px;">Mô hình YOLO đang nạp:</label>
+                    <select id="sel-vision-model" onchange="handleChangeVisionModel(this.value)" style="background: #232731; border: 1px solid #444; border-radius: 6px; color: #fff; padding: 7px; width: 100%; margin-top: 4px;">
+                        <!-- Dynamic models -->
+                    </select>
+                </div>
+
+                <div class="control-group" style="margin-bottom: 12px;">
+                    <label style="color: #cbd5e1; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between;">
+                        <span>Ngưỡng tin cậy (Confidence):</span>
+                        <span id="txt-conf-val" style="color: #38bdf8; font-weight: bold; font-family: monospace;">45%</span>
+                    </label>
+                    <input type="range" id="rng-conf-threshold" min="20" max="90" value="45" step="5" oninput="document.getElementById('txt-conf-val').innerText = this.value + '%'" style="width: 100%; margin-top: 4px;">
+                </div>
+
+                <div style="font-size: 12px; font-weight: 700; color: #94a3b8; margin-top: 4px; margin-bottom: 6px;">
+                    📦 VẬT THỂ ĐANG PHÁT HIỆN TRÊN BÀN (<span id="txt-detected-count">0</span>):
+                </div>
+                <div id="detected-cubes-list" style="display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 280px;">
+                    <!-- Detected cube cards -->
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script>
         const L1_BASE = 138;
@@ -2219,18 +2938,32 @@
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 if (msg.type === "pose") {
+                    const navRobotBadge = document.getElementById('nav-robot-badge');
+                    const navRobotText = document.getElementById('nav-robot-text');
+
                     if (msg.connected && msg.data) {
                         badge.className = "status-badge live";
                         badge.style.background = "";
                         badge.style.borderColor = "";
                         badge.style.color = "";
                         statusText.innerText = `● Đang đồng bộ thật (${msg.port})`;
+                        
+                        if (navRobotBadge) {
+                            navRobotBadge.className = "sys-badge online";
+                            navRobotText.innerText = `Robot: ${msg.port} (Online)`;
+                        }
+
                         if (currentMode === "live") {
                             renderRobot(msg.data.j1, msg.data.j2, msg.data.j3, msg.data.j4, msg.data.x, msg.data.y, msg.data.z);
                         }
                     } else {
                         badge.className = "status-badge offline";
                         statusText.innerText = "○ Chưa cắm USB hoặc Robot đang tắt";
+
+                        if (navRobotBadge) {
+                            navRobotBadge.className = "sys-badge offline";
+                            navRobotText.innerText = "Robot: Offline";
+                        }
                     }
 
                     // Hiển thị hoặc ẩn banner báo động lỗi
@@ -2244,6 +2977,14 @@
                         } else {
                             alarmBanner.style.display = "none";
                         }
+                    }
+                } else if (msg.type === "train_status") {
+                    if (typeof updateTrainDashboard === "function") {
+                        updateTrainDashboard(msg.data);
+                    }
+                } else if (msg.type === "vision_status") {
+                    if (typeof updateVisionDashboard === "function") {
+                        updateVisionDashboard(msg.data);
                     }
                 } else if (msg.type === "feedback") {
                     showToast(msg.msg);
@@ -2512,14 +3253,643 @@
             handleResizeDrag(resizeEdgeB, false, true);
         })();
 
-        // Phím tắt bàn phím: M để bật/tắt menu
+        // =====================================================================
+        // FABLAB AI & DOBOT WEB STUDIO - 4 MODULE CONTROLLER
+        // =====================================================================
+        let currentStudioTab = '3d';
+        let selectedDatasetClass = 'cube_red';
+        let isRecordingDataset = false;
+        let datasetRecordTimer = null;
+        let trainPollTimer = null;
+        let visionPollTimer = null;
+        let knownClasses = ['cube_red', 'cube_green', 'cube_blue', 'cube_yellow'];
+
+        // --- 1. CHUYỂN TAB WEB STUDIO ---
+        function switchStudioTab(tabId) {
+            currentStudioTab = tabId;
+            
+            // Cập nhật nút tab trên Top Navbar
+            document.querySelectorAll('.nav-studio-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.id === `btn-tab-${tabId}`);
+            });
+
+            // Hiển thị view tương ứng
+            const tabViews = {
+                '3d': 'view-3d-twin',
+                'data': 'view-data-collection',
+                'train': 'view-ai-trainer',
+                'sort': 'view-auto-sort'
+            };
+
+            Object.entries(tabViews).forEach(([id, viewId]) => {
+                const el = document.getElementById(viewId);
+                if (el) el.classList.toggle('active', id === tabId);
+            });
+
+            // Tác vụ kích hoạt riêng từng tab
+            if (tabId === '3d') {
+                // Đang ở 3D Twin
+            } else if (tabId === 'data') {
+                fetchCameraDevices();
+                fetchDatasetStats();
+                const img = document.getElementById('img-data-stream');
+                if (img) img.src = `/video_feed?mode=raw&t=${Date.now()}`;
+            } else if (tabId === 'train') {
+                fetchTrainStatus();
+            } else if (tabId === 'sort') {
+                fetchVisionModels();
+                fetchVisionStatus();
+                const img = document.getElementById('img-sort-stream');
+                if (img) img.src = `/video_feed?mode=yolo&t=${Date.now()}`;
+                startVisionPolling();
+            }
+
+            if (tabId !== 'sort') {
+                stopVisionPolling();
+            }
+        }
+
+        // --- 2. THU THẬP DỮ LIỆU (DATA COLLECTION) ---
+        async function fetchCameraDevices() {
+            try {
+                const res = await fetch('/api/camera');
+                const data = await res.json();
+                const sel = document.getElementById('sel-camera-device');
+                const navCamBadge = document.getElementById('nav-cam-badge');
+                const navCamText = document.getElementById('nav-cam-text');
+
+                if (data.status === 'ok') {
+                    if (sel && data.available_cameras) {
+                        sel.innerHTML = data.available_cameras.map(cam => 
+                            `<option value="${cam.id}" ${cam.is_current ? 'selected' : ''}>${cam.name}</option>`
+                        ).join('');
+                    }
+                    if (navCamBadge) {
+                        navCamBadge.className = data.is_opened ? 'sys-badge online' : 'sys-badge offline';
+                        navCamText.innerText = data.is_opened ? `Camera: Đang mở (ID ${data.current_cam})` : 'Camera: Không mở được';
+                    }
+                }
+            } catch (err) {
+                console.warn("fetchCameraDevices error:", err);
+            }
+        }
+
+        async function changeCameraDevice(camId) {
+            try {
+                showToast(`Đang chuyển sang Camera ${camId}...`);
+                const res = await fetch('/api/camera', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cam_id: parseInt(camId) })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`✅ Đã đổi sang Camera ${camId}`);
+                    const s1 = document.getElementById('img-data-stream');
+                    const s2 = document.getElementById('img-sort-stream');
+                    if (s1) s1.src = `/video_feed?mode=raw&t=${Date.now()}`;
+                    if (s2) s2.src = `/video_feed?mode=yolo&t=${Date.now()}`;
+                    fetchCameraDevices();
+                } else {
+                    showToast(`❌ Không thể mở Camera ${camId}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi kết nối camera: ${err.message}`);
+            }
+        }
+
+        async function fetchDatasetStats() {
+            try {
+                const res = await fetch('/api/dataset/stats');
+                const data = await res.json();
+                if (data && (data.status === 'ok' || data.classes)) {
+                    const counts = data.counts || data.classes || {};
+                    const classesList = Array.isArray(data.classes) ? data.classes : Object.keys(counts);
+                    renderClassPills(classesList, counts);
+                    renderStatsList(counts, data.total_images || 0);
+                    const totalBadge = document.getElementById('badge-total-images');
+                    if (totalBadge) totalBadge.innerText = `Tổng: ${data.total_images || 0} ảnh`;
+                    fetchRecentGallery();
+                }
+            } catch (err) {
+                console.warn("fetchDatasetStats error:", err);
+            }
+        }
+
+        function renderClassPills(classes, counts) {
+            const container = document.getElementById('class-pills-container');
+            if (!container) return;
+            const classArray = Array.isArray(classes) ? classes : Object.keys(classes || {});
+            knownClasses = classArray.length > 0 ? classArray : knownClasses;
+            if (!knownClasses.includes(selectedDatasetClass) && knownClasses.length > 0) {
+                selectedDatasetClass = knownClasses[0];
+            }
+
+            container.innerHTML = knownClasses.map(cls => {
+                const active = cls === selectedDatasetClass ? 'active' : '';
+                const cnt = counts[cls] || 0;
+                return `
+                    <button class="class-pill ${active}" onclick="selectDatasetClass('${cls}')">
+                        <span class="class-pill-dot" style="background:${getClassColor(cls)}"></span>
+                        <span style="font-weight:600;">${cls}</span>
+                        <span class="class-pill-count">${cnt}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectDatasetClass(cls) {
+            selectedDatasetClass = cls;
+            document.querySelectorAll('.class-pill').forEach(pill => {
+                pill.classList.toggle('active', pill.innerText.includes(cls));
+            });
+            showToast(`🏷️ Đã chọn nhãn: ${cls}`);
+        }
+
+        function getClassColor(cls) {
+            if (cls.includes('red')) return '#f87171';
+            if (cls.includes('green')) return '#4ade80';
+            if (cls.includes('blue')) return '#60a5fa';
+            if (cls.includes('yellow')) return '#facc15';
+            if (cls.includes('black')) return '#94a3b8';
+            if (cls.includes('white')) return '#f8fafc';
+            return '#38bdf8';
+        }
+
+        function renderStatsList(counts, total) {
+            const container = document.getElementById('stats-list-container');
+            if (!container) return;
+            const targetPerClass = 50;
+            container.innerHTML = Object.entries(counts).map(([cls, cnt]) => {
+                const pct = Math.min(100, Math.round((cnt / targetPerClass) * 100));
+                const col = getClassColor(cls);
+                return `
+                    <div class="stats-item">
+                        <div class="stats-item-top">
+                            <span style="display:flex; align-items:center; gap:6px;">
+                                <span class="class-pill-dot" style="background:${col}"></span>
+                                <b>${cls}</b>
+                            </span>
+                            <span style="color:#94a3b8;">${cnt} / ${targetPerClass} ảnh (${pct}%)</span>
+                        </div>
+                        <div class="stats-bar-track">
+                            <div class="stats-bar-fill" style="width:${pct}%; background:${col};"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleAddNewClass() {
+            const inp = document.getElementById('inp-new-class');
+            const val = inp.value.trim().toLowerCase().replace(/\s+/g, '_');
+            if (!val) {
+                showToast("⚠️ Vui lòng nhập tên nhãn (ví dụ: cube_purple)");
+                return;
+            }
+            try {
+                const res = await fetch('/api/dataset/add_class', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ class_name: val })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    selectedDatasetClass = val;
+                    inp.value = '';
+                    showToast(`✅ Đã thêm nhãn mới: ${val}`);
+                    fetchDatasetStats();
+                } else {
+                    showToast(`❌ Lỗi: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi thêm nhãn: ${err.message}`);
+            }
+        }
+
+        function triggerFlashOverlay() {
+            const flash = document.getElementById('data-flash-overlay');
+            if (flash) {
+                flash.style.opacity = '0.7';
+                setTimeout(() => { flash.style.opacity = '0'; }, 180);
+            }
+        }
+
+        async function triggerSingleCapture() {
+            try {
+                triggerFlashOverlay();
+                const res = await fetch('/api/dataset/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ class_name: selectedDatasetClass })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`📸 Đã chụp: ${data.filename} (${selectedDatasetClass})`);
+                    fetchDatasetStats();
+                } else {
+                    showToast(`❌ Lỗi chụp ảnh: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi mạng khi chụp ảnh: ${err.message}`);
+            }
+        }
+
+        function toggleContinuousRecording() {
+            isRecordingDataset = !isRecordingDataset;
+            const btn = document.getElementById('btn-toggle-record');
+            if (isRecordingDataset) {
+                btn.classList.add('recording');
+                btn.innerHTML = '<span>⏹️</span> <span>DỪNG LƯU (R)</span>';
+                showToast(`🔴 Bắt đầu lưu liên tục cho nhãn [${selectedDatasetClass}]!`);
+                triggerSingleCapture();
+                datasetRecordTimer = setInterval(() => {
+                    triggerSingleCapture();
+                }, 450);
+            } else {
+                btn.classList.remove('recording');
+                btn.innerHTML = '<span>🔴</span> <span>LƯU LIÊN TỤC (R)</span>';
+                if (datasetRecordTimer) {
+                    clearInterval(datasetRecordTimer);
+                    datasetRecordTimer = null;
+                }
+                showToast(`⏹️ Đã dừng lưu liên tục.`);
+                fetchDatasetStats();
+            }
+        }
+
+        async function fetchRecentGallery() {
+            try {
+                const res = await fetch('/api/dataset/recent');
+                const data = await res.json();
+                const container = document.getElementById('recent-gallery-container');
+                if (container && data.status === 'ok') {
+                    if (data.images.length === 0) {
+                        container.innerHTML = '<div style="color:#64748b; font-size:12px; padding:10px;">Chưa có ảnh nào được chụp</div>';
+                        return;
+                    }
+                    container.innerHTML = data.images.map(img => `
+                        <div class="thumb-card" title="${img.filename}">
+                            <img class="thumb-img" src="${img.url}" alt="${img.class_name}">
+                            <div class="thumb-badge">${img.class_name}</div>
+                            <button class="thumb-del-btn" onclick="handleDeleteCapture('${img.filename}')" title="Xóa ảnh này">✕</button>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.warn("fetchRecentGallery error:", err);
+            }
+        }
+
+        async function handleDeleteCapture(filename) {
+            if (!confirm(`Xóa ảnh ${filename}?`)) return;
+            try {
+                const res = await fetch('/api/dataset/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`🗑️ Đã xóa: ${filename}`);
+                    fetchDatasetStats();
+                } else {
+                    showToast(`❌ Lỗi xóa: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
+        // --- 3. HUẤN LUYỆN AI 1-CLICK (AI TRAINER) ---
+        async function fetchTrainStatus() {
+            try {
+                const res = await fetch('/api/train/status');
+                const data = await res.json();
+                updateTrainDashboard(data);
+            } catch (err) {
+                console.warn("fetchTrainStatus error:", err);
+            }
+        }
+
+        async function handleStartTraining() {
+            const modelName = document.getElementById('sel-train-model').value;
+            const epochs = parseInt(document.getElementById('rng-train-epochs').value);
+            const batch = parseInt(document.getElementById('sel-train-batch').value);
+
+            if (!confirm(`Bắt đầu huấn luyện mô hình ${modelName} với ${epochs} vòng lặp (Epochs)?`)) return;
+
+            try {
+                const res = await fetch('/api/train/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_name: modelName, epochs: epochs, batch: batch })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`🚀 Đã khởi chạy tiến trình huấn luyện!`);
+                    startTrainPolling();
+                } else {
+                    showToast(`❌ Không thể bắt đầu: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi khởi chạy: ${err.message}`);
+            }
+        }
+
+        async function handleStopTraining() {
+            if (!confirm("Bạn có chắc chắn muốn hủy phiên huấn luyện hiện tại?")) return;
+            try {
+                const res = await fetch('/api/train/stop', { method: 'POST' });
+                const data = await res.json();
+                showToast(`🛑 ${data.message}`);
+            } catch (err) {
+                showToast(`❌ Lỗi hủy: ${err.message}`);
+            }
+        }
+
+        async function handleExportColab() {
+            showToast("📦 Đang nén toàn bộ dataset thành file .zip...");
+            try {
+                const res = await fetch('/api/train/export_colab', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`🎉 Nén thành công! Đang tải xuống ${data.zip_name}...`);
+                    window.location.href = data.download_url;
+                } else {
+                    showToast(`❌ Lỗi nén Colab: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi tải zip: ${err.message}`);
+            }
+        }
+
+        function startTrainPolling() {
+            if (!trainPollTimer) {
+                trainPollTimer = setInterval(fetchTrainStatus, 1000);
+            }
+        }
+
+        function stopTrainPolling() {
+            if (trainPollTimer) {
+                clearInterval(trainPollTimer);
+                trainPollTimer = null;
+            }
+        }
+
+        function updateTrainDashboard(data) {
+            if (!data) return;
+            const badge = document.getElementById('train-status-badge');
+            const btnStart = document.getElementById('btn-start-train');
+            const btnStop = document.getElementById('btn-stop-train');
+            const btnColab = document.getElementById('btn-export-colab');
+            const statusMsg = document.getElementById('txt-train-status-msg');
+            const pctText = document.getElementById('txt-train-progress-pct');
+            const fillBar = document.getElementById('bar-train-fill');
+            const lossVal = document.getElementById('metric-loss');
+            const mapVal = document.getElementById('metric-map');
+            const etaVal = document.getElementById('metric-eta');
+            const logBox = document.getElementById('train-log-box');
+
+            const status = data.status || 'idle';
+            if (badge) {
+                if (status === 'training' || status === 'preparing') {
+                    badge.className = 'sys-badge online';
+                    badge.innerText = status === 'training' ? `Đang huấn luyện (Epoch ${data.current_epoch}/${data.total_epochs})` : 'Đang chuẩn bị dataset...';
+                } else if (status === 'completed') {
+                    badge.className = 'sys-badge online';
+                    badge.innerText = 'Hoàn thành 🎉';
+                } else if (status === 'error') {
+                    badge.className = 'sys-badge offline';
+                    badge.innerText = 'Lỗi!';
+                } else {
+                    badge.className = 'sys-badge offline';
+                    badge.innerText = 'Chưa chạy';
+                }
+            }
+
+            const isRunning = (status === 'training' || status === 'preparing');
+            if (btnStart) btnStart.style.display = isRunning ? 'none' : 'flex';
+            if (btnColab) btnColab.style.display = isRunning ? 'none' : 'flex';
+            if (btnStop) btnStop.style.display = isRunning ? 'flex' : 'none';
+
+            if (statusMsg) statusMsg.innerText = data.message || 'Sẵn sàng';
+            const pct = data.progress_pct || 0;
+            if (pctText) pctText.innerText = `${pct}%`;
+            if (fillBar) fillBar.style.width = `${pct}%`;
+
+            if (lossVal) lossVal.innerText = (data.current_loss > 0) ? data.current_loss.toFixed(4) : '--';
+            if (mapVal) mapVal.innerText = (data.current_map50 > 0) ? `${(data.current_map50 * 100).toFixed(1)}%` : '--';
+            if (etaVal) etaVal.innerText = data.eta || '--';
+
+            if (logBox && data.logs && data.logs.length > 0) {
+                logBox.innerText = data.logs.join('\n');
+                logBox.scrollTop = logBox.scrollHeight;
+            }
+
+            if (!isRunning) {
+                stopTrainPolling();
+            } else {
+                startTrainPolling();
+            }
+        }
+
+        // --- 4. AI VISION & TỰ ĐỘNG PHÂN LOẠI (AUTO SORT) ---
+        async function fetchVisionModels() {
+            try {
+                const res = await fetch('/api/vision/models');
+                const data = await res.json();
+                const sel = document.getElementById('sel-vision-model');
+                if (sel && data.status === 'ok' && data.models) {
+                    sel.innerHTML = data.models.map(m => 
+                        `<option value="${m.name}" ${m.name === data.current_model ? 'selected' : ''}>${m.label} (${m.size_mb}MB)</option>`
+                    ).join('');
+                }
+            } catch (err) {
+                console.warn("fetchVisionModels error:", err);
+            }
+        }
+
+        async function handleChangeVisionModel(modelName) {
+            try {
+                showToast(`Đang tải mô hình YOLO: ${modelName}...`);
+                const res = await fetch('/api/vision/models', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: modelName })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`✅ Đã nạp mô hình: ${modelName}`);
+                } else {
+                    showToast(`❌ Lỗi nạp mô hình: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi kết nối mô hình: ${err.message}`);
+            }
+        }
+
+        async function handleToggleAutoSort(enable) {
+            try {
+                const res = await fetch('/api/vision/auto_sort', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enable: enable })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(enable ? "⚡ ĐÃ BẬT TỰ ĐỘNG PHÂN LOẠI! Dobot sẽ tự gắp các khối màu." : "⏹️ Đã tắt tự động phân loại.");
+                } else {
+                    showToast(`❌ Lỗi: ${data.message}`);
+                    document.getElementById('chk-auto-sort').checked = !enable;
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
+        async function fetchVisionStatus() {
+            try {
+                const res = await fetch('/api/vision/status');
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    updateVisionDashboard(data);
+                }
+            } catch (err) {
+                console.warn("fetchVisionStatus error:", err);
+            }
+        }
+
+        function updateVisionDashboard(data) {
+            if (!data) return;
+            const chkAuto = document.getElementById('chk-auto-sort');
+            if (chkAuto && typeof data.auto_sort_enabled === 'boolean') {
+                chkAuto.checked = data.auto_sort_enabled;
+            }
+
+            const countEl = document.getElementById('txt-detected-count');
+            const listEl = document.getElementById('detected-cubes-list');
+            const cubes = data.detected_cubes || [];
+
+            if (countEl) countEl.innerText = cubes.length;
+
+            if (listEl) {
+                if (cubes.length === 0) {
+                    listEl.innerHTML = '<div style="color:#64748b; font-size:12px; padding:10px; text-align:center;">Chưa phát hiện khối màu nào trên bàn</div>';
+                    return;
+                }
+                listEl.innerHTML = cubes.map((cube, idx) => {
+                    const col = getClassColor(cube.class_name);
+                    const dx = (cube.dobot_x !== null && cube.dobot_x !== undefined) ? cube.dobot_x : (cube.dobot_coord ? cube.dobot_coord.x : null);
+                    const dy = (cube.dobot_y !== null && cube.dobot_y !== undefined) ? cube.dobot_y : (cube.dobot_coord ? cube.dobot_coord.y : null);
+                    const dobotCoord = (dx !== null && dy !== null) ? `Dobot: (${dx}, ${dy}) mm` : 'Chưa calib';
+                    return `
+                        <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span class="class-pill-dot" style="background:${col}"></span>
+                                    <b style="font-size:12px; color:#f8fafc;">${cube.class_name}</b>
+                                    <span style="font-size:11px; color:#4ade80;">${Math.round(cube.confidence * 100)}%</span>
+                                </div>
+                                <div style="font-size:11px; color:#94a3b8; font-family:monospace; margin-top:2px;">
+                                    ${dobotCoord}
+                                </div>
+                            </div>
+                            <button class="btn-sync-pose" style="padding:4px 8px; font-size:11px;" onclick="pickCubeDirectly(${dx}, ${dy}, '${cube.class_name}')">
+                                🦾 Gắp ngay
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function pickCubeDirectly(x, y, className) {
+            if (x === null || y === null) {
+                showToast("⚠️ Khối này chưa có tọa độ Dobot (Cần hiệu chuẩn camera trước)!");
+                return;
+            }
+            if (!confirm(`Ra lệnh cho Dobot gắp ${className} tại tọa độ X=${x}, Y=${y}?`)) return;
+            try {
+                showToast(`🚀 Đang yêu cầu Dobot gắp ${className} tại (${x}, ${y})...`);
+                const res = await fetch('/api/vision/pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dobot_x: x, dobot_y: y, class_name: className })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`✅ Dobot bắt đầu chu trình gắp thả!`);
+                } else {
+                    showToast(`❌ Lỗi gắp: ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi mạng: ${err.message}`);
+            }
+        }
+
+        async function handleVideoClickToPick(event) {
+            const img = document.getElementById('img-sort-stream');
+            if (!img) return;
+
+            const rect = img.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+
+            const normX = (clickX / rect.width) * 640;
+            const normY = (clickY / rect.height) * 480;
+
+            showToast(`🎯 Nhấp vào pixel: (${normX.toFixed(0)}, ${normY.toFixed(0)}). Đang tính toán gắp...`);
+
+            try {
+                const res = await fetch('/api/vision/pick', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x: normX, y: normY })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    showToast(`🚀 Đã nhận diện khối & bắt đầu gắp: ${data.message}`);
+                } else {
+                    showToast(`⚠️ ${data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi: ${err.message}`);
+            }
+        }
+
+        function startVisionPolling() {
+            if (!visionPollTimer) {
+                visionPollTimer = setInterval(fetchVisionStatus, 1500);
+            }
+        }
+
+        function stopVisionPolling() {
+            if (visionPollTimer) {
+                clearInterval(visionPollTimer);
+                visionPollTimer = null;
+            }
+        }
+
+        // --- PHÍM TẮT BÀN PHÍM TÍCH HỢP ---
         window.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             if (e.key === 'm' || e.key === 'M') {
-                togglePanel();
+                if (currentStudioTab === '3d') togglePanel();
+            } else if (e.code === 'Space') {
+                if (currentStudioTab === 'data') {
+                    e.preventDefault();
+                    triggerSingleCapture();
+                }
+            } else if (e.key === 'r' || e.key === 'R') {
+                if (currentStudioTab === 'data') {
+                    e.preventDefault();
+                    toggleContinuousRecording();
+                }
             }
         });
 
+        // Khởi động các module ban đầu
         setMode('live');
         setCoordSystem('cartesian');
         switchTab('target');
@@ -2527,6 +3897,8 @@
         initWebSocket();
         initTransformGizmo();
         updateTargetMarker();
+        switchStudioTab('3d');
+        fetchCameraDevices();
         animate();
     </script>
 </body>

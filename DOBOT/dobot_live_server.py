@@ -25,6 +25,8 @@ if sys.platform == "win32":
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
+import tornado.gen
+import tornado.iostream
 
 try:
     import serial
@@ -32,6 +34,19 @@ try:
 except ImportError:
     print("[-] Cần thư viện pyserial: pip install pyserial")
     sys.exit(1)
+
+# Import các phân hệ Web Studio (Vision, Dataset, Trainer)
+try:
+    from web_vision_engine import WebVisionEngine
+    from web_dataset_manager import (
+        get_dataset_stats, save_captured_frame, delete_captured_image,
+        add_new_class, get_recent_captures, DATASET_RAW_DIR
+    )
+    from web_trainer import web_trainer, COLAB_ZIP_PATH, MODELS_DIR
+    HAS_WEB_STUDIO = True
+except Exception as e:
+    HAS_WEB_STUDIO = False
+    print(f"[!] Cảnh báo nạp module Web Studio: {e}")
 
 
 ALARM_DICT = {
@@ -383,6 +398,7 @@ class DobotController:
 
 
 robot = DobotController()
+vision_engine = WebVisionEngine(robot_controller=robot, default_cam=0) if HAS_WEB_STUDIO else None
 connected_clients = set()
 
 
@@ -568,6 +584,374 @@ def poll_robot_pose():
             except Exception:
                 connected_clients.discard(client)
 
+        if HAS_WEB_STUDIO and poll_counter % 10 == 0:
+            tr_stat = web_trainer.get_status()
+            if tr_stat.get("status") in ("preparing", "training", "completed"):
+                tr_msg = json.dumps({"type": "train_status", "data": tr_stat})
+                for client in list(connected_clients):
+                    try:
+                        client.write_message(tr_msg)
+                    except Exception:
+                        pass
+
+
+# ==============================================================================
+# BỘ XỬ LÝ VIDEO & WEB STUDIO APIS (CAMERA, DATASET, TRAINER, AUTO SORT)
+# ==============================================================================
+
+class VideoFeedHandler(tornado.web.RequestHandler):
+    async def get(self):
+        mode = self.get_argument("mode", None)
+        if mode and HAS_WEB_STUDIO and vision_engine:
+            vision_engine.stream_mode = mode
+
+        self.set_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, pre-check=0, post-check=0, max-age=0')
+        self.set_header('Pragma', 'no-cache')
+        self.set_header('Connection', 'close')
+
+        try:
+            while not self.request.connection.stream.closed():
+                if HAS_WEB_STUDIO and vision_engine:
+                    jpeg = vision_engine.get_jpeg()
+                    if jpeg:
+                        self.write(b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n")
+                        await self.flush()
+                await tornado.gen.sleep(0.033) # ~30 fps
+        except (tornado.iostream.StreamClosedError, Exception):
+            pass
+
+
+class ApiCameraHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def get(self):
+        devices = []
+        if sys.platform == "win32":
+            for i in range(3):
+                try:
+                    c = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+                    if c.isOpened():
+                        devices.append({"id": i, "name": f"Camera {i}"})
+                        c.release()
+                except Exception:
+                    pass
+        if not devices:
+            devices = [{"id": 0, "name": "Camera 0"}]
+
+        status = vision_engine.get_status() if HAS_WEB_STUDIO and vision_engine else {}
+        is_cam_open = status.get("camera_online", False)
+        active_cam = vision_engine.cam_id if HAS_WEB_STUDIO and vision_engine else 0
+        self.write({
+            "status": "ok",
+            "success": True,
+            "devices": devices,
+            "available_cameras": devices,
+            "active_cam": active_cam,
+            "current_cam": active_cam,
+            "stream_mode": vision_engine.stream_mode if HAS_WEB_STUDIO and vision_engine else "raw",
+            "camera_online": is_cam_open,
+            "is_opened": is_cam_open
+        })
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body)
+            if "cam_id" in data and HAS_WEB_STUDIO and vision_engine:
+                ok = vision_engine.start_camera(int(data["cam_id"]))
+                self.write({"success": ok, "cam_id": vision_engine.cam_id})
+            elif "mode" in data and HAS_WEB_STUDIO and vision_engine:
+                vision_engine.stream_mode = str(data["mode"])
+                self.write({"success": True, "mode": vision_engine.stream_mode})
+            else:
+                self.write({"success": False, "error": "Tham số không hợp lệ"})
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiDatasetStatsHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        if HAS_WEB_STUDIO:
+            self.write(get_dataset_stats())
+        else:
+            self.write({"classes": {}, "total_images": 0})
+
+
+class ApiDatasetCaptureHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        if not HAS_WEB_STUDIO or not vision_engine:
+            self.write({"success": False, "error": "Vision Engine chưa khởi động"})
+            return
+
+        try:
+            data = json.loads(self.request.body)
+            class_name = data.get("class_name", "cube_red")
+            frame = vision_engine.get_raw_frame()
+            if frame is None:
+                self.write({"success": False, "error": "Chưa nhận được frame từ Camera"})
+                return
+
+            res = save_captured_frame(class_name, frame)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiDatasetDeleteHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body)
+            res = delete_captured_image(data.get("class_name", ""), data.get("filename", ""))
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiDatasetAddClassHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body)
+            res = add_new_class(data.get("class_name", ""))
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiDatasetRecentHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        if HAS_WEB_STUDIO:
+            self.write({"images": get_recent_captures(limit=16)})
+        else:
+            self.write({"images": []})
+
+
+class DatasetImageHandler(tornado.web.RequestHandler):
+    def get(self, path):
+        full_path = os.path.join(str(DATASET_RAW_DIR), path)
+        if os.path.exists(full_path) and os.path.isfile(full_path):
+            self.set_header("Content-Type", "image/jpeg")
+            with open(full_path, "rb") as f:
+                self.write(f.read())
+        else:
+            self.set_status(404)
+
+
+class ApiTrainStartHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        if not HAS_WEB_STUDIO:
+            self.write({"success": False, "error": "Module huấn luyện chưa sẵn sàng"})
+            return
+
+        try:
+            data = json.loads(self.request.body)
+            model_name = data.get("model") or data.get("model_name", "yolov8n.pt")
+            epochs = int(data.get("epochs", 30))
+            batch = int(data.get("batch", 16))
+            res = web_trainer.start(base_model=model_name, epochs=epochs, batch=batch)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiTrainStatusHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        if HAS_WEB_STUDIO:
+            self.write(web_trainer.get_status())
+        else:
+            self.write({"status": "idle"})
+
+
+class ApiTrainStopHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def post(self):
+        if HAS_WEB_STUDIO:
+            web_trainer.stop()
+            self.write({"success": True})
+        else:
+            self.write({"success": False})
+
+
+class ApiTrainExportColabHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def post(self):
+        if HAS_WEB_STUDIO:
+            self.write(web_trainer.export_colab_zip())
+        else:
+            self.write({"success": False, "error": "Chưa hỗ trợ"})
+
+
+class ApiTrainDownloadZipHandler(tornado.web.RequestHandler):
+    def get(self):
+        if COLAB_ZIP_PATH.exists():
+            self.set_header('Content-Type', 'application/zip')
+            self.set_header('Content-Disposition', 'attachment; filename="yolo_dataset.zip"')
+            with open(COLAB_ZIP_PATH, 'rb') as f:
+                self.write(f.read())
+        else:
+            self.set_status(404)
+            self.write("Chưa có file zip. Hãy bấm xuất gói trước.")
+
+
+class ApiVisionStatusHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        if HAS_WEB_STUDIO and vision_engine:
+            self.write(vision_engine.get_status())
+        else:
+            self.write({"camera_online": False})
+
+
+class ApiVisionPickHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        if not HAS_WEB_STUDIO or not vision_engine:
+            self.write({"success": False, "error": "Vision Engine chưa khởi động"})
+            return
+
+        try:
+            data = json.loads(self.request.body)
+            pick_x = data.get("pick_x") or data.get("dobot_x")
+            pick_y = data.get("pick_y") or data.get("dobot_y")
+            cube_name = data.get("cube_name") or data.get("class_name", "cube")
+
+            # Nếu gửi tọa độ pixel nhấp chuột (x, y)
+            if pick_x is None and "x" in data and "y" in data:
+                px = float(data["x"])
+                py = float(data["y"])
+                
+                # Tìm xem pixel này có nằm trong bbox của vật thể nào không
+                matched_cube = None
+                with vision_engine.lock:
+                    for c in vision_engine.detected_cubes:
+                        bbox = c.get("bbox", [])
+                        if len(bbox) == 4:
+                            x1, y1, x2, y2 = bbox
+                            if x1 <= px <= x2 and y1 <= py <= y2:
+                                matched_cube = c
+                                break
+
+                if matched_cube and matched_cube.get("dobot_coord", {}).get("x") is not None:
+                    pick_x = matched_cube["dobot_coord"]["x"]
+                    pick_y = matched_cube["dobot_coord"]["y"]
+                    cube_name = matched_cube.get("class_name", cube_name)
+                else:
+                    # Nếu không trúng bbox, thử chuyển pixel sang dobot bằng Homography trực tiếp
+                    dx, dy = vision_engine.pixel_to_dobot(px, py)
+                    if dx is not None and dy is not None:
+                        pick_x = dx
+                        pick_y = dy
+                    else:
+                        self.write({"success": False, "message": "Không thể đổi tọa độ pixel sang tọa độ Dobot (chưa nạp Calib)"})
+                        return
+
+            if pick_x is None or pick_y is None:
+                self.write({"success": False, "message": "Thiếu tọa độ gắp Dobot"})
+                return
+
+            res = vision_engine.execute_pick_and_place(float(pick_x), float(pick_y), str(cube_name))
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "message": str(e)})
+
+
+class ApiVisionAutoSortHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        if not HAS_WEB_STUDIO or not vision_engine:
+            self.write({"success": False, "error": "Vision Engine chưa khởi động"})
+            return
+
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            enable = data.get("enable", None)
+            res = vision_engine.toggle_auto_sort(enable)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiVisionModelsHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def get(self):
+        candidates = ["yolov8n.pt", "yolo11n.pt"]
+        if MODELS_DIR.exists():
+            for f in sorted(MODELS_DIR.glob("*.pt")):
+                if f.name not in candidates:
+                    candidates.append(f.name)
+        model_objs = []
+        for name in candidates:
+            p = MODELS_DIR / name
+            size_mb = round(p.stat().st_size / (1024 * 1024), 1) if p.exists() else 6.2
+            label = "YOLOv8 Nano (Khuyến nghị)" if name == "yolov8n.pt" else ("YOLO11 Nano" if name == "yolo11n.pt" else f"Mô hình ({name})")
+            model_objs.append({
+                "name": name,
+                "label": label,
+                "size_mb": size_mb,
+                "exists": p.exists()
+            })
+        active = vision_engine.active_model_name if HAS_WEB_STUDIO and vision_engine else "yolov8n.pt"
+        self.write({
+            "status": "ok",
+            "models": model_objs,
+            "current_model": active,
+            "active_model": active
+        })
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body)
+            model_name = data.get("model", "")
+            target_path = MODELS_DIR / model_name
+            if target_path.exists() and HAS_WEB_STUDIO and vision_engine:
+                ok = vision_engine.load_best_yolo_model(target_path)
+                self.write({"success": ok, "active_model": vision_engine.active_model_name})
+            else:
+                self.write({"success": False, "error": "Không tìm thấy file model"})
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
 
 def find_available_port(preferred_port=8080):
     import socket
@@ -591,6 +975,24 @@ def main():
         (r"/ws", WebSocketHandler),
         (r"/api/cmd", ApiCmdHandler),
         (r"/(.*\.js)", StaticFileHandler),
+        # Web Studio Streaming & APIs
+        (r"/video_feed", VideoFeedHandler),
+        (r"/api/camera", ApiCameraHandler),
+        (r"/api/dataset/stats", ApiDatasetStatsHandler),
+        (r"/api/dataset/capture", ApiDatasetCaptureHandler),
+        (r"/api/dataset/delete", ApiDatasetDeleteHandler),
+        (r"/api/dataset/add_class", ApiDatasetAddClassHandler),
+        (r"/api/dataset/recent", ApiDatasetRecentHandler),
+        (r"/api/dataset/image/(.*)", DatasetImageHandler),
+        (r"/api/train/start", ApiTrainStartHandler),
+        (r"/api/train/status", ApiTrainStatusHandler),
+        (r"/api/train/stop", ApiTrainStopHandler),
+        (r"/api/train/export_colab", ApiTrainExportColabHandler),
+        (r"/api/train/download_zip", ApiTrainDownloadZipHandler),
+        (r"/api/vision/status", ApiVisionStatusHandler),
+        (r"/api/vision/pick", ApiVisionPickHandler),
+        (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
+        (r"/api/vision/models", ApiVisionModelsHandler),
     ])
     
     app.listen(port, address="0.0.0.0")
