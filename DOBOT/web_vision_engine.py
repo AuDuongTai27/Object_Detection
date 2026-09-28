@@ -106,12 +106,15 @@ class WebVisionEngine:
         self.is_picking = False
         self.auto_sort_thread = None
 
-        # Danh sách camera ban đầu
+        # Danh sách camera ban đầu (quét an toàn)
         self.cam_id = 0
-        self.available_cameras = [
-            {"id": 0, "name": "Camera 0 (Camera tích hợp laptop / PC)", "is_external": False, "is_current": True},
-            {"id": 1, "name": "Camera 1 (USB Camera ngoài - Ưu tiên ⭐)", "is_external": True, "is_current": False}
-        ]
+        self.available_cameras = []
+        try:
+            self.scan_cameras()
+        except Exception:
+            pass
+        if self.available_cameras:
+            self.cam_id = self.available_cameras[0]["id"]
 
         # Camera được giữ ở trạng thái tự do (không chiếm dụng phần cứng)
         # để các công cụ chuyên dụng (capture_from_camera, dobot_auto_sort) luôn mở được 100%
@@ -166,9 +169,6 @@ class WebVisionEngine:
                         })
             except Exception:
                 pass
-
-        if not cams:
-            cams = [{"id": 0, "name": "Camera 0 (Mặc định)", "is_external": False, "is_current": True}]
 
         # Sắp xếp: Camera ngoài lên đầu, sau đó đến camera tích hợp
         cams.sort(key=lambda x: (not x.get("is_external", False), x["id"]))

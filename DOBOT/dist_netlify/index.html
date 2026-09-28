@@ -1099,10 +1099,6 @@
                 <span id="nav-robot-text">Robot: Chưa kết nối</span>
                 <button id="btn-toggle-robot" onclick="handleToggleRobotConnect()" style="background: #2563eb; color: #fff; border: 1px solid #38bdf8; border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s;">🔌 Kết Nối</button>
             </div>
-            <div id="nav-cam-badge" class="sys-badge offline">
-                <span class="sys-dot"></span>
-                <span id="nav-cam-text">Camera: Sẵn sàng</span>
-            </div>
         </div>
     </header>
 
@@ -1519,6 +1515,24 @@
                             <div style="font-size: 11.5px; font-family: monospace; color: #cbd5e1;">dataset/raw/<span id="txt-current-capture-folder">cube_red</span>/</div>
                         </div>
                     </div>
+
+                    <!-- Lựa chọn Camera cho Tab 2 -->
+                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label for="sel-cam-tab2" style="color: #cbd5e1; font-weight: 700; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                                <span>📷</span> <span>Chọn Camera Thu Thập:</span>
+                            </label>
+                            <button type="button" onclick="fetchCameraDevices(true)" style="background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Quét lại các cổng camera đang cắm">
+                                <span>🔄 Quét lại</span>
+                            </button>
+                        </div>
+                        <select id="sel-cam-tab2" style="background: #1e293b; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 8px 10px; width: 100%; font-size: 13px; font-weight: 600; outline: none; cursor: pointer;">
+                            <option value="">Đang dò tìm camera...</option>
+                        </select>
+                        <div id="warn-no-cam-tab2" style="display: none; margin-top: 8px; font-size: 11.5px; color: #f87171; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 7px 10px;">
+                            ⚠️ Không phát hiện camera nào được kết nối với máy tính! Không thể mở công cụ. Vui lòng cắm camera USB hoặc kiểm tra webcam và bấm "Quét lại".
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Nút Khởi Chạy / Dừng Công Cụ -->
@@ -1713,6 +1727,24 @@
 
                         <div style="margin-top: 10px; font-size: 11px; color: #64748b; line-height: 1.4; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 10px;">
                             📍 Tọa độ khay phân loại: <b>X = 49.2 mm, Y = -230.1 mm</b> | Z gắp: <b>-51.7 mm</b> | Chuyển đổi tọa độ: <b>Homography Matrix chuẩn</b>.
+                        </div>
+                    </div>
+
+                    <!-- Lựa chọn Camera cho Tab 4 -->
+                    <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(74, 222, 128, 0.25); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label for="sel-cam-tab4" style="color: #cbd5e1; font-weight: 700; font-size: 12.5px; display: flex; align-items: center; gap: 6px;">
+                                <span>📷</span> <span>Chọn Camera Cho AI Vision & Sort:</span>
+                            </label>
+                            <button type="button" onclick="fetchCameraDevices(true)" style="background: rgba(74, 222, 128, 0.15); border: 1px solid #4ade80; color: #4ade80; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Quét lại các cổng camera đang cắm">
+                                <span>🔄 Quét lại</span>
+                            </button>
+                        </div>
+                        <select id="sel-cam-tab4" style="background: #1e293b; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 8px 10px; width: 100%; font-size: 13px; font-weight: 600; outline: none; cursor: pointer;">
+                            <option value="">Đang dò tìm camera...</option>
+                        </select>
+                        <div id="warn-no-cam-tab4" style="display: none; margin-top: 8px; font-size: 11.5px; color: #f87171; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 7px 10px;">
+                            ⚠️ Không phát hiện camera nào được kết nối với máy tính! Không thể mở công cụ. Vui lòng cắm camera USB hoặc kiểm tra webcam và bấm "Quét lại".
                         </div>
                     </div>
                 </div>
@@ -3583,12 +3615,23 @@
                 showToast("⚠️ Vui lòng dừng công cụ ở Tab kia trước để giải phóng Camera!");
                 return;
             }
-            showToast("🔄 Đang mở cửa sổ capture_from_camera trên máy tính...");
+            const selCam = document.getElementById('sel-cam-tab2');
+            const camId = selCam ? selCam.value : '';
+            if (camId === '' || camId === null || isNaN(parseInt(camId))) {
+                showToast("⚠️ Không tìm thấy camera nào kết nối! Không thể mở công cụ.");
+                return;
+            }
+
+            showToast(`🔄 Đang mở cửa sổ capture_from_camera (Camera ${camId})...`);
             try {
                 const res = await fetch('/api/tool/launch', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ tool: 'capture', class_name: selectedDatasetClass })
+                    body: JSON.stringify({ 
+                        tool: 'capture', 
+                        class_name: selectedDatasetClass,
+                        cam_id: parseInt(camId)
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -3607,14 +3650,25 @@
                 showToast("⚠️ Vui lòng dừng công cụ ở Tab kia trước để giải phóng Camera!");
                 return;
             }
-            showToast("🔄 Đang khởi chạy dobot_auto_sort trên máy tính...");
+            const selCam = document.getElementById('sel-cam-tab4');
+            const camId = selCam ? selCam.value : '';
+            if (camId === '' || camId === null || isNaN(parseInt(camId))) {
+                showToast("⚠️ Không tìm thấy camera nào kết nối! Không thể mở công cụ.");
+                return;
+            }
+
+            showToast(`🔄 Đang khởi chạy dobot_auto_sort (Camera ${camId})...`);
             const modelSel = document.getElementById('sel-vision-model');
             const modelName = modelSel ? modelSel.value : '';
             try {
                 const res = await fetch('/api/tool/launch', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ tool: 'sort', model: modelName })
+                    body: JSON.stringify({ 
+                        tool: 'sort', 
+                        model: modelName,
+                        cam_id: parseInt(camId)
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -3670,11 +3724,13 @@
             // Quản lý dữ liệu khi chuyển tab
             if (tabId === 'data') {
                 fetchDatasetStats();
+                fetchCameraDevices();
                 checkToolStatus();
             } else if (tabId === 'train') {
                 fetchTrainStatus();
             } else if (tabId === 'sort') {
                 fetchVisionModels();
+                fetchCameraDevices();
                 checkToolStatus();
             }
         }
@@ -3698,24 +3754,78 @@
                     res = await fetch('/api/camera');
                 }
                 const data = await res.json();
-                const sel1 = document.getElementById('sel-camera-device');
-                const sel2 = document.getElementById('sel-camera-device-sort');
-                const navCamBadge = document.getElementById('nav-cam-badge');
-                const navCamText = document.getElementById('nav-cam-text');
+                const selTab2 = document.getElementById('sel-cam-tab2');
+                const selTab4 = document.getElementById('sel-cam-tab4');
+                const warnTab2 = document.getElementById('warn-no-cam-tab2');
+                const warnTab4 = document.getElementById('warn-no-cam-tab4');
+                const btnCapture = document.getElementById('btn-launch-capture');
+                const btnSort = document.getElementById('btn-launch-sort');
 
-                if (data.status === 'ok' && data.available_cameras) {
-                    const optionsHtml = data.available_cameras.map(cam => 
-                        `<option value="${cam.id}" ${cam.is_current ? 'selected' : ''}>${cam.name}</option>`
+                const cams = (data.status === 'ok' && Array.isArray(data.available_cameras)) ? data.available_cameras : [];
+
+                if (cams.length === 0) {
+                    const noCamHtml = `<option value="">⚠️ Không phát hiện camera nào</option>`;
+                    if (selTab2) selTab2.innerHTML = noCamHtml;
+                    if (selTab4) selTab4.innerHTML = noCamHtml;
+
+                    if (warnTab2) warnTab2.style.display = 'block';
+                    if (warnTab4) warnTab4.style.display = 'block';
+
+                    if (btnCapture) {
+                        btnCapture.disabled = true;
+                        btnCapture.style.opacity = '0.45';
+                        btnCapture.style.cursor = 'not-allowed';
+                        btnCapture.title = 'Không thể mở vì máy tính chưa nhận diện camera!';
+                    }
+                    if (btnSort) {
+                        btnSort.disabled = true;
+                        btnSort.style.opacity = '0.45';
+                        btnSort.style.cursor = 'not-allowed';
+                        btnSort.title = 'Không thể mở vì máy tính chưa nhận diện camera!';
+                    }
+
+                    if (forceRefresh) {
+                        showToast("⚠️ Không tìm thấy camera nào đang kết nối!");
+                    }
+                } else {
+                    const prevTab2Val = selTab2 ? selTab2.value : null;
+                    const prevTab4Val = selTab4 ? selTab4.value : null;
+
+                    const optionsHtml = cams.map((cam, idx) => 
+                        `<option value="${cam.id}">${cam.name}</option>`
                     ).join('');
 
-                    if (sel1) sel1.innerHTML = optionsHtml;
-                    if (sel2) sel2.innerHTML = optionsHtml;
+                    if (selTab2) {
+                        selTab2.innerHTML = optionsHtml;
+                        if (prevTab2Val !== null && cams.some(c => String(c.id) === String(prevTab2Val))) {
+                            selTab2.value = prevTab2Val;
+                        }
+                    }
+                    if (selTab4) {
+                        selTab4.innerHTML = optionsHtml;
+                        if (prevTab4Val !== null && cams.some(c => String(c.id) === String(prevTab4Val))) {
+                            selTab4.value = prevTab4Val;
+                        }
+                    }
 
-                    if (navCamBadge) {
-                        const isExt = (data.current_cam > 0);
-                        const label = isExt ? `Camera ngoài (ID ${data.current_cam}) ⭐` : `Camera máy tính (ID ${data.current_cam})`;
-                        navCamBadge.className = data.is_opened ? 'sys-badge online' : 'sys-badge offline';
-                        navCamText.innerText = data.is_opened ? `Camera: ${label}` : 'Camera: Không mở được';
+                    if (warnTab2) warnTab2.style.display = 'none';
+                    if (warnTab4) warnTab4.style.display = 'none';
+
+                    if (btnCapture) {
+                        btnCapture.disabled = false;
+                        btnCapture.style.opacity = '1';
+                        btnCapture.style.cursor = 'pointer';
+                        btnCapture.title = '';
+                    }
+                    if (btnSort) {
+                        btnSort.disabled = false;
+                        btnSort.style.opacity = '1';
+                        btnSort.style.cursor = 'pointer';
+                        btnSort.title = '';
+                    }
+
+                    if (forceRefresh) {
+                        showToast(`✅ Đã tìm thấy ${cams.length} camera khả dụng!`);
                     }
                 }
             } catch (err) {

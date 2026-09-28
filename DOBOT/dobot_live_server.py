@@ -848,11 +848,11 @@ class ApiCameraHandler(tornado.web.RequestHandler):
         if HAS_WEB_STUDIO and vision_engine:
             devices = vision_engine.get_camera_devices()
             status = vision_engine.get_status()
-            active_cam = vision_engine.cam_id
+            active_cam = vision_engine.cam_id if devices else None
             is_cam_open = status.get("camera_online", False)
         else:
-            devices = [{"id": 0, "name": "Camera 0 (Mặc định)", "is_external": False, "is_current": True}]
-            active_cam = 0
+            devices = []
+            active_cam = None
             is_cam_open = False
 
         self.write({
