@@ -33,6 +33,56 @@ def send_status(payload: dict):
         print(f"[Worker Status Error] {e}", flush=True)
 
 
+def select_optimal_device():
+    """Tự động kiểm tra phần cứng và chọn GPU tối ưu nhất.
+    Nếu có nhiều GPU (ví dụ máy Lab có 2 GPU): Tự so sánh VRAM và chọn card khỏe nhất / còn nhiều bộ nhớ nhất.
+    Nếu không có GPU NVIDIA: Tự động dùng CPU.
+    """
+    try:
+        import torch
+    except ImportError:
+        return "cpu", "CPU (Chưa cài đặt PyTorch)"
+
+    if not torch.cuda.is_available():
+        return "cpu", "CPU (Không phát hiện GPU NVIDIA / CUDA)"
+
+    gpu_count = torch.cuda.device_count()
+    if gpu_count == 0:
+        return "cpu", "CPU (CUDA khả dụng nhưng không có card)"
+
+    if gpu_count == 1:
+        name = torch.cuda.get_device_name(0)
+        total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        return 0, f"GPU 0: {name} ({total_vram:.1f} GB VRAM)"
+
+    # Máy có từ 2 GPU trở lên (Multi-GPU ở Lab):
+    print(f"[*] Phát hiện hệ thống có {gpu_count} GPU NVIDIA. Đang phân tích để chọn GPU tối ưu...", flush=True)
+    best_device_idx = 0
+    best_score = -1
+    best_desc = ""
+
+    for i in range(gpu_count):
+        prop = torch.cuda.get_device_properties(i)
+        try:
+            free_mem, total_mem = torch.cuda.mem_get_info(i)
+        except Exception:
+            free_mem = 0
+            total_mem = prop.total_memory
+
+        free_gb = free_mem / (1024**3)
+        total_gb = total_mem / (1024**3)
+        print(f"    [+] GPU {i}: {prop.name} | Tổng VRAM: {total_gb:.1f} GB | VRAM trống: {free_gb:.1f} GB", flush=True)
+
+        # Ưu tiên GPU có nhiều VRAM trống hơn và tổng VRAM lớn hơn
+        score = total_mem + free_mem * 2
+        if score > best_score:
+            best_score = score
+            best_device_idx = i
+            best_desc = f"GPU {i}: {prop.name} (VRAM trống: {free_gb:.1f} GB / Tổng: {total_gb:.1f} GB)"
+
+    return best_device_idx, best_desc
+
+
 def main():
     parser = argparse.ArgumentParser(description="Standalone YOLO Training Worker")
     parser.add_argument("--base-model", type=str, default="yolov8n.pt", help="Mô hình khởi điểm (.pt)")
@@ -116,9 +166,13 @@ def main():
     model.add_callback("on_train_epoch_end", on_train_epoch_end)
     model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
+    # Tự động phát hiện và chọn GPU tối ưu nhất (hoặc fallback về CPU)
+    device_arg, device_info = select_optimal_device()
+    print(f"[*] Thiết bị huấn luyện: {device_info}", flush=True)
+    send_status({"type": "status", "message": f"Sử dụng {device_info}"})
+
     # Chạy huấn luyện chính
-    print("[*] Gọi model.train()...", flush=True)
-    send_status({"type": "status", "message": "Bắt đầu vòng lặp huấn luyện chính..."})
+    print(f"[*] Bắt đầu huấn luyện YOLO trên thiết bị: {device_arg}...", flush=True)
 
     try:
         results = model.train(
@@ -126,6 +180,7 @@ def main():
             epochs=args.epochs,
             imgsz=args.imgsz,
             batch=args.batch,
+            device=device_arg,
             name="web_studio_train",
             exist_ok=True,
             verbose=False,
