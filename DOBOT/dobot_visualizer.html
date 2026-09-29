@@ -4568,6 +4568,9 @@
                 } else if (status === 'completed') {
                     badge.className = 'sys-badge online';
                     badge.innerText = 'Hoàn thành 🎉';
+                } else if (status === 'stopped') {
+                    badge.className = 'sys-badge offline';
+                    badge.innerText = 'Đã dừng 🛑';
                 } else if (status === 'error') {
                     badge.className = 'sys-badge offline';
                     badge.innerText = 'Lỗi!';
