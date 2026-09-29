@@ -5,6 +5,7 @@ runs/
 
 # Thư mục tạm và file nháp
 scratch/
+kaggle_workspace/
 *.tmp
 *.zip
 

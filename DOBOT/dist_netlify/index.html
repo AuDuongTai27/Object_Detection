@@ -1625,22 +1625,40 @@
                     </select>
                 </div>
 
+                <div class="control-group" style="margin-bottom: 14px;">
+                    <label style="color: #cbd5e1; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between;">
+                        <span>Tên file mô hình lưu về (Output Model):</span>
+                        <span style="color: #38bdf8; font-size: 11px;">(Ghi đè nếu đã tồn tại)</span>
+                    </label>
+                    <input type="text" id="inp-train-output-name" value="best_trained.pt" placeholder="best_trained.pt" style="background: #232731; border: 1px solid #444; border-radius: 6px; color: #38bdf8; font-weight: 600; padding: 8px 10px; width: 100%; box-sizing: border-box; font-family: monospace; font-size: 12.5px; margin-top: 4px;">
+                </div>
+
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <button id="btn-start-train" class="btn-capture-big btn-capture-snap" style="padding: 12px;" onclick="handleStartTraining()">
-                        <span>🚀</span> <span>BẮT ĐẦU HUẤN LUYỆN 1-CLICK (CỤC BỘ)</span>
+                    <button id="btn-start-train" class="btn-capture-big btn-capture-snap" style="padding: 11px;" onclick="handleStartTraining()">
+                        <span>🚀</span> <span>OPTION 1: HUẤN LUYỆN 1-CLICK (CỤC BỘ)</span>
                     </button>
-                    <button id="btn-export-colab" class="btn-capture-big btn-capture-record" style="color: #38bdf8; border-color: #38bdf8;" onclick="handleExportColab()">
-                        <span>📦</span> <span>XUẤT GÓI GOOGLE COLAB (.ZIP)</span>
+                    <button id="btn-start-cloud-train" class="btn-capture-big" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; padding: 11px; border: 1px solid #38bdf8; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="handleStartCloudTraining()">
+                        <span>⚡</span> <span>OPTION 3: HUẤN LUYỆN CLOUD GPU (KAGGLE 1-CLICK)</span>
+                    </button>
+                    <button id="btn-export-colab" class="btn-capture-big btn-capture-record" style="color: #38bdf8; border-color: #38bdf8; padding: 11px;" onclick="handleExportColab()">
+                        <span>📦</span> <span>OPTION 2: XUẤT GÓI GOOGLE COLAB (.ZIP)</span>
                     </button>
                     <button id="btn-stop-train" class="btn-capture-big" style="background: #e03131; color: #fff; display: none;" onclick="handleStopTraining()">
                         <span>🛑</span> <span>DỪNG HUẤN LUYỆN</span>
                     </button>
                 </div>
 
-                <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-top: 14px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
-                    💡 <b>Mẹo cho học sinh:</b><br>
-                    • Nếu máy tính có card đồ họa NVIDIA (GPU): Bấm <b>Huấn luyện 1-Click</b>, mô hình sẽ hoàn thành sau 1-2 phút.<br>
-                    • Nếu máy chỉ có CPU: Bấm <b>Xuất gói Google Colab</b> để tải file <code>yolo_dataset.zip</code> lên Colab train miễn phí 100%.
+                <!-- Kaggle Account Status Bar -->
+                <div id="kaggle-status-bar" style="display: flex; justify-content: space-between; align-items: center; background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; padding: 6px 10px; font-size: 11px; margin-top: 8px;">
+                    <span id="kaggle-status-text" style="color: #94a3b8;">☁️ Kaggle Cloud: Đang kiểm tra...</span>
+                    <button id="btn-open-kaggle-modal" style="background: #2563eb; color: #fff; border: none; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer;" onclick="openKaggleModal()">⚙️ Cài đặt Token</button>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
+                    💡 <b>Mẹo chọn chế độ huấn luyện:</b><br>
+                    • <b>Option 1 (Cục bộ):</b> Dành cho máy có sẵn GPU NVIDIA tại chỗ (train nhanh 1-2 phút).<br>
+                    • <b>Option 3 (Cloud GPU Kaggle ⭐):</b> 1-Click tự đẩy lên đám mây train bằng GPU Tesla T4 miễn phí rồi tự kéo về (không cần GPU trên máy).<br>
+                    • <b>Option 2 (Google Colab):</b> Tải file .zip để tự mở huấn luyện thủ công trên Google Colab.
                 </div>
             </div>
 
@@ -4460,10 +4478,98 @@
             }
         }
 
-        // --- 3. HUẤN LUYỆN AI 1-CLICK (AI TRAINER) ---
+        // --- 3. HUẤN LUYỆN AI 1-CLICK (LOCAL & KAGGLE CLOUD GPU) ---
+        let activeTrainType = 'local'; // 'local' hoặc 'cloud'
+
+        // Kiểm tra và hiển thị trạng thái Kaggle API
+        async function checkKaggleCreds() {
+            try {
+                const res = await fetch('/api/train/kaggle/creds');
+                const data = await res.json();
+                const statusTxt = document.getElementById('kaggle-status-text');
+                const btnModal = document.getElementById('btn-open-kaggle-modal');
+                if (statusTxt) {
+                    if (data.configured) {
+                        statusTxt.innerHTML = `☁️ Kaggle Cloud: <b>@${data.username}</b> <span style="color:#22c55e;">(Sẵn sàng 🟢)</span>`;
+                        if (btnModal) btnModal.innerText = '⚙️ Đổi tài khoản';
+                    } else {
+                        statusTxt.innerHTML = `☁️ Kaggle Cloud: <span style="color:#f59e0b;">Chưa cài Token ⚠️</span>`;
+                        if (btnModal) btnModal.innerText = '🔑 Cài đặt Token';
+                    }
+                }
+                return data;
+            } catch(e) {
+                console.warn("checkKaggleCreds error:", e);
+                return { configured: false };
+            }
+        }
+
+        function openKaggleModal() {
+            const m = document.getElementById('modal-kaggle-setup');
+            if (m) m.style.display = 'flex';
+        }
+
+        function closeKaggleModal() {
+            const m = document.getElementById('modal-kaggle-setup');
+            if (m) m.style.display = 'none';
+        }
+
+        function handleKaggleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    if (json.username && json.key) {
+                        document.getElementById('inp-kaggle-user').value = json.username;
+                        document.getElementById('inp-kaggle-key').value = json.key;
+                        showToast(`📄 Đã nạp thông tin tài khoản @${json.username} từ file!`);
+                    } else {
+                        showToast("❌ File kaggle.json không đúng định dạng!");
+                    }
+                } catch(err) {
+                    showToast("❌ Không đọc được nội dung JSON!");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function handleSaveKaggleCreds() {
+            const user = document.getElementById('inp-kaggle-user').value.trim();
+            const key = document.getElementById('inp-kaggle-key').value.trim();
+            if (!user || !key) {
+                alert("Vui lòng nhập đầy đủ Username và API Key!");
+                return;
+            }
+            const btn = document.getElementById('btn-save-kaggle');
+            if (btn) btn.innerText = 'Đang xác thực...';
+
+            try {
+                const res = await fetch('/api/train/kaggle/creds', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, key: key })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ ${data.message || 'Lưu tài khoản thành công!'}`);
+                    closeKaggleModal();
+                    checkKaggleCreds();
+                } else {
+                    alert(`Lỗi xác thực: ${data.error}`);
+                }
+            } catch(e) {
+                alert(`Lỗi kết nối: ${e.message}`);
+            } finally {
+                if (btn) btn.innerText = 'Lưu & Xác Thực';
+            }
+        }
+
         async function fetchTrainStatus() {
             try {
-                const res = await fetch('/api/train/status');
+                const endpoint = (activeTrainType === 'cloud') ? '/api/train/kaggle/status' : '/api/train/status';
+                const res = await fetch(endpoint);
                 const data = await res.json();
                 updateTrainDashboard(data);
             } catch (err) {
@@ -4472,21 +4578,24 @@
         }
 
         async function handleStartTraining() {
+            activeTrainType = 'local';
             const modelName = document.getElementById('sel-train-model').value;
             const epochs = parseInt(document.getElementById('rng-train-epochs').value);
             const batch = parseInt(document.getElementById('sel-train-batch').value);
+            let outputModel = (document.getElementById('inp-train-output-name')?.value || '').trim() || 'best_trained.pt';
+            if (!outputModel.toLowerCase().endsWith('.pt')) outputModel += '.pt';
 
-            if (!confirm(`Bắt đầu huấn luyện mô hình ${modelName} với ${epochs} vòng lặp (Epochs)?`)) return;
+            if (!confirm(`Bắt đầu huấn luyện mô hình ${modelName} với ${epochs} vòng lặp (Epochs) trên máy cục bộ? Mô hình xuất ra: ${outputModel}`)) return;
 
             try {
                 const res = await fetch('/api/train/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model_name: modelName, epochs: epochs, batch: batch })
+                    body: JSON.stringify({ model_name: modelName, epochs: epochs, batch: batch, output_model_name: outputModel })
                 });
                 const data = await res.json();
                 if (data.status === 'ok' || data.success) {
-                    showToast(`🚀 Đã khởi chạy tiến trình huấn luyện!`);
+                    showToast(`🚀 Đã khởi chạy tiến trình huấn luyện cục bộ (Lưu: ${outputModel})!`);
                     startTrainPolling();
                     fetchTrainStatus();
                 } else {
@@ -4497,10 +4606,48 @@
             }
         }
 
+        async function handleStartCloudTraining() {
+            const creds = await checkKaggleCreds();
+            if (!creds || !creds.configured) {
+                openKaggleModal();
+                showToast("🔑 Vui lòng cài đặt API Key Kaggle trước khi train!");
+                return;
+            }
+
+            const modelName = document.getElementById('sel-train-model').value;
+            const epochs = parseInt(document.getElementById('rng-train-epochs').value);
+            const batch = parseInt(document.getElementById('sel-train-batch').value);
+            let outputModel = (document.getElementById('inp-train-output-name')?.value || '').trim() || 'best_trained.pt';
+            if (!outputModel.toLowerCase().endsWith('.pt')) outputModel += '.pt';
+
+            if (!confirm(`🚀 Gửi dữ liệu lên Cloud GPU (NVIDIA Tesla T4 của Kaggle) để huấn luyện ${epochs} Epochs? Mô hình tải về sẽ lưu và ghi đè vào: ${outputModel}`)) return;
+
+            try {
+                activeTrainType = 'cloud';
+                const res = await fetch('/api/train/kaggle/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_name: modelName, epochs: epochs, batch: batch, output_model_name: outputModel })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`⚡ Đã khởi động phiên huấn luyện Cloud GPU (Lưu thành: ${outputModel})!`);
+                    startTrainPolling();
+                    fetchTrainStatus();
+                } else {
+                    if (data.need_setup) openKaggleModal();
+                    showToast(`❌ Không thể bắt đầu: ${data.error || data.message}`);
+                }
+            } catch (err) {
+                showToast(`❌ Lỗi gửi Cloud: ${err.message}`);
+            }
+        }
+
         async function handleStopTraining() {
             if (!confirm("Bạn có chắc chắn muốn hủy phiên huấn luyện hiện tại?")) return;
             try {
-                const res = await fetch('/api/train/stop', { method: 'POST' });
+                const endpoint = (activeTrainType === 'cloud') ? '/api/train/kaggle/stop' : '/api/train/stop';
+                const res = await fetch(endpoint, { method: 'POST' });
                 const data = await res.json();
                 showToast(`🛑 ${data.message || 'Đã gửi lệnh dừng'}`);
                 fetchTrainStatus();
@@ -4523,8 +4670,6 @@
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
-
-
                 } else {
                     showToast(`❌ Lỗi nén Colab: ${data.message || data.error}`);
                 }
@@ -4550,6 +4695,7 @@
             if (!data) return;
             const badge = document.getElementById('train-status-badge');
             const btnStart = document.getElementById('btn-start-train');
+            const btnCloud = document.getElementById('btn-start-cloud-train');
             const btnStop = document.getElementById('btn-stop-train');
             const btnColab = document.getElementById('btn-export-colab');
             const statusMsg = document.getElementById('txt-train-status-msg');
@@ -4562,12 +4708,24 @@
 
             const status = data.status || 'idle';
             if (badge) {
-                if (status === 'training' || status === 'preparing') {
+                if (status === 'queued') {
                     badge.className = 'sys-badge online';
-                    badge.innerText = status === 'training' ? `Đang huấn luyện (Epoch ${data.current_epoch}/${data.total_epochs})` : 'Đang chuẩn bị dataset...';
+                    badge.innerText = 'Đang xếp hàng GPU (Queued)...';
+                } else if (status === 'uploading') {
+                    badge.className = 'sys-badge online';
+                    badge.innerText = 'Đang tải lên Cloud...';
+                } else if (status === 'downloading') {
+                    badge.className = 'sys-badge online';
+                    badge.innerText = 'Đang tải model về...';
+                } else if (status === 'running' || status === 'training' || status === 'preparing') {
+                    badge.className = 'sys-badge online';
+                    badge.innerText = (data.is_cloud ? '☁️ Cloud GPU: ' : '') + `Epoch ${data.current_epoch}/${data.total_epochs}`;
                 } else if (status === 'completed') {
                     badge.className = 'sys-badge online';
                     badge.innerText = 'Hoàn thành 🎉';
+                } else if (status === 'stopped') {
+                    badge.className = 'sys-badge offline';
+                    badge.innerText = 'Đã dừng 🛑';
                 } else if (status === 'error') {
                     badge.className = 'sys-badge offline';
                     badge.innerText = 'Lỗi!';
@@ -4577,8 +4735,9 @@
                 }
             }
 
-            const isRunning = (status === 'training' || status === 'preparing');
+            const isRunning = (status === 'training' || status === 'preparing' || status === 'uploading' || status === 'queued' || status === 'running' || status === 'downloading');
             if (btnStart) btnStart.style.display = isRunning ? 'none' : 'flex';
+            if (btnCloud) btnCloud.style.display = isRunning ? 'none' : 'flex';
             if (btnColab) btnColab.style.display = isRunning ? 'none' : 'flex';
             if (btnStop) btnStop.style.display = isRunning ? 'flex' : 'none';
 
@@ -4591,8 +4750,6 @@
             if (mapVal) mapVal.innerText = (data.current_map50 > 0) ? `${(data.current_map50 * 100).toFixed(1)}%` : '--';
             if (etaVal) etaVal.innerText = data.eta || '--';
 
-
-
             if (logBox && data.logs && data.logs.length > 0) {
                 logBox.innerText = data.logs.join('\n');
                 logBox.scrollTop = logBox.scrollHeight;
@@ -4600,6 +4757,9 @@
 
             if (!isRunning) {
                 stopTrainPolling();
+                if (status === 'completed') {
+                    fetchVisionModels();
+                }
             } else {
                 startTrainPolling();
             }
@@ -5146,8 +5306,55 @@
         switchStudioTab('3d');
         fetchCameraDevices();
         fetchDropTargets();
+        checkKaggleCreds();
         setInterval(checkToolStatus, 1500);
         animate();
     </script>
+
+    <!-- Modal Cấu hình Kaggle Cloud GPU API Token -->
+    <div id="modal-kaggle-setup" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 999999; justify-content: center; align-items: center;">
+        <div style="background: #1e293b; border: 1px solid #38bdf8; border-radius: 12px; width: 460px; max-width: 90vw; padding: 22px; color: #fff; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 16px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                    <span>⚡</span> <span>Cài Đặt Tài Khoản Kaggle Cloud GPU</span>
+                </h3>
+                <button onclick="closeKaggleModal()" style="background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
+            
+            <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin: 0 0 14px 0;">
+                Mỗi máy tính ở FabLab chỉ cần liên kết 1 lần duy nhất để sử dụng <b>30 giờ GPU NVIDIA Tesla T4/P100 miễn phí</b> mỗi tuần.
+            </p>
+
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.2); font-size: 11px; color: #cbd5e1; margin-bottom: 16px; line-height: 1.6;">
+                📖 <b>Cách lấy Token Kaggle miễn phí:</b><br>
+                1. Đăng nhập vào <a href="https://www.kaggle.com/settings" target="_blank" style="color: #38bdf8; text-decoration: underline;">kaggle.com/settings</a><br>
+                2. Cuộn xuống mục <b>API</b> ➔ Bấm nút <b>Create New Token</b><br>
+                3. File <code>kaggle.json</code> sẽ được tải về máy bạn.
+            </div>
+
+            <!-- Cách 1: Nạp file kaggle.json -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+                <label style="font-size: 11px; font-weight: 600; color: #38bdf8; display: block; margin-bottom: 4px;">Cách 1: Chọn file kaggle.json đã tải về:</label>
+                <input type="file" id="file-kaggle-json" accept=".json" onchange="handleKaggleFileSelect(event)" style="font-size: 11px; color: #94a3b8; width: 100%;">
+            </div>
+
+            <div style="text-align: center; color: #64748b; font-size: 10px; margin: 6px 0;">— HOẶC NHẬP TAY —</div>
+
+            <!-- Cách 2: Nhập username và API key -->
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 11px; color: #cbd5e1; font-weight: 600;">Kaggle Username:</label>
+                <input type="text" id="inp-kaggle-user" placeholder="Ví dụ: nguyenvana" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 12px;">
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 11px; color: #cbd5e1; font-weight: 600;">Kaggle API Key:</label>
+                <input type="password" id="inp-kaggle-key" placeholder="Chuỗi ký tự API key dài 32 ký tự" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 12px;">
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button onclick="closeKaggleModal()" style="background: #334155; color: #cbd5e1; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 12px;">Hủy</button>
+                <button onclick="handleSaveKaggleCreds()" id="btn-save-kaggle" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; border: 1px solid #38bdf8; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 12px; font-weight: 600;">Lưu & Xác Thực</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

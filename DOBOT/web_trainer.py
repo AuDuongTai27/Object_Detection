@@ -125,10 +125,16 @@ class WebYOLOTrainer:
                 self.state["message"] = "Tiến trình huấn luyện không hoạt động."
                 self.process = None
 
-    def start(self, base_model="yolov8n.pt", epochs=30, batch=16):
+    def start(self, base_model="yolov8n.pt", epochs=30, batch=16, output_model_name="best_trained.pt"):
         with self.lock:
             if self.process is not None and self.process.poll() is None:
                 return {"success": False, "error": "Đang có một tiến trình huấn luyện chạy ngầm!"}
+
+            # Chuẩn hóa tên file mô hình xuất ra
+            clean_name = str(output_model_name).strip() if output_model_name else "best_trained.pt"
+            clean_name = Path(clean_name).name
+            if not clean_name.lower().endswith(".pt"):
+                clean_name += ".pt"
 
             self.stop_requested = False
             self.state["status"] = "preparing"
@@ -137,22 +143,23 @@ class WebYOLOTrainer:
             self.state["total_epochs"] = int(epochs)
             self.state["loss"] = 0.0
             self.state["map50"] = 0.0
-            self.state["message"] = "Đang kiểm tra và chuẩn bị dữ liệu YOLO..."
+            self.state["output_model_name"] = clean_name
+            self.state["message"] = f"Đang chuẩn bị dữ liệu (Mô hình: {clean_name})..."
             self.state["logs"] = []
             self.state["started_at"] = time.time()
             self.state["eta_seconds"] = 0
 
         self.worker_thread = threading.Thread(
             target=self._run_training_pipeline,
-            args=(base_model, int(epochs), int(batch)),
+            args=(base_model, int(epochs), int(batch), clean_name),
             daemon=True
         )
         self.worker_thread.start()
-        return {"success": True, "message": "Bắt đầu huấn luyện!"}
+        return {"success": True, "message": f"Bắt đầu huấn luyện (Lưu thành {clean_name})!"}
 
-    def _run_training_pipeline(self, base_model: str, epochs: int, batch: int):
+    def _run_training_pipeline(self, base_model: str, epochs: int, batch: int, output_model_name: str = "best_trained.pt"):
         try:
-            self.log(f"🚀 Bắt đầu phiên huấn luyện: Model={base_model} | Epochs={epochs} | Batch={batch}")
+            self.log(f"🚀 Bắt đầu phiên huấn luyện: Model={base_model} | Epochs={epochs} | Batch={batch} | Lưu={output_model_name}")
 
             # 1. Tự động kiểm tra và đồng bộ tập dữ liệu YOLO từ dataset_raw
             data_yaml = YOLO_DATASET_DIR / "data.yaml"
@@ -238,7 +245,15 @@ class WebYOLOTrainer:
 
             # 2. Khởi chạy standalone train_worker.py dưới dạng subprocess riêng
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
-            dest_best = MODELS_DIR / "best_trained.pt"
+            dest_best = MODELS_DIR / output_model_name
+
+            # Nếu mô hình đích đã tồn tại thì xóa trước để đảm bảo ghi đè
+            if dest_best.exists():
+                try:
+                    dest_best.unlink()
+                    self.log(f"🔄 Đã xóa mô hình cũ '{dest_best.name}' để ghi đè bản mới.")
+                except Exception as e_del:
+                    self.log(f"⚠️ Chú ý khi ghi đè file '{dest_best.name}': {e_del}")
 
             cmd = [
                 sys.executable, "-u", str(TRAIN_WORKER_SCRIPT),
@@ -344,8 +359,9 @@ class WebYOLOTrainer:
                     self.state["status"] = "completed"
                     self.state["progress"] = 100
                     self.state["best_model"] = str(dest_best)
-                    self.state["message"] = "🎉 Huấn luyện thành công! Mô hình đã sẵn sàng gắp thả."
-                    self.log(f"🎉 [Hoàn thành] Đã lưu mô hình: {dest_best}")
+                    self.state["output_model_name"] = output_model_name
+                    self.state["message"] = f"🎉 Huấn luyện thành công! Mô hình '{output_model_name}' đã sẵn sàng gắp thả."
+                    self.log(f"🎉 [Hoàn thành] Đã lưu mô hình: {dest_best.name}")
 
                     # Tự động nạp mô hình mới vào Tab 4 (AI Vision)
                     try:
@@ -353,9 +369,9 @@ class WebYOLOTrainer:
                         if server_mod and hasattr(server_mod, "vision_engine") and server_mod.vision_engine:
                             ok = server_mod.vision_engine.load_best_yolo_model(str(dest_best))
                             if ok:
-                                self.log("🤖 Đã tự động kích hoạt mô hình mới vào Tab 4 (AI Vision)!")
-                    except Exception:
-                        pass
+                                self.log(f"🤖 Đã tự động kích hoạt mô hình '{dest_best.name}' vào Tab 4 (AI Vision)!")
+                    except Exception as e_engine:
+                        self.log(f"Thông báo Vision Engine: {e_engine}")
                 else:
                     if self.state["status"] != "error":
                         self.state["status"] = "error"

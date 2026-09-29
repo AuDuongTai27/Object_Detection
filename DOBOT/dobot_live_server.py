@@ -48,9 +48,15 @@ try:
         add_new_class, get_recent_captures, DATASET_RAW_DIR
     )
     from web_trainer import web_trainer, COLAB_ZIP_PATH, MODELS_DIR
+    try:
+        from kaggle_trainer import kaggle_trainer
+    except Exception as e_k:
+        kaggle_trainer = None
+        print(f"[!] Cảnh báo nạp module Kaggle Trainer: {e_k}")
     HAS_WEB_STUDIO = True
 except Exception as e:
     HAS_WEB_STUDIO = False
+    kaggle_trainer = None
     print(f"[!] Cảnh báo nạp module Web Studio: {e}")
 
 
@@ -992,7 +998,8 @@ class ApiTrainStartHandler(tornado.web.RequestHandler):
             model_name = data.get("model") or data.get("model_name", "yolov8n.pt")
             epochs = int(data.get("epochs", 30))
             batch = int(data.get("batch", 16))
-            res = web_trainer.start(base_model=model_name, epochs=epochs, batch=batch)
+            output_model_name = data.get("output_model_name") or data.get("output_name") or "best_trained.pt"
+            res = web_trainer.start(base_model=model_name, epochs=epochs, batch=batch, output_model_name=output_model_name)
             res["status"] = "ok" if res.get("success") else "error"
             self.write(res)
         except Exception as e:
@@ -1052,6 +1059,76 @@ class ApiTrainDownloadZipHandler(tornado.web.RequestHandler):
         else:
             self.set_status(404)
             self.write("Chưa có file zip. Hãy bấm xuất gói trước.")
+
+
+class ApiKaggleCredsHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def get(self):
+        if kaggle_trainer:
+            self.write(kaggle_trainer.get_credentials())
+        else:
+            self.write({"configured": False, "error": "Module Kaggle chưa sẵn sàng"})
+
+    def post(self):
+        if not kaggle_trainer:
+            self.write({"success": False, "error": "Module Kaggle chưa sẵn sàng"})
+            return
+        try:
+            data = json.loads(self.request.body)
+            username = data.get("username", "")
+            key = data.get("key", "")
+            res = kaggle_trainer.save_credentials(username, key)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiKaggleStartHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        if not kaggle_trainer:
+            self.write({"success": False, "error": "Module Kaggle chưa sẵn sàng"})
+            return
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            model_name = data.get("model") or data.get("model_name", "yolo11n.pt")
+            epochs = int(data.get("epochs", 30))
+            batch = int(data.get("batch", 16))
+            output_model_name = data.get("output_model_name") or data.get("output_name") or "best_trained.pt"
+            res = kaggle_trainer.start(base_model=model_name, epochs=epochs, batch=batch, output_model_name=output_model_name)
+            self.write(res)
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
+
+
+class ApiKaggleStatusHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        if kaggle_trainer:
+            self.write(kaggle_trainer.get_status())
+        else:
+            self.write({"status": "idle"})
+
+
+class ApiKaggleStopHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def post(self):
+        if kaggle_trainer:
+            kaggle_trainer.stop()
+            self.write({"success": True, "message": "Đã gửi lệnh dừng tiến trình Cloud GPU!"})
+        else:
+            self.write({"success": False, "error": "Chưa hỗ trợ"})
+
 
 
 class ApiVisionStatusHandler(tornado.web.RequestHandler):
@@ -1177,9 +1254,9 @@ class ApiVisionModelsHandler(tornado.web.RequestHandler):
             target_path = MODELS_DIR / model_name
             if target_path.exists() and HAS_WEB_STUDIO and vision_engine:
                 ok = vision_engine.load_best_yolo_model(target_path)
-                self.write({"success": ok, "active_model": vision_engine.active_model_name})
+                self.write({"status": "ok", "success": ok, "active_model": vision_engine.active_model_name, "message": f"Đã nạp mô hình {vision_engine.active_model_name}"})
             else:
-                self.write({"success": False, "error": "Không tìm thấy file model"})
+                self.write({"status": "error", "success": False, "error": "Không tìm thấy file model", "message": "Không tìm thấy file model"})
         except Exception as e:
             self.write({"success": False, "error": str(e)})
 
@@ -1292,6 +1369,10 @@ def main():
         (r"/api/train/stop", ApiTrainStopHandler),
         (r"/api/train/export_colab", ApiTrainExportColabHandler),
         (r"/api/train/download_zip", ApiTrainDownloadZipHandler),
+        (r"/api/train/kaggle/creds", ApiKaggleCredsHandler),
+        (r"/api/train/kaggle/start", ApiKaggleStartHandler),
+        (r"/api/train/kaggle/status", ApiKaggleStatusHandler),
+        (r"/api/train/kaggle/stop", ApiKaggleStopHandler),
         (r"/api/vision/status", ApiVisionStatusHandler),
         (r"/api/vision/pick", ApiVisionPickHandler),
         (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
