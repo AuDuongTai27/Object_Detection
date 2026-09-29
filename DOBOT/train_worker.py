@@ -214,9 +214,18 @@ def main():
         try:
             metrics = getattr(trainer, "metrics", None)
             val = 0.0
-            if metrics and "metrics/mAP50(B)" in metrics:
-                val = float(metrics["metrics/mAP50(B)"])
+            p_val = 0.0
+            r_val = 0.0
+            if metrics:
+                if "metrics/mAP50(B)" in metrics:
+                    val = float(metrics["metrics/mAP50(B)"])
+                if "metrics/precision(B)" in metrics:
+                    p_val = float(metrics["metrics/precision(B)"])
+                if "metrics/recall(B)" in metrics:
+                    r_val = float(metrics["metrics/recall(B)"])
             epoch_cache["map50"] = round(val, 4)
+            epoch_cache["precision"] = round(p_val, 4)
+            epoch_cache["recall"] = round(r_val, 4)
 
             ep = epoch_cache["epoch"]
             loss = epoch_cache["loss"]
@@ -231,8 +240,10 @@ def main():
                 "progress": pct,
                 "loss": loss,
                 "map50": round(val, 4),
+                "precision": round(p_val, 4),
+                "recall": round(r_val, 4),
                 "eta_seconds": eta,
-                "message": f"Epoch {ep}/{total_epochs} hoàn tất | Loss: {loss:.4f} | mAP50: {map_pct} | Còn lại ~{eta}s"
+                "message": f"Epoch {ep}/{total_epochs} hoàn tất | Loss: {loss:.4f} | mAP50: {map_pct}"
             })
         except Exception as e:
             pass

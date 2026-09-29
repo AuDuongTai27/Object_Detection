@@ -64,6 +64,8 @@ class WebYOLOTrainer:
             "total_epochs": 30,
             "loss": 0.0,
             "map50": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
             "message": "Hệ thống sẵn sàng huấn luyện.",
             "logs": [],
             "best_model": "",
@@ -87,6 +89,8 @@ class WebYOLOTrainer:
             st["progress_pct"] = st.get("progress", 0)
             st["current_loss"] = st.get("loss", 0.0)
             st["current_map50"] = st.get("map50", 0.0)
+            st["current_precision"] = st.get("precision", 0.0)
+            st["current_recall"] = st.get("recall", 0.0)
             eta_s = st.get("eta_seconds", 0)
             if eta_s > 0:
                 mins = eta_s // 60
@@ -309,6 +313,8 @@ class WebYOLOTrainer:
                                 tot = data.get("total_epochs", self.state["total_epochs"])
                                 loss = data.get("loss", self.state["loss"])
                                 map50 = data.get("map50", 0.0)
+                                precision = data.get("precision", 0.0)
+                                recall = data.get("recall", 0.0)
                                 pct = data.get("progress", self.state["progress"])
                                 eta_s = data.get("eta_seconds", 0)
 
@@ -316,10 +322,14 @@ class WebYOLOTrainer:
                                 self.state["progress"] = pct
                                 self.state["loss"] = loss
                                 self.state["map50"] = map50
+                                self.state["precision"] = precision
+                                self.state["recall"] = recall
                                 self.state["eta_seconds"] = eta_s
 
                                 map_str = f"{map50 * 100:.1f}%" if map50 > 0 else "--"
-                                summary_text = f"📊 [Epoch {ep}/{tot}] Loss: {loss:.4f} | mAP50: {map_str} | Tiến độ: {pct}% | Còn lại: ~{eta_s}s"
+                                p_str = f"{precision * 100:.1f}%" if precision > 0 else "--"
+                                r_str = f"{recall * 100:.1f}%" if recall > 0 else "--"
+                                summary_text = f"📊 [Epoch {ep}/{tot}] Loss: {loss:.4f} | mAP50: {map_str} | P: {p_str} | R: {r_str} | Tiến độ: {pct}%"
                                 self.state["message"] = summary_text
                                 self.log(summary_text)
 

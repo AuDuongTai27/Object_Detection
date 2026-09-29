@@ -43,6 +43,8 @@ class KaggleYOLOTrainer:
             "total_epochs": 30,
             "loss": 0.0,
             "map50": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
             "message": "Sẵn sàng huấn luyện trên Cloud GPU",
             "logs": [],
             "best_model": "",
@@ -167,6 +169,8 @@ class KaggleYOLOTrainer:
             st["progress_pct"] = st.get("progress", 0)
             st["current_loss"] = st.get("loss", 0.0)
             st["current_map50"] = st.get("map50", 0.0)
+            st["current_precision"] = st.get("precision", 0.0)
+            st["current_recall"] = st.get("recall", 0.0)
             eta_s = st.get("eta_seconds", 0)
             if eta_s > 0:
                 mins = eta_s // 60
@@ -210,6 +214,8 @@ class KaggleYOLOTrainer:
             self.state["total_epochs"] = int(epochs)
             self.state["loss"] = 0.0
             self.state["map50"] = 0.0
+            self.state["precision"] = 0.0
+            self.state["recall"] = 0.0
             self.state["output_model_name"] = clean_name
             self.state["message"] = f"Đang chuẩn bị gửi gói dữ liệu (Mô hình đích: {clean_name})..."
             self.state["logs"] = []
@@ -435,7 +441,19 @@ def on_train_epoch_end(trainer):
 
     print(f"[EPOCH_LOG] Epoch {{ep}}/{{total}} ({{pct}}%) | Loss: {{loss:.4f}}", flush=True)
 
+def on_fit_epoch_end(trainer):
+    try:
+        metrics = getattr(trainer, "metrics", dict()) or dict()
+        p = float(metrics.get("metrics/precision(B)", 0.0))
+        r = float(metrics.get("metrics/recall(B)", 0.0))
+        m50 = float(metrics.get("metrics/mAP50(B)", 0.0))
+        if m50 > 0 or p > 0:
+            print(f"[ACCURACY_METRICS] map50:{{m50:.4f}}|precision:{{p:.4f}}|recall:{{r:.4f}}", flush=True)
+    except Exception:
+        pass
+
 model.add_callback("on_train_epoch_end", on_train_epoch_end)
+model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
 # Bắt đầu huấn luyện, lưu checkpoint tạm trong /tmp/runs
 print("[*] Starting training on Tesla GPU...")
@@ -450,6 +468,16 @@ results = model.train(
     exist_ok=True,
     verbose=False
 )
+
+# Trích xuất độ chính xác tổng kết sau khi train xong
+try:
+    rd = getattr(results, "results_dict", dict()) or dict()
+    p_final = float(rd.get("metrics/precision(B)", 0.0))
+    r_final = float(rd.get("metrics/recall(B)", 0.0))
+    m50_final = float(rd.get("metrics/mAP50(B)", 0.0))
+    print(f"[ACCURACY_METRICS] map50:{{m50_final:.4f}}|precision:{{p_final:.4f}}|recall:{{r_final:.4f}}", flush=True)
+except Exception:
+    pass
 
 # Chỉ copy duy nhất 1 file best.pt ra /kaggle/working để tải về siêu tốc (<2s)
 best_trained = Path("/tmp/runs/dobot_cloud/weights/best.pt")
@@ -513,6 +541,7 @@ print("[Kaggle Cloud GPU] Session finished successfully!")
             stop_stream = threading.Event()
 
             def process_log_line(raw_l: str):
+                import re
                 l = raw_l.strip()
                 if not l:
                     return
@@ -533,8 +562,45 @@ print("[Kaggle Cloud GPU] Session finished successfully!")
                         self.log(f"📊 [Cloud GPU {ep_part}] Loss: {loss_val:.4f} | Tiến độ: {pct}%")
                     except Exception:
                         self.log(l)
-                elif any(k in l for k in ["[*]", "Device", "Starting", "Training", "Ultralytics", "Epoch", "complete"]):
-                    self.log(l)
+                elif "[ACCURACY_METRICS]" in l:
+                    try:
+                        tail = l[l.index("[ACCURACY_METRICS]") + len("[ACCURACY_METRICS]"):].strip()
+                        for item in tail.split("|"):
+                            if ":" in item:
+                                k, v = item.split(":", 1)
+                                k = k.strip().lower()
+                                val = float(v.strip())
+                                with self.lock:
+                                    if k == "map50":
+                                        self.state["map50"] = val
+                                    elif k == "precision":
+                                        self.state["precision"] = val
+                                    elif k == "recall":
+                                        self.state["recall"] = val
+                        with self.lock:
+                            m_val = self.state["map50"]
+                            p_val = self.state["precision"]
+                            r_val = self.state["recall"]
+                        self.log(f"🎯 [Chỉ Số AI] mAP50: {m_val*100:.1f}% | Precision: {p_val*100:.1f}% | Recall: {r_val*100:.1f}%")
+                    except Exception:
+                        pass
+                else:
+                    # Kiểm tra dòng bảng tổng kết validation chuẩn của YOLO: "all  127  250  0.994  0.98  0.985"
+                    m_all = re.search(r"all\s+\d+\s+\d+\s+([0-1]?\.\d+)\s+([0-1]?\.\d+)\s+([0-1]?\.\d+)", l)
+                    if m_all:
+                        try:
+                            p_val = float(m_all.group(1))
+                            r_val = float(m_all.group(2))
+                            map_val = float(m_all.group(3))
+                            with self.lock:
+                                self.state["precision"] = p_val
+                                self.state["recall"] = r_val
+                                self.state["map50"] = map_val
+                            self.log(f"🎯 [Chỉ Số AI] mAP50: {map_val*100:.1f}% | Precision: {p_val*100:.1f}% | Recall: {r_val*100:.1f}%")
+                        except Exception:
+                            pass
+                    elif any(k in l for k in ["[*]", "Device", "Starting", "Training", "Ultralytics", "Epoch", "complete"]):
+                        self.log(l)
 
             def log_stream_worker():
                 """Đọc log thời gian thực từng dòng qua SSE stream của Kaggle."""
@@ -595,7 +661,12 @@ print("[Kaggle Cloud GPU] Session finished successfully!")
 
                 # Trạng thái hoàn thành!
                 elif k_status == "complete":
-                    self.log("🎉 Kaggle Cloud GPU đã hoàn tất phiên huấn luyện!")
+                    time.sleep(2.0)  # Đợi 2s để SSE stream kịp nhận nốt các log epoch cuối cùng đang dồn trong buffer
+                    self.log(f"🎉 Kaggle Cloud GPU đã hoàn tất toàn bộ {epochs}/{epochs} Epochs!")
+                    with self.lock:
+                        self.state["current_epoch"] = epochs
+                        self.state["progress"] = 95
+                        self.state["message"] = f"Cloud GPU: Đã hoàn tất {epochs}/{epochs} Epochs!"
                     break
 
                 # Trạng thái lỗi

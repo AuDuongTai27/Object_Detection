@@ -1638,10 +1638,10 @@
                         <span>🚀</span> <span>OPTION 1: HUẤN LUYỆN 1-CLICK (CỤC BỘ)</span>
                     </button>
                     <button id="btn-start-cloud-train" class="btn-capture-big" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; padding: 11px; border: 1px solid #38bdf8; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="handleStartCloudTraining()">
-                        <span>⚡</span> <span>OPTION 3: HUẤN LUYỆN CLOUD GPU (KAGGLE 1-CLICK)</span>
+                        <span>⚡</span> <span>OPTION 2: HUẤN LUYỆN CLOUD GPU (KAGGLE 1-CLICK)</span>
                     </button>
                     <button id="btn-export-colab" class="btn-capture-big btn-capture-record" style="color: #38bdf8; border-color: #38bdf8; padding: 11px;" onclick="handleExportColab()">
-                        <span>📦</span> <span>OPTION 2: XUẤT GÓI GOOGLE COLAB (.ZIP)</span>
+                        <span>📦</span> <span>OPTION 3: XUẤT GÓI GOOGLE COLAB (.ZIP)</span>
                     </button>
                     <button id="btn-stop-train" class="btn-capture-big" style="background: #e03131; color: #fff; display: none;" onclick="handleStopTraining()">
                         <span>🛑</span> <span>DỪNG HUẤN LUYỆN</span>
@@ -1657,8 +1657,8 @@
                 <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
                     💡 <b>Mẹo chọn chế độ huấn luyện:</b><br>
                     • <b>Option 1 (Cục bộ):</b> Dành cho máy có sẵn GPU NVIDIA tại chỗ (train nhanh 1-2 phút).<br>
-                    • <b>Option 3 (Cloud GPU Kaggle ⭐):</b> 1-Click tự đẩy lên đám mây train bằng GPU Tesla T4 miễn phí rồi tự kéo về (không cần GPU trên máy).<br>
-                    • <b>Option 2 (Google Colab):</b> Tải file .zip để tự mở huấn luyện thủ công trên Google Colab.
+                    • <b>Option 2 (Cloud GPU Kaggle ⭐):</b> 1-Click tự đẩy lên đám mây train bằng GPU Tesla T4 miễn phí rồi tự kéo về (không cần GPU trên máy).<br>
+                    • <b>Option 3 (Google Colab):</b> Tải file .zip để tự mở huấn luyện thủ công trên Google Colab.
                 </div>
             </div>
 
@@ -1671,26 +1671,31 @@
                     <span id="train-status-badge" class="sys-badge offline">Chưa chạy</span>
                 </div>
 
-                <div class="train-metric-row">
-                    <div class="train-metric-card">
-                        <div style="font-size: 11px; color: #94a3b8;">SAI SỐ (LOSS)</div>
-                        <div class="train-metric-val" id="metric-loss">0.000</div>
+                <!-- 4 CHỈ SỐ HUẤN LUYỆN CHUẨN: LOSS, mAP50, PRECISION, RECALL -->
+                <div class="train-metric-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; margin-bottom: 12px;">
+                    <div class="train-metric-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 6px; text-align: center;">
+                        <div style="font-size: 10px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px;">SAI SỐ (LOSS)</div>
+                        <div class="train-metric-val" id="metric-loss" style="font-size: 15px; font-weight: 800; color: #f87171; margin-top: 3px; font-family: monospace;">--</div>
                     </div>
-                    <div class="train-metric-card">
-                        <div style="font-size: 11px; color: #94a3b8;">ĐỘ CHÍNH XÁC (mAP50)</div>
-                        <div class="train-metric-val" id="metric-map" style="color: #4ade80;">0.0%</div>
+                    <div class="train-metric-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 6px; text-align: center;">
+                        <div style="font-size: 10px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px;">mAP50</div>
+                        <div class="train-metric-val" id="metric-map" style="font-size: 15px; font-weight: 800; color: #4ade80; margin-top: 3px; font-family: monospace;">--</div>
                     </div>
-                    <div class="train-metric-card">
-                        <div style="font-size: 11px; color: #94a3b8;">CÒN LẠI (ETA)</div>
-                        <div class="train-metric-val" id="metric-eta" style="color: #fbbf24;">--</div>
+                    <div class="train-metric-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 6px; text-align: center;">
+                        <div style="font-size: 10px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px;">PRECISION</div>
+                        <div class="train-metric-val" id="metric-precision" style="font-size: 15px; font-weight: 800; color: #38bdf8; margin-top: 3px; font-family: monospace;">--</div>
+                    </div>
+                    <div class="train-metric-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 6px; text-align: center;">
+                        <div style="font-size: 10px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px;">RECALL</div>
+                        <div class="train-metric-val" id="metric-recall" style="font-size: 15px; font-weight: 800; color: #fbbf24; margin-top: 3px; font-family: monospace;">--</div>
                     </div>
                 </div>
 
-                <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-top: 4px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 600; margin-top: 6px; margin-bottom: 4px;">
                     <span id="txt-train-status-msg">Hệ thống sẵn sàng...</span>
-                    <span id="txt-train-progress-pct" style="color: #38bdf8;">0%</span>
+                    <span id="txt-train-progress-pct" style="color: #38bdf8; font-weight: 700;">0%</span>
                 </div>
-                <div class="train-progress-bar-wrap">
+                <div class="train-progress-bar-wrap" style="height: 14px; margin-bottom: 14px;">
                     <div class="train-progress-bar-fill" id="bar-train-fill"></div>
                 </div>
 
@@ -4703,7 +4708,8 @@
             const fillBar = document.getElementById('bar-train-fill');
             const lossVal = document.getElementById('metric-loss');
             const mapVal = document.getElementById('metric-map');
-            const etaVal = document.getElementById('metric-eta');
+            const precVal = document.getElementById('metric-precision');
+            const recallVal = document.getElementById('metric-recall');
             const logBox = document.getElementById('train-log-box');
 
             const status = data.status || 'idle';
@@ -4747,8 +4753,18 @@
             if (fillBar) fillBar.style.width = `${pct}%`;
 
             if (lossVal) lossVal.innerText = (data.current_loss > 0) ? data.current_loss.toFixed(4) : '--';
-            if (mapVal) mapVal.innerText = (data.current_map50 > 0) ? `${(data.current_map50 * 100).toFixed(1)}%` : '--';
-            if (etaVal) etaVal.innerText = data.eta || '--';
+            if (mapVal) {
+                const m = data.current_map50 ?? data.map50 ?? 0;
+                mapVal.innerText = (m > 0) ? `${(m > 1 ? m : m * 100).toFixed(1)}%` : '--';
+            }
+            if (precVal) {
+                const p = data.current_precision ?? data.precision ?? 0;
+                precVal.innerText = (p > 0) ? `${(p > 1 ? p : p * 100).toFixed(1)}%` : '--';
+            }
+            if (recallVal) {
+                const r = data.current_recall ?? data.recall ?? 0;
+                recallVal.innerText = (r > 0) ? `${(r > 1 ? r : r * 100).toFixed(1)}%` : '--';
+            }
 
             if (logBox && data.logs && data.logs.length > 0) {
                 logBox.innerText = data.logs.join('\n');
