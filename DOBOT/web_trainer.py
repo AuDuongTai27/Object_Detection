@@ -2,10 +2,10 @@
 Module Huấn luyện AI (AI Training Worker) cho FabLab AI & Dobot Web Studio:
 - Chạy ngầm tiến trình huấn luyện YOLOv8 / YOLO11 qua SUBPROCESS riêng biệt (train_worker.py)
 - Hoàn toàn độc lập với luồng chính của Tornado Web Server
-- Khi người dùng ấn Dừng (Stop), kill sạch tiến trình và các DataLoader con mà KHÔNG làm đơ hay tắt server
-- Tự động chuẩn bị tập dữ liệu (gọi generate_yolo_dataset.py) nếu chưa có data.yaml
-- Cập nhật tiến độ Epoch, Loss, mAP50 thời gian thực
-- Tạo gói zip để xuất lên Google Colab
+- Tự động đồng bộ đường dẫn path trong data.yaml trên mọi máy tính (laptop, máy GPU FabLab)
+- Tự động nhận diện ảnh mới từ dataset_raw để sinh dataset cập nhật
+- Hiển thị log súc tích, chuyên nghiệp: tổng quát 1 dòng sau mỗi Epoch
+- Tự động nạp mô hình mới nhất vào Tab 4 (AI Vision) sau khi huấn luyện xong
 """
 
 import os
@@ -33,6 +33,27 @@ COLAB_ZIP_PATH = PROJECT_ROOT / "yolo_dataset.zip"
 TRAIN_WORKER_SCRIPT = BASE_DIR / "train_worker.py"
 
 
+def sync_data_yaml_path(data_yaml_path: Path):
+    """Đồng bộ trường path: trong data.yaml theo thư mục máy tính hiện tại."""
+    try:
+        yaml_dir = data_yaml_path.parent.resolve().as_posix()
+        lines = []
+        path_found = False
+        with open(data_yaml_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("path:"):
+                    lines.append(f"path: {yaml_dir}\n")
+                    path_found = True
+                else:
+                    lines.append(line)
+        if not path_found:
+            lines.insert(0, f"path: {yaml_dir}\n")
+        with open(data_yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception as e:
+        print(f"[AI Trainer] Lỗi đồng bộ data.yaml: {e}")
+
+
 class WebYOLOTrainer:
     def __init__(self):
         self.lock = threading.RLock()
@@ -57,8 +78,8 @@ class WebYOLOTrainer:
         print(f"[AI Trainer] {text}", flush=True)
         with self.lock:
             self.state["logs"].append(f"[{time.strftime('%H:%M:%S')}] {text}")
-            if len(self.state["logs"]) > 200:
-                self.state["logs"] = self.state["logs"][-200:]
+            if len(self.state["logs"]) > 100:
+                self.state["logs"] = self.state["logs"][-100:]
 
     def get_status(self) -> dict:
         with self.lock:
@@ -82,7 +103,7 @@ class WebYOLOTrainer:
             if proc is not None and proc.poll() is None:
                 self.state["status"] = "stopped"
                 self.state["message"] = "Đang dừng tiến trình huấn luyện..."
-                self.log("Nhận lệnh dừng huấn luyện từ người dùng.")
+                self.log("🛑 Nhận lệnh dừng huấn luyện từ người dùng.")
                 try:
                     if sys.platform == "win32":
                         # taskkill /F /T tiêu diệt toàn bộ cây tiến trình (bao gồm các DataLoader con của PyTorch)
@@ -97,7 +118,7 @@ class WebYOLOTrainer:
                     self.log(f"Lỗi khi dừng tiến trình: {e}")
                 
                 self.state["message"] = "Đã dừng tiến trình huấn luyện thành công."
-                self.log("Đã dừng tiến trình huấn luyện thành công!")
+                self.log("🛑 Đã dừng tiến trình huấn luyện thành công!")
                 self.process = None
             else:
                 self.state["status"] = "stopped"
@@ -131,19 +152,41 @@ class WebYOLOTrainer:
 
     def _run_training_pipeline(self, base_model: str, epochs: int, batch: int):
         try:
-            self.log(f"Khởi động tiến trình: Base Model={base_model}, Epochs={epochs}, Batch={batch}")
+            self.log(f"🚀 Bắt đầu phiên huấn luyện: Model={base_model} | Epochs={epochs} | Batch={batch}")
 
-            # 1. Tự động sinh tập dữ liệu YOLO từ dataset_raw nếu chưa có
+            # 1. Tự động kiểm tra và đồng bộ tập dữ liệu YOLO từ dataset_raw
             data_yaml = YOLO_DATASET_DIR / "data.yaml"
             gen_script = PROJECT_ROOT / "generate_yolo_dataset.py"
+            train_img_dir = YOLO_DATASET_DIR / "images" / "train"
 
-            if not data_yaml.exists() and gen_script.exists():
-                self.log("Đang gán nhãn và chia tập Train/Val từ dataset_raw/...")
+            # Kiểm tra xem có cần sinh lại dataset hay không
+            need_generate = (
+                not data_yaml.exists()
+                or not train_img_dir.exists()
+                or len(list(train_img_dir.glob("*.jpg"))) == 0
+            )
+
+            # Kiểm tra nếu dataset_raw có ảnh mới chụp gần đây hơn file data.yaml
+            if not need_generate and data_yaml.exists():
+                try:
+                    yaml_mtime = data_yaml.stat().st_mtime
+                    raw_dir = PROJECT_ROOT / "dataset_raw"
+                    if raw_dir.exists():
+                        for p in raw_dir.rglob("*.jpg"):
+                            if p.stat().st_mtime > yaml_mtime:
+                                need_generate = True
+                                self.log(f"📦 Phát hiện ảnh mới từ dataset_raw ({p.name}), đang cập nhật dataset...")
+                                break
+                except Exception:
+                    pass
+
+            if need_generate and gen_script.exists():
+                self.log("📦 Đang tổng hợp ảnh huấn luyện (trộn nền, gán nhãn, tăng cường dữ liệu)...")
                 with self.lock:
-                    self.state["message"] = "Đang tự động gán nhãn và tạo data.yaml..."
+                    self.state["message"] = "Đang gán nhãn và tạo tập dữ liệu YOLO..."
 
                 gen_proc = subprocess.Popen(
-                    [sys.executable, str(gen_script), "--train-count", "200", "--val-count", "50"],
+                    [sys.executable, str(gen_script), "--train-count", "300", "--val-count", "60"],
                     cwd=str(PROJECT_ROOT),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -156,8 +199,8 @@ class WebYOLOTrainer:
                     if not line:
                         break
                     l = line.strip()
-                    if l:
-                        self.log(f"[Dataset] {l}")
+                    if l.startswith("[*] Đã") or l.startswith(" - Tổng ảnh"):
+                        self.log(l)
                     if self.stop_requested:
                         try:
                             if sys.platform == "win32":
@@ -170,15 +213,15 @@ class WebYOLOTrainer:
 
                 gen_proc.wait()
                 if gen_proc.returncode != 0:
-                    self.log(f"Lỗi khi chuẩn bị dataset (exit code {gen_proc.returncode})")
+                    self.log(f"❌ Lỗi khi chuẩn bị dataset (exit code {gen_proc.returncode})")
                     with self.lock:
                         if self.state["status"] != "stopped":
                             self.state["status"] = "error"
                             self.state["message"] = "Lỗi khi sinh dataset YOLO"
                     return
-                self.log("Chuẩn bị dữ liệu thành công! File data.yaml sẵn sàng.")
+                self.log("✅ Chuẩn bị dữ liệu hoàn tất! Tập data.yaml đã sẵn sàng.")
             else:
-                self.log("Tập dữ liệu data.yaml đã có sẵn.")
+                self.log("✅ Dữ liệu yolo_dataset đã sẵn sàng.")
 
             if self.stop_requested:
                 return
@@ -186,9 +229,12 @@ class WebYOLOTrainer:
             if not data_yaml.exists():
                 raise FileNotFoundError(f"Không tìm thấy file {data_yaml}")
 
+            # Đảm bảo đường dẫn data.yaml tương thích 100% với máy này
+            sync_data_yaml_path(data_yaml)
+
             with self.lock:
                 self.state["status"] = "training"
-                self.state["message"] = "Khởi chạy tiến trình Train Worker độc lập..."
+                self.state["message"] = "Khởi chạy tiến trình Train Worker..."
 
             # 2. Khởi chạy standalone train_worker.py dưới dạng subprocess riêng
             MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -204,7 +250,6 @@ class WebYOLOTrainer:
                 "--project-root", str(PROJECT_ROOT)
             ]
 
-            self.log(f"Chạy lệnh Subprocess: {' '.join(cmd)}")
             train_proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -228,8 +273,14 @@ class WebYOLOTrainer:
                     try:
                         data = json.loads(line[len("JSON_STATUS:"):])
                         st_type = data.get("type")
+
                         with self.lock:
-                            if st_type == "epoch":
+                            if st_type == "device":
+                                dev_msg = data.get("message", "")
+                                self.state["message"] = dev_msg
+                                self.log(f"💻 {dev_msg}")
+
+                            elif st_type == "epoch":
                                 self.state["current_epoch"] = data.get("epoch", self.state["current_epoch"])
                                 self.state["total_epochs"] = data.get("total_epochs", self.state["total_epochs"])
                                 self.state["progress"] = data.get("progress", self.state["progress"])
@@ -237,26 +288,53 @@ class WebYOLOTrainer:
                                 self.state["eta_seconds"] = data.get("eta_seconds", 0)
                                 if "message" in data:
                                     self.state["message"] = data["message"]
+
+                            elif st_type == "epoch_summary":
+                                ep = data.get("epoch", self.state["current_epoch"])
+                                tot = data.get("total_epochs", self.state["total_epochs"])
+                                loss = data.get("loss", self.state["loss"])
+                                map50 = data.get("map50", 0.0)
+                                pct = data.get("progress", self.state["progress"])
+                                eta_s = data.get("eta_seconds", 0)
+
+                                self.state["current_epoch"] = ep
+                                self.state["progress"] = pct
+                                self.state["loss"] = loss
+                                self.state["map50"] = map50
+                                self.state["eta_seconds"] = eta_s
+
+                                map_str = f"{map50 * 100:.1f}%" if map50 > 0 else "--"
+                                summary_text = f"📊 [Epoch {ep}/{tot}] Loss: {loss:.4f} | mAP50: {map_str} | Tiến độ: {pct}% | Còn lại: ~{eta_s}s"
+                                self.state["message"] = summary_text
+                                self.log(summary_text)
+
                             elif st_type == "metrics":
                                 self.state["map50"] = data.get("map50", self.state["map50"])
+
                             elif st_type == "status":
                                 self.state["message"] = data.get("message", self.state["message"])
+
                             elif st_type == "completed":
                                 self.state["status"] = "completed"
                                 self.state["progress"] = 100
                                 self.state["best_model"] = data.get("best_model", str(dest_best))
                                 self.state["message"] = data.get("message", "Huấn luyện thành công!")
+                                self.log(f"🎉 {data.get('message', 'Huấn luyện thành công!')}")
+
                             elif st_type == "error":
                                 if self.state["status"] != "stopped":
                                     self.state["status"] = "error"
                                     self.state["message"] = data.get("message", "Lỗi huấn luyện")
-                    except Exception as e:
+                                    self.log(f"❌ {data.get('message')}")
+                    except Exception:
                         pass
                 else:
-                    self.log(line)
+                    # Chỉ hiện các thông điệp quan trọng có tiền tố [*] hoặc [!]
+                    # Bỏ qua toàn bộ thanh tiến trình nội bộ và log rác của PyTorch
+                    if line.startswith("[*] Thiết bị") or line.startswith("[+] GPU"):
+                        self.log(line)
 
             ret_code = train_proc.wait()
-            self.log(f"Tiến trình Train Worker kết thúc với mã {ret_code}.")
 
             with self.lock:
                 if self.state["status"] == "stopped" or self.stop_requested:
@@ -267,13 +345,24 @@ class WebYOLOTrainer:
                     self.state["progress"] = 100
                     self.state["best_model"] = str(dest_best)
                     self.state["message"] = "🎉 Huấn luyện thành công! Mô hình đã sẵn sàng gắp thả."
+                    self.log(f"🎉 [Hoàn thành] Đã lưu mô hình: {dest_best}")
+
+                    # Tự động nạp mô hình mới vào Tab 4 (AI Vision)
+                    try:
+                        server_mod = sys.modules.get("dobot_live_server") or sys.modules.get("__main__")
+                        if server_mod and hasattr(server_mod, "vision_engine") and server_mod.vision_engine:
+                            ok = server_mod.vision_engine.load_best_yolo_model(str(dest_best))
+                            if ok:
+                                self.log("🤖 Đã tự động kích hoạt mô hình mới vào Tab 4 (AI Vision)!")
+                    except Exception:
+                        pass
                 else:
                     if self.state["status"] != "error":
                         self.state["status"] = "error"
-                        self.state["message"] = f"Tiến trình huấn luyện kết thúc với mã lỗi ({ret_code})"
+                        self.state["message"] = f"Tiến trình dừng với mã lỗi ({ret_code})"
 
         except Exception as e:
-            self.log(f"Lỗi ngoài dự kiến trong worker pipeline: {e}")
+            self.log(f"❌ Lỗi ngoài dự kiến: {e}")
             with self.lock:
                 if self.state["status"] != "stopped":
                     self.state["status"] = "error"
@@ -285,7 +374,6 @@ class WebYOLOTrainer:
     def export_colab_zip(self) -> dict:
         """Nén thư mục yolo_dataset thành file zip sẵn sàng tải về."""
         try:
-            # Chỉ sinh dataset nếu chưa có data.yaml
             data_yaml = YOLO_DATASET_DIR / "data.yaml"
             gen_script = PROJECT_ROOT / "generate_yolo_dataset.py"
             if not data_yaml.exists() and gen_script.exists():
@@ -293,6 +381,9 @@ class WebYOLOTrainer:
 
             if not YOLO_DATASET_DIR.exists():
                 return {"success": False, "status": "error", "error": "Chưa có dữ liệu yolo_dataset!", "message": "Chưa có dữ liệu yolo_dataset!"}
+
+            # Đảm bảo đường dẫn path trong data.yaml đúng chuẩn Colab hoặc relative
+            sync_data_yaml_path(data_yaml)
 
             # Nén thành file zip
             zip_base = str(PROJECT_ROOT / "yolo_dataset")

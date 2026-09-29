@@ -3,8 +3,10 @@
 """
 train_worker.py: Standalone Subprocess Huấn luyện YOLO cho Web Studio.
 Độc lập hoàn toàn với tiến trình chính Tornado Web Server.
-Khi người dùng bấm Dừng (Stop), tiến trình này có thể bị ngắt (kill) ngay lập tức
-mà không ảnh hưởng tới Web Server hay khóa tài nguyên CUDA/GIL.
+- Tự động nhận diện và ưu tiên GPU mạnh nhất / nhiều VRAM trống nhất.
+- Tự động đồng bộ đường dẫn path trong data.yaml theo đúng thư mục máy tính hiện tại.
+- Xuất log tổng quát 1 lần sau mỗi Epoch, loại bỏ các dòng rác nội bộ.
+- Dọn dẹp cache runs cũ trước khi train để đảm bảo mô hình sinh ra là bản mới nhất.
 """
 
 import os
@@ -31,6 +33,31 @@ def send_status(payload: dict):
         print(line, flush=True)
     except Exception as e:
         print(f"[Worker Status Error] {e}", flush=True)
+
+
+def sync_data_yaml_path(data_yaml_path: Path):
+    """
+    Đồng bộ trường 'path' trong data.yaml thành đường dẫn tuyệt đối của thư mục chứa data.yaml trên MÁY HIỆN TẠI.
+    Điều này giải quyết triệt để lỗi khi copy/clone code sang máy GPU ở FabLab có đường dẫn ổ đĩa khác.
+    """
+    try:
+        yaml_dir = data_yaml_path.parent.resolve().as_posix()
+        lines = []
+        path_found = False
+        with open(data_yaml_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("path:"):
+                    lines.append(f"path: {yaml_dir}\n")
+                    path_found = True
+                else:
+                    lines.append(line)
+        if not path_found:
+            lines.insert(0, f"path: {yaml_dir}\n")
+        with open(data_yaml_path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+        print(f"[*] Đã đồng bộ data.yaml theo thư mục máy này: {yaml_dir}", flush=True)
+    except Exception as e:
+        print(f"[!] Cảnh báo khi đồng bộ data.yaml: {e}", flush=True)
 
 
 def select_optimal_device():
@@ -102,8 +129,18 @@ def main():
         send_status({"type": "error", "message": f"Không tìm thấy file {data_yaml_path}"})
         sys.exit(1)
 
-    print(f"[*] Bắt đầu Train Worker với: Model={args.base_model}, Epochs={args.epochs}, Batch={args.batch}", flush=True)
-    send_status({"type": "init", "message": f"Đang nạp mô hình {args.base_model}..."})
+    # 1. Tự động đồng bộ trường path: trong data.yaml về thư mục của máy này
+    sync_data_yaml_path(data_yaml_path)
+
+    # 2. Dọn dẹp thư mục chạy cũ runs/detect/web_studio_train để tránh dùng đè model lỗi cũ
+    run_dir = project_root / "runs" / "detect" / "web_studio_train"
+    if run_dir.exists():
+        try:
+            shutil.rmtree(run_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+    print(f"[*] Bắt đầu Huấn luyện AI: Model={args.base_model}, Epochs={args.epochs}, Batch={args.batch}", flush=True)
 
     try:
         from ultralytics import YOLO
@@ -117,8 +154,27 @@ def main():
         send_status({"type": "error", "message": f"Lỗi nạp mô hình {args.base_model}: {str(e)}"})
         sys.exit(1)
 
+    # Tự động phát hiện và chọn GPU tối ưu nhất
+    device_arg, device_info = select_optimal_device()
+    print(f"[*] Thiết bị huấn luyện: {device_info}", flush=True)
+    send_status({
+        "type": "device",
+        "device": str(device_arg),
+        "device_info": device_info,
+        "message": f"Sử dụng {device_info}"
+    })
+
     start_time = time.time()
     total_epochs = args.epochs
+
+    # Bộ đệm lưu dữ liệu của epoch hiện tại
+    epoch_cache = {
+        "epoch": 0,
+        "loss": 0.0,
+        "map50": 0.0,
+        "eta": 0,
+        "pct": 0
+    }
 
     # Các callback theo dõi tiến độ
     def on_train_epoch_end(trainer):
@@ -137,6 +193,11 @@ def main():
             elapsed = time.time() - start_time
             eta_seconds = int((elapsed / max(1, ep)) * (total - ep))
 
+            epoch_cache["epoch"] = ep
+            epoch_cache["loss"] = round(loss, 4)
+            epoch_cache["eta"] = eta_seconds
+            epoch_cache["pct"] = pct
+
             send_status({
                 "type": "epoch",
                 "epoch": ep,
@@ -144,35 +205,42 @@ def main():
                 "progress": pct,
                 "loss": round(loss, 4),
                 "eta_seconds": eta_seconds,
-                "message": f"Đang huấn luyện Epoch {ep}/{total} ({pct}%) - Loss: {loss:.4f}"
+                "message": f"Epoch {ep}/{total} ({pct}%) - Loss: {loss:.4f}"
             })
-            print(f"[Worker] Epoch {ep}/{total} - Loss: {loss:.4f} - Còn lại ~{eta_seconds}s", flush=True)
         except Exception as e:
-            print(f"[Worker Epoch Callback Error] {e}", flush=True)
+            pass
 
     def on_fit_epoch_end(trainer):
         try:
             metrics = getattr(trainer, "metrics", None)
+            val = 0.0
             if metrics and "metrics/mAP50(B)" in metrics:
                 val = float(metrics["metrics/mAP50(B)"])
-                send_status({
-                    "type": "metrics",
-                    "map50": round(val, 4)
-                })
-                print(f"[Worker] mAP50(B): {val:.4f}", flush=True)
+            epoch_cache["map50"] = round(val, 4)
+
+            ep = epoch_cache["epoch"]
+            loss = epoch_cache["loss"]
+            pct = epoch_cache["pct"]
+            eta = epoch_cache["eta"]
+            map_pct = f"{val * 100:.1f}%" if val > 0 else "--"
+
+            send_status({
+                "type": "epoch_summary",
+                "epoch": ep,
+                "total_epochs": total_epochs,
+                "progress": pct,
+                "loss": loss,
+                "map50": round(val, 4),
+                "eta_seconds": eta,
+                "message": f"Epoch {ep}/{total_epochs} hoàn tất | Loss: {loss:.4f} | mAP50: {map_pct} | Còn lại ~{eta}s"
+            })
         except Exception as e:
             pass
 
     model.add_callback("on_train_epoch_end", on_train_epoch_end)
     model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
-    # Tự động phát hiện và chọn GPU tối ưu nhất (hoặc fallback về CPU)
-    device_arg, device_info = select_optimal_device()
-    print(f"[*] Thiết bị huấn luyện: {device_info}", flush=True)
-    send_status({"type": "status", "message": f"Sử dụng {device_info}"})
-
-    # Chạy huấn luyện chính
-    print(f"[*] Bắt đầu huấn luyện YOLO trên thiết bị: {device_arg}...", flush=True)
+    print(f"[*] Bắt đầu vòng lặp huấn luyện chính...", flush=True)
 
     try:
         results = model.train(
@@ -202,7 +270,7 @@ def main():
             send_status({
                 "type": "completed",
                 "best_model": str(dest_model),
-                "message": "🎉 Huấn luyện thành công! Mô hình đã sẵn sàng gắp thả."
+                "message": "🎉 Huấn luyện thành công! Mô hình đã sẵn sàng nhận diện và gắp thả."
             })
             sys.exit(0)
 
