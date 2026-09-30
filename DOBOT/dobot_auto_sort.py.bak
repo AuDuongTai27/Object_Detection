@@ -127,7 +127,6 @@ COLOR_RANGES = {
 class HomographyTransformer:
     def __init__(self, json_path=HOMOGRAPHY_JSON_PATH):
         self.H = None
-        self.H_inv = None
         self.load(json_path)
 
     def load(self, path):
@@ -142,13 +141,6 @@ class HomographyTransformer:
         else:
             raise FileNotFoundError(f"Không tìm thấy file Homography tại {path}! Hãy chạy calibrate_camera_to_dobot.py trước.")
 
-        # Tính toán ma trận nghịch đảo để chiếu ngược từ tọa độ Robot sang điểm ảnh Camera
-        try:
-            self.H_inv = np.linalg.inv(self.H)
-        except Exception as e:
-            print(f"[!] Lỗi nghịch đảo ma trận Homography: {e}")
-            self.H_inv = None
-
     def pixel_to_dobot(self, u, v):
         """Chuyển đổi (u, v) pixel sang (X, Y) Dobot (mm)."""
         vec = np.array([float(u), float(v), 1.0], dtype=np.float64)
@@ -156,65 +148,6 @@ class HomographyTransformer:
         if abs(res[2]) < 1e-9:
             return 0.0, 0.0
         return float(res[0] / res[2]), float(res[1] / res[2])
-
-    def dobot_to_pixel(self, rx, ry):
-        """Chuyển đổi tọa độ Robot (rx, ry) sang điểm ảnh (u, v) trên khung hình camera."""
-        if self.H_inv is None:
-            return 0, 0
-        vec = np.array([float(rx), float(ry), 1.0], dtype=np.float64)
-        res = self.H_inv @ vec
-        if abs(res[2]) < 1e-9:
-            return 0, 0
-        return int(round(res[0] / res[2])), int(round(res[1] / res[2]))
-
-    def get_workspace_roi(self, r_min=140.0, r_max=330.0, x_min=70.0):
-        """
-        Tính toán đa giác và đường biên của Vùng Làm Việc An Toàn (140 <= R <= 330 mm, X >= 70 mm)
-        chiếu trực tiếp lên hệ tọa độ điểm ảnh Camera.
-        """
-        if self.H_inv is None:
-            return None, None, None, None, None
-
-        # 1. Cung tròn ngoài R_MAX = 330 mm
-        arc_outer = []
-        for deg in np.linspace(-72, 72, 36):
-            rad = np.radians(deg)
-            rx = r_max * np.cos(rad)
-            ry = r_max * np.sin(rad)
-            if rx >= x_min:
-                arc_outer.append(self.dobot_to_pixel(rx, ry))
-
-        # 2. Cung tròn trong R_MIN = 140 mm
-        arc_inner = []
-        for deg in np.linspace(60, -60, 26):
-            rad = np.radians(deg)
-            rx = r_min * np.cos(rad)
-            ry = r_min * np.sin(rad)
-            if rx >= x_min:
-                arc_inner.append(self.dobot_to_pixel(rx, ry))
-
-        if not arc_outer or not arc_inner:
-            return None, None, None, None, None
-
-        # Đa giác khép kín bao quanh toàn bộ vùng an toàn
-        poly_pts = np.array(arc_outer + arc_inner, dtype=np.int32)
-        arc_outer_pts = np.array(arc_outer, dtype=np.int32)
-        arc_inner_pts = np.array(arc_inner, dtype=np.int32)
-
-        # Tọa độ đặt nhãn ghi chú
-        lbl_outer = arc_outer[len(arc_outer) // 2]
-        lbl_inner = arc_inner[len(arc_inner) // 2]
-
-        return poly_pts, arc_outer_pts, arc_inner_pts, lbl_outer, lbl_inner
-
-
-def is_safe_workspace(rx, ry, r_min=140.0, r_max=330.0, x_min=70.0):
-    """
-    Kiểm tra một tọa độ robot có nằm trong vùng làm việc an toàn hay không.
-    Ngăn chặn tuyệt đối các lệnh gửi ra ngoài tầm với gây còi kêu, đèn đỏ (Alarm 0x10/0x11).
-    """
-    r = math.hypot(rx, ry)
-    return (r_min <= r <= r_max) and (rx >= x_min)
 
 
 # ==============================================================================
@@ -316,10 +249,6 @@ class DobotExecutor:
         """Chạy chu trình gắp thả trong luồng nền để không làm đứng khung hình camera."""
         if self.is_busy:
             print("[!] Robot đang bận thực hiện chu trình trước!")
-            return False
-
-        if not is_safe_workspace(pick_x, pick_y):
-            print(f"[!] Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}) nằm ngoài vùng an toàn robot! Hủy lệnh.")
             return False
 
         t = threading.Thread(target=self._pick_and_place_worker, args=(pick_x, pick_y, cube_name, on_complete), daemon=True)
@@ -506,25 +435,13 @@ def main():
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
 
     current_detected_cubes = []
-    alert_info = {"msg": "", "expire": 0.0}
-
-    # Khởi tạo dữ liệu hình học Vùng Làm Việc An Toàn (ROI 140 <= R <= 330 mm, X >= 70 mm)
-    roi_poly, roi_arc_outer, roi_arc_inner, roi_lbl_outer, roi_lbl_inner = transformer.get_workspace_roi()
-    show_workspace_roi = True
 
     def on_mouse(event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN and not executor.is_busy:
             for cube in current_detected_cubes:
                 bx, by, bw, bh = cube["box"]
                 if bx <= x <= bx + bw and by <= y <= by + bh:
-                    rx, ry = cube["rx"], cube["ry"]
-                    r_dist = math.hypot(rx, ry)
-                    if not is_safe_workspace(rx, ry):
-                        print(f"\n[!] TỪ CHỐI GẮP: {cube['name']} nằm ngoài vùng an toàn (X={rx:.1f}, Y={ry:.1f}, R={r_dist:.1f}mm)!")
-                        alert_info["msg"] = f"CANH BAO: {cube['name']} NGOAI VUNG AN TOAN! (R={r_dist:.1f}mm | YEU CAU 140 <= R <= 330 mm)"
-                        alert_info["expire"] = time.time() + 3.0
-                        break
-                    print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | R={r_dist:.1f}mm")
+                    print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f})")
                     executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"])
                     break
 
@@ -537,9 +454,8 @@ def main():
     print("\n" + "=" * 65)
     print(" HƯỚNG DẪN ĐIỀU KHIỂN:")
     print(" - CLICK CHUỘT vào bất kỳ khối màu nào trên màn hình để gắp khối đó")
-    print(" - Nhấn [SPACE] : Gắp khối màu đầu tiên nằm trong vùng an toàn")
+    print(" - Nhấn [SPACE] : Gắp khối màu đầu tiên tìm thấy")
     print(" - Nhấn [A]     : Bật / Tắt chế độ Tự Động Hoàn Toàn (Auto Sorting)")
-    print(" - Nhấn [W]     : Bật / Tắt hiển thị Vùng Làm Việc An Toàn (ROI)")
     print(" - Nhấn [Q]     : Thoát chương trình")
     print("=" * 65 + "\n")
 
@@ -607,74 +523,37 @@ def main():
 
         current_detected_cubes = detected_cubes
 
-        # 3. Vẽ Lớp Phủ Vùng Làm Việc An Toàn (Workspace ROI: 140 <= R <= 330 mm)
-        if show_workspace_roi and roi_poly is not None and len(roi_poly) > 0:
-            overlay = frame.copy()
-            cv2.fillPoly(overlay, [roi_poly], (20, 60, 20))
-            cv2.addWeighted(overlay, 0.20, frame, 0.80, 0, frame)
-
-            if roi_arc_outer is not None and len(roi_arc_outer) > 0:
-                cv2.polylines(frame, [roi_arc_outer], False, (0, 255, 255), 2, cv2.LINE_AA)
-                cv2.putText(frame, "R_MAX 330mm", (roi_lbl_outer[0] - 40, roi_lbl_outer[1] - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 255), 1, cv2.LINE_AA)
-
-            if roi_arc_inner is not None and len(roi_arc_inner) > 0:
-                cv2.polylines(frame, [roi_arc_inner], False, (0, 165, 255), 2, cv2.LINE_AA)
-                cv2.putText(frame, "R_MIN 140mm", (roi_lbl_inner[0] - 40, roi_lbl_inner[1] + 18),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 165, 255), 1, cv2.LINE_AA)
-
-        # 4. Vẽ thông tin các phôi phát hiện
+        # 3. Vẽ thông tin lên màn hình
         for cube in detected_cubes:
             x, y, w, h = cube["box"]
             name = cube["name"]
             color = cube["color"]
             rx, ry = cube["rx"], cube["ry"]
-            r_dist = math.hypot(rx, ry)
-            safe = is_safe_workspace(rx, ry)
 
-            if safe:
-                # Phôi nằm trong vùng an toàn: Viền màu theo phôi, chấm tròn tâm xanh
-                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-                cv2.circle(frame, cube["center"], 4, (0, 255, 0), -1)
+            # Đánh dấu viền Bounding Box
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            cv2.circle(frame, cube["center"], 4, (0, 255, 255), -1)
 
-                label = f"{name} [SAFE] | X={rx:.1f}, Y={ry:.1f} (R={r_dist:.0f})"
-                t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
-                cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), color, -1)
-                cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
-            else:
-                # Phôi ngoài vùng an toàn: Viền ĐỎ RỰC, gạch chéo ❌, nhãn cảnh báo BLOCKED
-                red_color = (0, 0, 240)
-                cv2.rectangle(frame, (x, y), (x + w, y + h), red_color, 2)
-                cv2.line(frame, (x, y), (x + w, y + h), red_color, 2, cv2.LINE_AA)
-                cv2.line(frame, (x, y + h), (x + w, y), red_color, 2, cv2.LINE_AA)
-                cv2.circle(frame, cube["center"], 4, red_color, -1)
+            # Hiển thị Tên + Tọa độ Robot
+            label = f"{name} | Robot: X={rx:.1f}, Y={ry:.1f}"
+            t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)[0]
+            cv2.rectangle(frame, (x, y - 24), (x + t_size[0] + 8, y), color, -1)
+            cv2.putText(frame, label, (x + 4, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
-                label = f"{name} [OUT OF BOUNDS: R={r_dist:.0f}mm] (BLOCKED)"
-                t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
-                cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), red_color, -1)
-                cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
-
-        # 5. Thanh Header trạng thái
+        # 4. Thanh Header trạng thái
         cv2.rectangle(frame, (0, 0), (w_img, 45), (25, 25, 25), -1)
         robot_status = "DANG GAP THA..." if executor.is_busy else "SAN SANG (IDLE)"
         status_color = (0, 165, 255) if executor.is_busy else (0, 255, 0)
         mode_text = "[AUTO ON]" if auto_sort_enabled else "[MANUAL]"
-        roi_text = "[W] ROI: ON" if show_workspace_roi else "[W] ROI: OFF"
 
-        header_text = f"Dobot: {engine_name} | {len(detected_cubes)} cube | {robot_status} | {mode_text} | {roi_text}"
-        cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, status_color, 2, cv2.LINE_AA)
+        header_text = f"Dobot Vision: {engine_name} | Tim thay: {len(detected_cubes)} cube | Robot: {robot_status} | Che do: {mode_text}"
+        cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_color, 2, cv2.LINE_AA)
 
-        # 6. Banner cảnh báo đỏ OSD nổi bật nếu người dùng click nhầm ngoài vùng
-        if time.time() < alert_info["expire"]:
-            banner_h = 36
-            cv2.rectangle(frame, (0, 46), (w_img, 46 + banner_h), (0, 0, 180), -1)
-            cv2.putText(frame, alert_info["msg"], (18, 46 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
-
-        # 7. Xử lý chế độ Tự Động (Auto Sort)
+        # 5. Xử lý chế độ Tự Động (Auto Sort)
         if auto_sort_enabled and not executor.is_busy:
             if time.time() - last_auto_pick_time > 2.0 and len(detected_cubes) > 0:
-                # Chọn cube trong tầm với an toàn
-                valid_cubes = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"])]
+                # Chọn cube trong tầm với (140 <= R <= 330)
+                valid_cubes = [c for c in detected_cubes if 140.0 <= math.hypot(c["rx"], c["ry"]) <= 330.0]
                 if valid_cubes:
                     target = valid_cubes[0]
                     print(f"[*] AUTO TRIGGER: Gắp {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
@@ -686,21 +565,14 @@ def main():
         key = cv2.waitKey(10) & 0xFF
         if key in [ord('q'), ord('Q'), 27]:
             break
-        elif key == ord(' '): # Phím cách: Gắp khối đầu tiên an toàn
+        elif key == ord(' '): # Phím cách: Gắp khối đầu tiên
             if not executor.is_busy and len(detected_cubes) > 0:
-                safe_candidates = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"])]
-                if safe_candidates:
-                    target = safe_candidates[0]
-                    print(f"[+] NHẤN SPACE: Gắp {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
-                    executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
-                else:
-                    print("[!] Không có phôi nào nằm trong vùng an toàn của Robot để gắp!")
+                target = detected_cubes[0]
+                print(f"[+] NHẤN SPACE: Gắp {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
+                executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
         elif key in [ord('a'), ord('A')]: # Bật/Tắt Auto Sort
             auto_sort_enabled = not auto_sort_enabled
             print(f"[*] Chế độ Tự Động Phân Loại (Auto Sort): {'BẬT' if auto_sort_enabled else 'TẮT'}")
-        elif key in [ord('w'), ord('W')]: # Bật/Tắt hiển thị Vùng An Toàn ROI
-            show_workspace_roi = not show_workspace_roi
-            print(f"[*] Hiển thị Vùng Làm Việc An Toàn ROI: {'BẬT' if show_workspace_roi else 'TẮT'}")
 
     cap.release()
     cv2.destroyAllWindows()
