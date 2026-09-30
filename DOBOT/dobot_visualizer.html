@@ -113,32 +113,38 @@
         }
 
         #floating-toggle-btn {
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 999;
-            background: rgba(18, 22, 31, 0.94);
+            position: absolute;
+            top: 18px;
+            left: 18px;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(51, 154, 240, 0.45);
-            color: #fff;
-            padding: 8px 14px;
-            border-radius: 10px;
-            font-size: 12.5px;
+            border: 1px solid rgba(56, 189, 248, 0.6);
+            color: #f8fafc;
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-size: 13px;
             font-weight: 700;
             cursor: pointer;
             display: none;
             align-items: center;
-            gap: 8px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-            transition: all 0.2s ease;
+            gap: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.3);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             user-select: none;
+            animation: pulse-glow 2.5s infinite ease-in-out;
         }
         #floating-toggle-btn:hover {
-            background: #1c7ed6;
-            border-color: #339af0;
-            box-shadow: 0 10px 28px rgba(28, 126, 214, 0.5);
-            transform: translateY(-1px);
+            background: #0284c7;
+            border-color: #38bdf8;
+            color: #ffffff;
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75), 0 0 24px rgba(56, 189, 248, 0.55);
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 12px rgba(56, 189, 248, 0.3); }
+            50% { box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 22px rgba(56, 189, 248, 0.6); }
         }
         .floating-dot {
             width: 8px;
@@ -1347,6 +1353,10 @@
         </nav>
 
         <div class="nav-system-status">
+            <button id="btn-reopen-panel" onclick="showPanel()" style="display: none; background: #0284c7; color: #fff; border: 1px solid #38bdf8; border-radius: 6px; padding: 5px 12px; font-size: 11.5px; font-weight: 700; cursor: pointer; align-items: center; gap: 6px; transition: all 0.2s;" title="Mở lại bảng điều khiển Dobot 3D (Phím tắt: M)">
+                <span>📋 Mở Bảng Điều Khiển</span>
+                <span style="background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; font-size: 10px;">M</span>
+            </button>
             <div id="nav-robot-badge" class="sys-badge offline" style="display: flex; align-items: center; gap: 6px;">
                 <span class="sys-dot"></span>
                 <span id="nav-robot-text">Robot: Chưa kết nối</span>
@@ -4142,13 +4152,17 @@
 
         function showPanel() {
             panelEl.style.display = 'flex';
-            floatingToggleBtn.style.display = 'none';
+            if (floatingToggleBtn) floatingToggleBtn.style.display = 'none';
+            const btnReopen = document.getElementById('btn-reopen-panel');
+            if (btnReopen) btnReopen.style.display = 'none';
         }
 
         function hidePanel() {
             panelEl.style.display = 'none';
-            floatingToggleBtn.style.display = 'flex';
-            showToast("Đã ẩn menu. Bấm nút nổi hoặc nhấn phím 'M' để mở lại.");
+            if (floatingToggleBtn) floatingToggleBtn.style.display = 'flex';
+            const btnReopen = document.getElementById('btn-reopen-panel');
+            if (btnReopen && currentStudioTab === '3d') btnReopen.style.display = 'flex';
+            showToast("Đã ẩn bảng điều khiển. Bấm nút '📋 Mở Bảng Điều Khiển' hoặc nhấn phím 'M' để mở lại.");
         }
 
         function togglePanel() {
@@ -4628,6 +4642,11 @@
         // --- 1. CHUYỂN TAB WEB STUDIO ---
         function switchStudioTab(tabId) {
             currentStudioTab = tabId;
+            
+            const btnReopenTop = document.getElementById('btn-reopen-panel');
+            if (btnReopenTop) {
+                btnReopenTop.style.display = (tabId === '3d' && panelEl && panelEl.style.display === 'none') ? 'flex' : 'none';
+            }
             
             // Cập nhật nút tab trên Top Navbar
             document.querySelectorAll('.nav-studio-tab').forEach(btn => {
