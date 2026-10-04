@@ -1899,77 +1899,7 @@
             </div>
         </div>
 
-        <!-- 3. STICKY FOOTER -->
-        <xml id="blockly-toolbox" style="display: none">
-                <category name="🦾 Chuyển Động" colour="#1971c2">
-                    <block type="dobot_move_xyz">
-                        <field name="X">240</field>
-                        <field name="Y">0</field>
-                        <field name="Z">30</field>
-                        <field name="R">0</field>
-                        <field name="MODE">safe</field>
-                    </block>
-                    <block type="dobot_move_joint">
-                        <field name="J1">0</field>
-                        <field name="J2">20</field>
-                        <field name="J3">40</field>
-                        <field name="J4">0</field>
-                    </block>
-                    <block type="dobot_move_relative">
-                        <field name="DX">10</field>
-                        <field name="DY">0</field>
-                        <field name="DZ">0</field>
-                        <field name="DR">0</field>
-                    </block>
-                    <block type="dobot_home"></block>
-                </category>
-                <category name="💨 Đầu Hút & Chờ" colour="#2f9e44">
-                    <block type="dobot_suction">
-                        <field name="STATE">ON</field>
-                    </block>
-                    <block type="dobot_suction">
-                        <field name="STATE">OFF</field>
-                    </block>
-                    <block type="dobot_wait">
-                        <field name="TIME">1.0</field>
-                    </block>
-                </category>
-                <category name="🔄 Vòng Lặp" colour="#a855f7">
-                    <block type="controls_repeat_ext">
-                        <value name="TIMES">
-                            <shadow type="math_number">
-                                <field name="NUM">3</field>
-                            </shadow>
-                        </value>
-                    </block>
-                    <block type="controls_whileUntil"></block>
-                    <block type="controls_for">
-                        <value name="FROM"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-                        <value name="TO"><shadow type="math_number"><field name="NUM">5</field></shadow></value>
-                        <value name="BY"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
-                    </block>
-                    <block type="controls_flow_statements"></block>
-                </category>
-                <category name="🔀 Điều Kiện" colour="#06b6d4">
-                    <block type="controls_if"></block>
-                    <block type="controls_if">
-                        <mutation else="1"></mutation>
-                    </block>
-                    <block type="logic_compare"></block>
-                    <block type="logic_operation"></block>
-                    <block type="logic_negate"></block>
-                    <block type="logic_boolean"></block>
-                </category>
-                <category name="📐 Toán Học" colour="#f59f00">
-                    <block type="math_number">
-                        <field name="NUM">0</field>
-                    </block>
-                    <block type="math_arithmetic"></block>
-                    <block type="math_single"></block>
-                </category>
-                <category name="🔢 Biến Số" custom="VARIABLE" colour="#e67700"></category>
-                <category name="📦 Hàm Khối" custom="PROCEDURE" colour="#d6336c"></category>
-            </xml>
+
 
         <div class="panel-footer">
             <button class="btn-footer btn-clear-alarm" onclick="sendAction('clear_alarms')" title="Xóa cờ lỗi & khôi phục robot khi bị đèn đỏ">
@@ -5767,8 +5697,7 @@
                     toolbox: toolboxEl,
                     scrollbars: true,
                     trashcan: true,
-                    sounds: false,
-                    renderer: (Blockly.blockRendering && Blockly.blockRendering.getRenderer('zelos')) ? 'zelos' : 'geras',
+                    renderer: 'zelos',
                     grid: {
                         spacing: 20,
                         length: 3,

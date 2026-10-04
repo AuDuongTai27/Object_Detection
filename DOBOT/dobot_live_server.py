@@ -432,6 +432,9 @@ connected_clients = set()
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
+        self.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.set_header("Pragma", "no-cache")
+        self.set_header("Expires", "0")
         file_path = os.path.join(os.path.dirname(__file__), "dobot_visualizer.html")
         with open(file_path, "r", encoding="utf-8") as f:
             self.write(f.read())
