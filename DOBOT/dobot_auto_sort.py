@@ -612,12 +612,6 @@ def main():
             overlay = frame.copy()
             cv2.fillPoly(overlay, [roi_poly], (20, 60, 20))
             cv2.addWeighted(overlay, 0.20, frame, 0.80, 0, frame)
-
-            if roi_arc_outer is not None and len(roi_arc_outer) > 0:
-                cv2.polylines(frame, [roi_arc_outer], False, (0, 255, 255), 2, cv2.LINE_AA)
-                cv2.putText(frame, "R_MAX 330mm", (roi_lbl_outer[0] - 40, roi_lbl_outer[1] - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 255), 1, cv2.LINE_AA)
-
             if roi_arc_inner is not None and len(roi_arc_inner) > 0:
                 cv2.polylines(frame, [roi_arc_inner], False, (0, 165, 255), 2, cv2.LINE_AA)
                 cv2.putText(frame, "R_MIN 140mm", (roi_lbl_inner[0] - 40, roi_lbl_inner[1] + 18),
