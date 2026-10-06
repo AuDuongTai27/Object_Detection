@@ -1,156 +1,110 @@
-# 🎯 FabLab Multi-Cube Object Detection System (Real-time YOLO)
+# 🦾 FabLab AI & Dobot Magician 3D Digital Twin Studio
 
-Hệ thống thị giác máy tính toàn diện cho bài toán phát hiện và định vị đa vật thể (Multi-Object Detection) theo thời gian thực trên camera/webcam tại FabLab.
+Hệ thống tích hợp toàn diện **Thị giác Máy tính (AI Computer Vision)**, **Bản sao số 3D (3D Digital Twin)** và **Điều khiển Cánh tay Robot công nghiệp Dobot Magician**, phục vụ nghiên cứu, sản xuất thử nghiệm và giáo dục STEAM chuẩn công nghiệp 4.0.
 
-Dự án tối ưu hóa toàn bộ pipeline từ **Thu thập dữ liệu camera** $\rightarrow$ **Tăng cường dữ liệu thích nghi (Adaptive Data Augmentation)** $\rightarrow$ **Huấn luyện GPU trên Google Colab** $\rightarrow$ **Suy luận thời gian thực 25–30 FPS trên CPU laptop**.
-
----
-
-## 📁 1. Cấu Trúc Dự Án (Project Structure)
-
-```text
-ObjectDetection/
-├── models/                               # [Trọng số mô hình đã huấn luyện]
-│   ├── best_11.pt                        # ⭐ [Khuyên dùng] YOLO11 Nano - Spatial Attention, chống bắt nhầm tốt nhất
-│   ├── best_v8_more_augmentation.pt      # 🚀 [Độ nhạy cao] YOLOv8 Nano - Bắt cube cực nhạy, chịu ngón tay che
-│   └── archive/                          # Lưu trữ các checkpoints đối chứng (v5, v8 gốc, v8 background)
-│       ├── best_v5.pt
-│       ├── best_v8.pt
-│       ├── best_v8_background.pt
-│       └── yolov8n.pt
-│
-├── dataset_raw/                          # Dữ liệu ảnh thô chụp từ camera
-│   ├── cube_blue/                        # 145 ảnh
-│   ├── cube_green/                       # 116 ảnh
-│   ├── cube_red/                         # 108 ảnh
-│   ├── cube_yellow/                      # 130 ảnh
-│   └── background/                       # 131 ảnh nền âm tính (Negative samples)
-│
-├── yolo_dataset/                         # Tập dữ liệu tổng hợp chuẩn YOLO (Train / Val / data.yaml)
-├── yolo_dataset.zip                      # File nén dataset sẵn sàng đẩy lên Google Colab (~141 MB)
-│
-├── fablab_studio.py                  # 🚀 [GIAO DIỆN GUI TOÀN DIỆN] App học sinh 3 Tab (Thu thập -> 1-Click Train -> Dobot)
-├── run_studio.bat                    # 🖱️ [1-Click Windows] Double click để mở ngay phần mềm GUI
-│
-├── DOBOT/                            # [Hệ thống Động học & Điều khiển Dobot - Phát triển bởi Danh Huynh (https://github.com/DanhCon)]
-│   ├── dobot_auto_sort.py            # Script nhận diện & tự động phân loại bằng Dobot
-│   ├── calibrate_camera_to_dobot.py  # Hiệu chuẩn ma trận Homography (Pixel -> mm Dobot)
-│   ├── homography_dobot.json         # Ma trận tọa độ camera sang Dobot thực nghiệm
-│   ├── move_to_point.py              # Di chuyển điểm chỉ định với quỹ đạo an toàn Safe Jump
-│   └── dobot_live_server.py          # Server Digital Twin 3D thời gian thực
-│
-├── detect_camera_yolo.py             # Chương trình nhận diện camera thời gian thực bằng YOLO (CLI)
-├── detect_camera_opencv.py           # Nhận diện cơ bản bằng giải thuật phân đoạn màu HSV (60 FPS)
-├── capture_from_camera.py            # Công cụ chụp và thu thập ảnh mẫu từ Webcam / USB Cam (CLI)
-├── generate_yolo_dataset.py          # Pipeline sinh dataset YOLO kèm mô phỏng che khuất & sai lệch cảm biến
-├── augment_images.py                 # Bộ công cụ siêu Augmentation (Mosaic, CutMix, Shadows)
-├── zip_dataset.py                    # Tiện ích tự động nén yolo_dataset.zip
-├── train_on_colab.ipynb              # Sổ tay huấn luyện GPU T4 trên Google Colab (~2-3 phút)
-├── train_yolo.py                     # Huấn luyện cục bộ bằng CPU (tuỳ chọn)
-│
-├── requirements.txt                  # Danh sách các thư viện phụ thuộc
-├── .gitignore                        # Cấu hình bỏ qua tệp nháp / file nhị phân
-└── README.md                         # Tài liệu hướng dẫn sử dụng chi tiết
-```
+Toàn bộ quy trình từ **Thu thập dữ liệu** $\rightarrow$ **Huấn luyện mô hình AI** $\rightarrow$ **Lập trình trực quan Blockly** $\rightarrow$ **Tự động hóa gắp thả phân loại phôi màu theo thời gian thực** đã được tích hợp tập trung vào một giao diện Web duy nhất.
 
 ---
 
-## 🏆 2. Đánh Giá & So Sánh 2 Mô Hình Tốt Nhất
+## 🚀 1. Hướng Dẫn Khởi Chạy Nhanh (Quickstart)
 
-| Đặc tính | ⭐ YOLO11 Nano (`models/best_11.pt`) | 🚀 YOLOv8 Nano (`models/best_v8_more_augmentation.pt`) |
-| :--- | :---: | :---: |
-| **Kiến trúc** | **C2PSA Spatial Attention + C3k2** | Task-Aligned Assigner Anchor-Free |
-| **Ưu điểm vượt trội** | **Chống nhận diện nhầm vật lạ cực tốt** | **Bắt cube cực nhạy ở mọi góc khó** |
-| **Phản ứng với ngón tay che** | Tốt, giữ vững bounding box | Rất tốt, chịu được cả khi che 30% cạnh |
-| **Tốc độ trên CPU Laptop** | **~20 – 25 FPS (Rất nhẹ & mượt)** | ~18 – 22 FPS |
-| **Mục đích sử dụng** | **Môi trường phòng thực tế có nhiều đồ vật** | **Môi trường ít đồ vật hoặc cự ly xa** |
+Chỉ cần **1 lệnh duy nhất** để khởi động toàn bộ hệ thống (Web Studio, 3D Digital Twin, luồng Camera AI và Server điều khiển Dobot):
 
----
-
-## 🚀 3. Hướng Dẫn Chạy Nhanh (Quickstart)
-
-### 3.1. Cài đặt môi trường
-Khuyến nghị sử dụng Python 3.10 – 3.12 (hoặc Conda):
+### Bước 1: Cài đặt thư viện phụ thuộc
+Khuyến nghị sử dụng môi trường Python 3.10 – 3.12:
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3.2. Chạy nhận diện trực tiếp bằng Camera
-Mặc định hệ thống tự động ưu tiên nạp `models/best_11.pt` và mở Camera USB ngoài:
+### Bước 2: Khởi động Server trung tâm
 ```bash
-python detect_camera_yolo.py
+python DOBOT/dobot_live_server.py
 ```
 
-* **Chỉ định model cụ thể:**
-  ```bash
-  # Chạy với YOLO11
-  python detect_camera_yolo.py --model models/best_11.pt
-
-  # Chạy với YOLOv8 More Augmentation
-  python detect_camera_yolo.py --model models/best_v8_more_augmentation.pt
-  ```
-
-* **Phím tắt điều khiển trực tiếp trên cửa sổ Camera:**
-  * `+` hoặc `=`: Tăng ngưỡng tự tin (Confidence) thêm 2% (giúp lọc sạch nhiễu nền).
-  * `-` hoặc `_`: Giảm ngưỡng tự tin bớt 2% (giúp bắt các góc cube mờ/xa).
-  * `S` hoặc `TAB`: **Chuyển đổi qua lại ngay lập tức giữa Camera Laptop và Camera USB ngoài**.
-  * `Q` hoặc `ESC`: Thoát ứng dụng.
+* Máy chủ sẽ tự động chạy tại: **`http://localhost:8080`** (hoặc tự động mở trình duyệt web tới `http://localhost:8080/dobot_visualizer.html`).
+* Cắm cáp USB Dobot Magician vào máy tính, bấm nút **"🔌 Kết Nối"** trên giao diện Web để đồng bộ ngay lập tức.
 
 ---
 
-## 🛠️ 4. Quy Trình Cập Nhật & Huấn Luyện Thêm Dữ Liệu
+## 🖥️ 2. Các Phân Hệ Trên Giao Diện Web Studio (5 Tabs)
 
-Khi bạn muốn bổ sung thêm vật thể mới hoặc chụp thêm bối cảnh để chống nhận nhầm:
+Giao diện trực quan tích hợp trọn vẹn 5 phân hệ công nghệ:
 
-### Bước 1: Chụp thêm ảnh từ Camera
-```bash
-# Chụp thêm mẫu cube (ví dụ cube_blue)
-python capture_from_camera.py --class cube_blue
+### 🦾 Tab 1: 3D Digital Twin & Blockly Studio
+* **Bản sao số 3D thời gian thực (Three.js):** Mô phỏng cử động 3D đồng bộ 1:1 với cánh tay Dobot vật lý qua WebSocket nội bộ với độ trễ $< 50\text{ms}$.
+* **Điều khiển đa chế độ:** Điều khiển tọa độ Descartes $(X, Y, Z, R)$, góc 4 khớp xoay $(J_1 - J_4)$, bước nhảy an toàn **Safe Jump** chống va đập, và bật/tắt đầu hút chân không.
+* **Lập trình trực quan khối lệnh (Blockly):** Kéo thả các khối lệnh di chuyển, vòng lặp, điều kiện $\rightarrow$ Tự động sinh mã nguồn Python chuẩn và nạp lệnh trực tiếp tới robot.
 
-# Chụp thêm bối cảnh phòng/bàn để làm mẫu âm tính chống nhận nhầm
-python capture_from_camera.py --class background
-```
-*(Bấm phím `R` trên cửa sổ camera để lưu liên tục ~7 ảnh/giây, di chuyển vật thể quanh bàn).*
+### 📸 Tab 2: Thu Thập Dữ Liệu Thị Giác (Dataset Manager)
+* Kết nối luồng webcam trực tiếp, chuyển đổi qua lại giữa Camera tích hợp và Camera USB ngoài.
+* Chụp ảnh và tự động gán nhãn phôi mẫu (`cube_red`, `cube_green`, `cube_blue`, `cube_yellow`) và ảnh nền âm tính (Background).
+* Quản lý số lượng mẫu và thống kê tập dữ liệu trực tiếp trên giao diện.
 
-### Bước 2: Sinh lại tập dữ liệu YOLO
-```bash
-python generate_yolo_dataset.py
-```
-*Tự động tách cube, áp dụng Cutout ngón tay che khuất, biến thiên màu sắc cảm biến, trộn 131 ảnh nền âm tính với file `.txt` rỗng (0 bytes).*
+### 🧠 Tab 3: Trạm Huấn Luyện AI (AI Training Hub)
+* Huấn luyện mô hình phát hiện vật thể YOLOv8n / YOLO11n.
+* **Tích hợp Cloud GPU miễn phí (Kaggle API):** Tận dụng 30 giờ GPU NVIDIA Tesla T4/P100 miễn phí hàng tuần chỉ với 1 cú click chuột, không đòi hỏi máy tính cấu hình mạnh.
+* Hỗ trợ xuất file nén `yolo_dataset.zip` để chạy trên Google Colab.
+* Theo dõi tiến trình trực quan theo từng Epoch: Biểu đồ Loss, độ chính xác $mAP_{50}$, Precision và Recall.
 
-### Bước 3: Nén dataset
-```bash
-python zip_dataset.py
-```
-*Tạo file `yolo_dataset.zip` (~140 MB).*
+### 🎯 Tab 4: Dây Chuyền Thị Giác & Phân Loại Tự Động (AI Vision Sorting)
+* Chạy mô hình YOLO thời gian thực bám theo phôi trên bàn làm việc / băng chuyền.
+* Tự động chuyển đổi tọa độ Pixel ảnh sang tọa độ thực $(X, Y\text{ mm})$ của Dobot thông qua ma trận biến đổi phối cảnh (**Homography**).
+* **Vùng an toàn tự động (Workspace Safety Check):** Giới hạn bán kính an toàn ($140\text{mm} \le R \le 330\text{mm}$), chống va đập và ngăn chặn lệnh ngoài tầm với.
+* Chế độ tự động gắp thả phôi màu vào các khay thả chỉ định (`drop_targets.json`).
 
-### Bước 4: Train GPU trên Google Colab
-1. Mở [train_on_colab.ipynb](file:///c:/Users/PC/OneDrive/Desktop/EIU/FabLabExecutive/ObjectDetection/train_on_colab.ipynb) trên Google Colab.
-2. Đổi Runtime sang **T4 GPU**.
-3. Kéo thả file `yolo_dataset.zip` vào mục Files bên trái.
-4. Bấm **Runtime** $\rightarrow$ **Run all** (chạy ~2–3 phút).
-5. Tải file `best.pt` về, đổi tên thành `best_11.pt`, đặt vào thư mục `models/` và chạy `python detect_camera_yolo.py`.
+### 📐 Tab 5: Cân Chỉnh Không Gian Camera – Robot (Calibration)
+* Giao diện hiệu chuẩn phối cảnh 4 điểm (**Hand-Eye Calibration**).
+* Tự động tính toán ma trận Homography và lưu trữ vào file cấu hình `homography_dobot.json`.
 
 ---
 
-## ⚡ 5. Bí Quyết Tối Ưu Hóa Kỹ Thuật (Engineering Notes)
+## 📁 3. Cấu Trúc Dự Án (Project Structure)
 
-1. **Khắc phục nghẽn băng thông USB 2.0 (Sub-10 FPS Bottleneck)**:
-   - Trên Windows DirectShow, camera ngoài được ép chuẩn nén phần cứng `MJPG`:
-     `cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))`
-   - Giúp camera USB truyền dữ liệu ở tốc độ chuẩn **30 FPS**.
-2. **Tăng tốc suy luận CPU Laptop**:
-   - Tham số `imgsz=416` giảm 57% lượng phép tính FLOPS so với kích thước gốc 640x640, tăng gấp đôi tốc độ xử lý mà không làm suy giảm độ chính xác định vị cube.
-3. **Cơ chế chống Ức chế ngược (Negative Suppression)**:
-   - Các ảnh nền thật được kết hợp song song: vừa làm ảnh âm tính (0 bytes), vừa làm phôi nền để dán cube, giúp mô hình phân biệt rạch ròi giữa đồ vật trong phòng và khối cube màu.
+```text
+ObjectDetection/
+├── DOBOT/                                # [Hệ thống Động học, Server & Giao diện Dobot]
+│   ├── dobot_live_server.py              # ⭐ [SERVER CHÍNH] Khởi chạy toàn bộ hệ thống
+│   ├── dobot_visualizer.html             # 🌐 Giao diện Web 3D Digital Twin & AI Studio
+│   ├── dobot_auto_sort.py                # Pipeline phân loại phôi tự động độc lập
+│   ├── calibrate_camera_to_dobot.py      # Script hiệu chuẩn ma trận Homography
+│   ├── kaggle_trainer.py                 # Module tự động hóa huấn luyện trên Kaggle Cloud GPU
+│   ├── web_vision_engine.py              # Động cơ thị giác máy tính tích hợp Web
+│   ├── web_trainer.py                    # Bộ điều phối huấn luyện YOLO tích hợp
+│   ├── web_dataset_manager.py            # Trình quản lý tập dữ liệu hình ảnh
+│   ├── drop_targets.json                 # Cấu hình tọa độ khay thả vật phẩm theo màu
+│   ├── homography_dobot.json             # Ma trận biến đổi tọa độ Camera -> Dobot
+│   ├── move_to_point.py                  # Điều khiển di chuyển điểm quỹ đạo Safe Jump
+│   └── test_dobot.py                     # Script kiểm tra kết nối phần cứng Dobot
+│
+├── models/                               # [Trọng số mô hình đã huấn luyện]
+│   ├── best_11.pt                        # ⭐ [Khuyên dùng] YOLO11 Nano - Spatial Attention
+│   ├── best_trained.pt                   # Mô hình mới nhất vừa huấn luyện từ Studio
+│   └── best_v8_more_augmentation.pt      # YOLOv8 Nano - Độ nhạy cao
+│
+├── dataset_raw/                          # Dữ liệu ảnh thô chụp từ camera theo từng class
+├── yolo_dataset/                         # Tập dữ liệu cấu trúc chuẩn YOLO (train / val)
+├── yolo_dataset.zip                      # File nén dataset sẵn sàng đẩy lên Cloud
+│
+├── requirements.txt                      # Danh sách thư viện Python phụ thuộc
+└── README.md                             # Tài liệu hướng dẫn sử dụng
+```
 
 ---
 
-## 🤝 Đóng Góp & Tác Giả (Credits & Acknowledgements)
+## ⚡ 4. Điểm Nhấn Kỹ Thuật (Key Technical Highlights)
+
+1. **Điện toán biên cục bộ (Edge Computing):** Vận hành hoàn toàn Offline trên máy tính nội bộ thông qua Localhost, không đòi hỏi kết nối Internet khi điều khiển robot vật lý.
+2. **Khắc phục nghẽn băng thông USB Camera:** Ép chuẩn nén phần cứng `MJPG` trên Windows DirectShow giúp camera ngoài luôn duy trì mượt mà ở **30 FPS**.
+3. **Cơ chế Bước nhảy an toàn (Safe Jump):** Tự động bù trừ chiều dài giác hút ($Z_{\text{offset}} = 59.5\text{mm}$), tự động nâng độ cao an toàn trước khi di chuyển ngang giúp triệt tiêu nguy cơ va quẹt phôi hoặc camera.
+4. **Tích hợp Cloud GPU 0 Đồng:** Huấn luyện trực tiếp trên GPU Tesla T4 thông qua Kaggle API, giải quyết triệt để rào cản phòng máy trường học không có card đồ họa rời.
+
+---
+
+## 🤝 Đóng Góp & Tác Giả (Credits)
 
 - **Hệ thống Động học & Điều khiển Cánh tay Robot Dobot (Thư mục `DOBOT/`)**:
   Được nghiên cứu, phát triển và tối ưu hóa bởi kỹ sư **Danh Huynh** — [GitHub: @DanhCon](https://github.com/DanhCon).
   Bao gồm các module:
   - Hiệu chuẩn tọa độ thị giác Hand-Eye Calibration (Homography Mapping $u, v \to X, Y\text{ mm}$).
   - Thuật toán giải động học nghịch & Quỹ đạo an toàn **Safe Jump** chống báo động/va đập.
-  - Server bản sao số 3D Digital Twin thời gian thực và chu trình tự động hóa gắp thả phân loại khối màu.
+  - Server bản sao số 3D Live Digital Twin và chu trình tự động hóa gắp thả phân loại khối màu.
