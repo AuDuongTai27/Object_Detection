@@ -131,7 +131,7 @@ class DobotController:
     def _load_safety_limits(self):
         default_limits = {
             "z_min_standalone": -65.0,
-            "z_min_rail": -125.0,
+            "z_min_rail": -180.0,
             "z_max": 165.0,
             "safe_travel_z": 30.0,
             "r_min": 140.0,
@@ -375,7 +375,7 @@ class DobotController:
         r_min = self.safety_limits.get("r_min", 140.0)
         r_max = self.safety_limits.get("r_max", 330.0)
         z_min_key = "z_min_rail" if self.is_rail_mode else "z_min_standalone"
-        z_min_limit = float(self.safety_limits.get(z_min_key, -125.0 if self.is_rail_mode else -65.0))
+        z_min_limit = float(self.safety_limits.get(z_min_key, -180.0 if self.is_rail_mode else -65.0))
         z_max_limit = float(self.safety_limits.get("z_max", 165.0))
 
         if r_horiz < r_min:

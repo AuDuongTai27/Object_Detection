@@ -1590,7 +1590,7 @@
                             <label><span>Trục Z (Độ cao mũi hút):</span> <span class="badge-val" id="cart-z-val">66 mm</span></label>
                             <div class="slider-row">
                                 <button class="btn-nudge" onclick="nudgeSlider('cart-z', -1)">-</button>
-                                <input type="range" id="cart-z" min="-120" max="150" value="66" step="1">
+                                <input type="range" id="cart-z" min="-220" max="180" value="66" step="1">
                                 <button class="btn-nudge" onclick="nudgeSlider('cart-z', 1)">+</button>
                             </div>
                         </div>
@@ -1775,7 +1775,7 @@
                         <div>
                             <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 2px;">Z Min (Ray trượt):</label>
                             <div style="display: flex; align-items: center; gap: 4px;">
-                                <input type="number" id="inp-safety-z-min-rail" value="-120" step="1" oninput="isSafetyInputsDirty=true; markSafetyUnsaved();" style="width: 100%; height: 32px; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; text-align: center; font-weight: bold;">
+                                <input type="number" id="inp-safety-z-min-rail" value="-180" step="1" oninput="isSafetyInputsDirty=true; markSafetyUnsaved();" style="width: 100%; height: 32px; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; text-align: center; font-weight: bold;">
                                 <span style="font-size: 10px; color: #64748b;">mm</span>
                             </div>
                         </div>
@@ -2767,7 +2767,7 @@
         let lastKnownRobotPose = { x: 250, y: 0, z: 50, r: 0, zTcp: -9.5 };
         let cachedSafetyLimits = {
             z_min_standalone: -65.0,
-            z_min_rail: -120.0,
+            z_min_rail: -180.0,
             z_max: 165.0,
             safe_travel_z: 30.0,
             r_min: 140.0,
@@ -2848,8 +2848,8 @@
         fillLight.position.set(-300, 200, -200);
         scene.add(fillLight);
 
-        // Sàn Simulator
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x3d7a46, roughness: 0.8, metalness: 0.1 });
+        // Sàn Simulator (Hỗ trợ bán trong suốt để nhìn thấy mục tiêu dưới sàn khi kéo sâu)
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x3d7a46, roughness: 0.8, metalness: 0.1, transparent: true, opacity: 0.88 });
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), floorMat);
         floor.rotation.x = -Math.PI / 2;
         floor.position.y = -0.5;
@@ -3074,6 +3074,7 @@
         // TARGET BEACON & GIZMO
         // =========================================================================
         const targetBeaconGroup = new THREE.Group();
+        targetBeaconGroup.renderOrder = 999;
         scene.add(targetBeaconGroup);
 
         const beaconBoxGeo = new THREE.BoxGeometry(18, 18, 18);
@@ -3365,7 +3366,8 @@
 
             const radiusHoriz = Math.sqrt(x * x + y * y);
             const dist3D = Math.sqrt(x * x + y * y + zTcp * zTcp);
-            const floorHeight = L1_BASE + zTcp;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
+            const floorHeight = railYOffset + L1_BASE + zTcp;
 
             document.getElementById('tcp-radius').innerText = radiusHoriz.toFixed(2) + ' mm';
             document.getElementById('tcp-dist3d').innerText = dist3D.toFixed(2) + ' mm';
@@ -3395,21 +3397,22 @@
                 document.getElementById('j4-val').innerText = j4Deg.toFixed(1) + '°';
             }
 
-            const tcpWorldPos = new THREE.Vector3(x, floorHeight, -y);
+            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+            const tcpWorldPos = new THREE.Vector3(x, floorHeight, railOffset - y);
             tcpMarker.position.copy(tcpWorldPos);
 
             if (showProjections) {
-                const pts = [tcpWorldPos, new THREE.Vector3(x, 0.5, -y)];
+                const pts = [tcpWorldPos, new THREE.Vector3(x, 0.5, railOffset - y)];
                 dropLine.geometry.setFromPoints(pts);
                 dropLine.computeLineDistances();
                 dropLine.visible = true;
 
-                groundReticle.position.set(x, 0.5, -y);
-                groundPoint.position.set(x, 0.5, -y);
+                groundReticle.position.set(x, 0.5, railOffset - y);
+                groundPoint.position.set(x, 0.5, railOffset - y);
                 groundReticle.visible = true;
                 groundPoint.visible = true;
 
-                radiusLine.geometry.setFromPoints([new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(x, 0.5, -y)]);
+                radiusLine.geometry.setFromPoints([new THREE.Vector3(0, 0.5, railOffset), new THREE.Vector3(x, 0.5, railOffset - y)]);
                 radiusLine.visible = true;
             } else {
                 dropLine.visible = false;
@@ -3746,9 +3749,10 @@
 
         function onTargetGizmoChange() {
             const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
             const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
             const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE - railYOffset) * 10) / 10;
 
             document.getElementById('inp-target-x').value = x.toFixed(1);
             document.getElementById('inp-target-y').value = y.toFixed(1);
@@ -3759,9 +3763,10 @@
 
         function onTargetGizmoDragEnd() {
             const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
             const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
             const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE - railYOffset) * 10) / 10;
 
             document.getElementById('inp-target-x').value = x.toFixed(1);
             document.getElementById('inp-target-y').value = y.toFixed(1);
@@ -3772,7 +3777,7 @@
             const rHoriz = Math.sqrt(x * x + y * y);
             const rMinCheck = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
             const rMaxCheck = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
-            const zMinCheck = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -120.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
+            const zMinCheck = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
             const zMaxCheck = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
             const zFlangeCheck = zTcp + toolOffset;
 
@@ -3796,7 +3801,8 @@
         }
 
         function updateTargetAncillaries(x, y, zTcp) {
-            const floorHeight = L1_BASE + zTcp;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
+            const floorHeight = railYOffset + L1_BASE + zTcp;
             const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
 
             // Vòng tâm ngắm ở mặt sàn (bám theo con trượt Dobot)
@@ -3811,7 +3817,7 @@
             const rHoriz = Math.sqrt(x * x + y * y);
             const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
             const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
-            const zMin = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -120.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
+            const zMin = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
             const zMax = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
             const zFlange = zTcp + toolOffset;
 
@@ -3877,7 +3883,8 @@
             const y = parseFloat(document.getElementById('inp-target-y').value) || 0;
             const zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
 
-            const floorHeight = L1_BASE + zTcp;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
+            const floorHeight = railYOffset + L1_BASE + zTcp;
             const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
             targetBeaconGroup.position.set(x, floorHeight, railOffset - y);
 
@@ -3910,8 +3917,14 @@
             const r = parseFloat(document.getElementById('inp-target-r').value);
 
             const rHoriz = Math.sqrt(x * x + y * y);
-            if (rHoriz < 140.0 || rHoriz > 330.0 || zTcp < -120.0 || zTcp > 150.0) {
-                alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: 140 - 330mm)\nZ đầu hút: ${zTcp.toFixed(1)}mm (hợp lệ: -120 - 150mm)`);
+            const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
+            const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
+            const zMinLimit = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
+            const zMaxLimit = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
+            const zFlange = zTcp + toolOffset;
+
+            if (rHoriz < rMin || rHoriz > rMax || zFlange < zMinLimit || zFlange > zMaxLimit) {
+                alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: ${rMin} - ${rMax}mm)\nFlange Z: ${zFlange.toFixed(1)}mm (Z đầu hút: ${zTcp.toFixed(1)}mm)\nGiới hạn an toàn Flange: [${zMinLimit}, ${zMaxLimit}]mm`);
                 return;
             }
 
@@ -3946,9 +3959,10 @@
 
             raycaster.setFromCamera(mouseVec, camera);
 
-            // Cao độ mặt phẳng chọn điểm (Robot Z = targetZ, tính theo Three.js Y = L1_BASE + targetZ)
+            // Cao độ mặt phẳng chọn điểm (Robot Z = targetZ, tính theo Three.js Y = railYOffset + L1_BASE + targetZ)
             const targetZ = parseFloat(document.getElementById('inp-target-z').value) || 0;
-            const planeY = L1_BASE + targetZ;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
+            const planeY = railYOffset + L1_BASE + targetZ;
             const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY);
             const hit = new THREE.Vector3();
             const result = raycaster.ray.intersectPlane(plane, hit);
@@ -4373,7 +4387,7 @@
 
             const container = document.getElementById('safety-live-info');
             if (container) {
-                const zMin = isRailModeActive ? (cachedSafetyLimits?.z_min_rail ?? -120) : (cachedSafetyLimits?.z_min_standalone ?? -65);
+                const zMin = isRailModeActive ? (cachedSafetyLimits?.z_min_rail ?? -180) : (cachedSafetyLimits?.z_min_standalone ?? -65);
                 const zMax = cachedSafetyLimits?.z_max ?? 165;
                 const rMin = cachedSafetyLimits?.r_min ?? 140;
                 const rMax = cachedSafetyLimits?.r_max ?? 330;
@@ -4547,7 +4561,7 @@
         }
 
         async function saveSafetyLimits() {
-            const zRail = parseFloat(document.getElementById('inp-safety-z-min-rail')?.value || -120);
+            const zRail = parseFloat(document.getElementById('inp-safety-z-min-rail')?.value || -180);
             const zStand = parseFloat(document.getElementById('inp-safety-z-min-standalone')?.value || -65);
             const safeZ = parseFloat(document.getElementById('inp-safety-safe-z')?.value || 30);
             const zMax = parseFloat(document.getElementById('inp-safety-z-max')?.value || 165);
@@ -4598,7 +4612,7 @@
 
         async function resetSafetyLimitsToDefaults() {
             const defs = {
-                z_min_rail: -120.0,
+                z_min_rail: -180.0,
                 z_min_standalone: -65.0,
                 safe_travel_z: 30.0,
                 z_max: 165.0,
@@ -4740,11 +4754,17 @@
             // Cập nhật vị trí nhãn HUD nổi bám theo cục điểm đích 3D
             if (isTargetGizmoActive && targetBeaconGroup) {
                 const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+                const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
                 const x = targetBeaconGroup.position.x;
                 const y = -(targetBeaconGroup.position.z - railOffset);
-                const zTcp = targetBeaconGroup.position.y - L1_BASE;
+                const zTcp = targetBeaconGroup.position.y - L1_BASE - railYOffset;
                 const rHoriz = Math.sqrt(x * x + y * y);
-                const isValid = (rHoriz >= 140 && rHoriz <= 330 && zTcp >= -120 && zTcp <= 150);
+                const rMin = cachedSafetyLimits?.r_min ?? 140;
+                const rMax = cachedSafetyLimits?.r_max ?? 330;
+                const zMin = isRailModeActive ? (cachedSafetyLimits?.z_min_rail ?? -180) : (cachedSafetyLimits?.z_min_standalone ?? -65);
+                const zMax = cachedSafetyLimits?.z_max ?? 165;
+                const zFlange = zTcp + toolOffset;
+                const isValid = (rHoriz >= rMin && rHoriz <= rMax && zFlange >= zMin && zFlange <= zMax);
                 updateBeaconHudLabel(targetBeaconGroup.position, x, y, zTcp, isValid);
             }
         }
@@ -5452,9 +5472,10 @@
         function addTargetGizmoPoseToTeach() {
             if (!targetBeaconGroup) return;
             const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
             const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
             const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE - railYOffset) * 10) / 10;
             const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
             const idx = teachWaypoints.length + 1;
 
@@ -5898,7 +5919,7 @@
                     "args0": [
                         { "type": "field_number", "name": "X", "value": 240, "min": -350, "max": 350 },
                         { "type": "field_number", "name": "Y", "value": 0, "min": -350, "max": 350 },
-                        { "type": "field_number", "name": "Z", "value": 30, "min": -120, "max": 150 },
+                        { "type": "field_number", "name": "Z", "value": 30, "min": -250, "max": 200 },
                         { "type": "field_number", "name": "R", "value": 0, "min": -180, "max": 180 },
                         {
                             "type": "field_dropdown",
@@ -6308,11 +6329,14 @@
                 showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🦾'} Di chuyển X=${x}, Y=${y}, Z=${z}, R=${r} (${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'})...`, isSim ? "#38bdf8" : "#4ade80");
 
                 const rHoriz = Math.sqrt(x * x + y * y);
-                if (rHoriz < 140.0 || rHoriz > 330.0 || z < -120.0 || z > 150.0) {
-                    throw new Error(`Tọa độ (X=${x}, Y=${y}, Z=${z}) ngoài vùng an toàn (140<=R<=330, -120<=Z<=150)!`);
-                }
-
+                const rMin = cachedSafetyLimits?.r_min ?? 140.0;
+                const rMax = cachedSafetyLimits?.r_max ?? 330.0;
+                const zMinLimit = isRailModeActive ? (cachedSafetyLimits?.z_min_rail ?? -180.0) : (cachedSafetyLimits?.z_min_standalone ?? -65.0);
+                const zMaxLimit = cachedSafetyLimits?.z_max ?? 165.0;
                 const zFlange = z + toolOffset;
+                if (rHoriz < rMin || rHoriz > rMax || zFlange < zMinLimit || zFlange > zMaxLimit) {
+                    throw new Error(`Tọa độ (X=${x}, Y=${y}, Z_đầu_hút=${z}) ngoài vùng an toàn!`);
+                }
                 if (isSim) {
                     const ok = await animateRobotCartesian(x, y, z, r, mode, mode === 'safe' ? 550 : 400, () => isBlocklyRunning, () => isBlocklyPaused);
                     if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
@@ -6717,11 +6741,17 @@
             // Cập nhật vị trí nhãn HUD nổi bám theo cục điểm đích 3D
             if (isTargetGizmoActive && targetBeaconGroup) {
                 const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+                const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
                 const x = targetBeaconGroup.position.x;
                 const y = -(targetBeaconGroup.position.z - railOffset);
-                const zTcp = targetBeaconGroup.position.y - L1_BASE;
+                const zTcp = targetBeaconGroup.position.y - L1_BASE - railYOffset;
                 const rHoriz = Math.sqrt(x * x + y * y);
-                const isValid = (rHoriz >= 140 && rHoriz <= 330 && zTcp >= -120 && zTcp <= 150);
+                const rMin = cachedSafetyLimits?.r_min ?? 140;
+                const rMax = cachedSafetyLimits?.r_max ?? 330;
+                const zMin = isRailModeActive ? (cachedSafetyLimits?.z_min_rail ?? -180) : (cachedSafetyLimits?.z_min_standalone ?? -65);
+                const zMax = cachedSafetyLimits?.z_max ?? 165;
+                const zFlange = zTcp + toolOffset;
+                const isValid = (rHoriz >= rMin && rHoriz <= rMax && zFlange >= zMin && zFlange <= zMax);
                 updateBeaconHudLabel(targetBeaconGroup.position, x, y, zTcp, isValid);
             }
         }
