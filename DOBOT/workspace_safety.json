@@ -1,5 +1,5 @@
 {
-    "z_min_standalone": -65.0,
+    "z_min_standalone": -177.0,
     "z_min_rail": -120.0,
     "z_max": 165.0,
     "safe_travel_z": 30.0,
