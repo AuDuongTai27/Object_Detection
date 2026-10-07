@@ -520,17 +520,18 @@ class DobotController:
     def rail_stop(self):
         """Dừng khẩn cấp động cơ bước ray trượt"""
         with self.lock:
+            self.rail_is_moving = False
+            self.rail_is_homing = False
+            self.rail_motion["active"] = False
+            self._save_rail_state(self.rail_current_pos)
             if not self.connected:
-                return False
+                print("[!] [Mô phỏng] Đã gửi lệnh dừng ray trượt.")
+                return True
             try:
                 params = struct.pack("<B B i I", RAIL_INDEX, 0, 0, 0)
                 self._send_raw_cmd(id=240, ctrl=1)
                 self._send_raw_cmd(id=136, ctrl=3, params=params)
                 self._send_raw_cmd(id=240, ctrl=1)
-                self.rail_is_moving = False
-                self.rail_is_homing = False
-                self.rail_motion["active"] = False
-                self._save_rail_state(self.rail_current_pos)
                 print("[!] Đã gửi lệnh dừng ray trượt.")
                 return True
             except Exception as e:
@@ -545,32 +546,31 @@ class DobotController:
         """
         if abs(dist_mm) < 0.1:
             return True, "Hành trình quá nhỏ"
-        if not self.connected:
-            return False, "Robot chưa kết nối"
 
         curr = self.rail_current_pos
         target = curr + dist_mm
         if target < 0.0 or target > RAIL_MAX_MM:
             return False, f"⚠️ Vượt quá hành trình ray (0 - {RAIL_MAX_MM:.0f}mm)!"
 
-        # Kiểm tra cữ nếu chạy lùi
-        if dist_mm < 0 and self.get_rail_switch():
+        # Kiểm tra cữ nếu chạy lùi (chỉ khi có kết nối phần cứng)
+        if self.connected and dist_mm < 0 and self.get_rail_switch():
             return False, "⚠️ Cảm biến cữ đang chạm! Không thể chạy lùi thêm."
 
-        pulses = int(abs(dist_mm) * PULSES_PER_MM)
         safe_speed = max(5.0, min(80.0, float(speed_mm_s)))
-        speed_pulses = int(safe_speed * PULSES_PER_MM)
-        dir_speed = -speed_pulses if dist_mm >= 0 else speed_pulses
         duration = abs(dist_mm) / safe_speed
 
-        with self.lock:
-            try:
-                self._send_raw_cmd(id=240, ctrl=1)
-                params = struct.pack("<B B i I", RAIL_INDEX, 1, dir_speed, pulses)
-                self._send_raw_cmd(id=136, ctrl=3, params=params)
-                self._send_raw_cmd(id=240, ctrl=1)
-            except Exception as e:
-                return False, f"Lỗi gửi lệnh ray: {e}"
+        if self.connected:
+            pulses = int(abs(dist_mm) * PULSES_PER_MM)
+            speed_pulses = int(safe_speed * PULSES_PER_MM)
+            dir_speed = -speed_pulses if dist_mm >= 0 else speed_pulses
+            with self.lock:
+                try:
+                    self._send_raw_cmd(id=240, ctrl=1)
+                    params = struct.pack("<B B i I", RAIL_INDEX, 1, dir_speed, pulses)
+                    self._send_raw_cmd(id=136, ctrl=3, params=params)
+                    self._send_raw_cmd(id=240, ctrl=1)
+                except Exception as e:
+                    return False, f"Lỗi gửi lệnh ray: {e}"
 
         self.rail_is_moving = True
         self.rail_motion = {
@@ -580,23 +580,44 @@ class DobotController:
             "start_pos": curr,
             "target_pos": target
         }
-        print(f"[+] Ray Jog: {curr:.1f}mm -> {target:.1f}mm ({dist_mm:+.1f}mm, T={duration:.1f}s)")
+        tag = "[Thực tế]" if self.connected else "[Mô phỏng]"
+        print(f"[+] {tag} Ray Jog: {curr:.1f}mm -> {target:.1f}mm ({dist_mm:+.1f}mm, T={duration:.1f}s)")
         return True, f"Ray đang chạy {dist_mm:+.1f}mm (tới {target:.1f}mm)..."
 
     def rail_move_to(self, target_mm: float, speed_mm_s: float = DEFAULT_SPEED_MM_S):
         """Di chuyển ray trượt tới vị trí tuyệt đối target_mm (0 - 1000mm)"""
-        if not self.connected:
-            return False, "Robot chưa kết nối"
         target_mm = max(0.0, min(float(RAIL_MAX_MM), float(target_mm)))
         delta = target_mm - self.rail_current_pos
         return self.rail_jog(delta, speed_mm_s=speed_mm_s)
 
     def rail_home(self):
         """Khởi động quy trình dò gốc tọa độ ray trượt trong luồng nền an toàn"""
-        if not self.connected:
-            return False, "Robot chưa kết nối"
         if self.rail_is_homing:
             return False, "Quy trình Homing đang chạy"
+
+        if not self.connected:
+            curr = self.rail_current_pos
+            if curr <= 0.1:
+                return True, "Ray đã ở vị trí gốc 0.0mm"
+            duration = max(1.0, curr / 35.0)
+            self.rail_is_homing = True
+            self.rail_is_moving = True
+            self.rail_motion = {
+                "active": True,
+                "start_time": time.time(),
+                "duration": duration,
+                "start_pos": curr,
+                "target_pos": 0.0
+            }
+            def _sim_homing_worker():
+                time.sleep(duration + 0.1)
+                self.rail_is_homing = False
+                self.rail_switch_active = True
+                self._save_rail_state(0.0)
+                time.sleep(1.0)
+                self.rail_switch_active = False
+            threading.Thread(target=_sim_homing_worker, daemon=True).start()
+            return True, "Đang mô phỏng dò gốc ray về 0.0mm..."
 
         def _homing_worker():
             self.rail_is_homing = True
@@ -1009,8 +1030,8 @@ def poll_robot_pose():
             "safety": robot.safety_limits
         })
     else:
-        # Nếu chưa kết nối robot, gửi gói tin trạng thái nhẹ nhàng mỗi 20 chu kỳ (~1 giây)
-        if poll_counter % 20 != 0:
+        # Nếu đang di chuyển ray hoặc homing (kể cả mô phỏng), gửi liên tục mỗi chu kỳ 50ms; nếu nghỉ thì gửi mỗi 20 chu kỳ (~1s)
+        if not robot.rail_motion.get("active", False) and not robot.rail_is_homing and (poll_counter % 20 != 0):
             return
         msg = json.dumps({
             "type": "pose",
