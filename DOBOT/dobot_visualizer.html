@@ -4467,26 +4467,18 @@
 
         function sendRailHome() {
             if (!isRobotConnected || currentMode === 'manual') {
-                currentRailL = 0.0;
+                currentRailL = 5.0;
                 updateRailTelemetry({
                     mode: isRailModeActive,
-                    pos: 0.0,
-                    switch: true,
+                    pos: 5.0,
+                    switch: false,
                     is_homing: false,
                     is_moving: false
                 });
-                setTimeout(() => {
-                    updateRailTelemetry({
-                        mode: isRailModeActive,
-                        pos: 0.0,
-                        switch: false,
-                        is_homing: false,
-                        is_moving: false
-                    });
-                }, 1200);
+                showToast('🎉 Mô phỏng: Ray đã về gốc và thoát cữ ra L = 5.0 mm an toàn.');
             }
             sendAction('rail_home');
-            showToast(`🏠 Đang bắt đầu quy trình dò gốc tọa độ ray (Homing)...`);
+            showToast(`🏠 Đang bắt đầu quy trình dò gốc ray (Homing và tự động thoát cữ an toàn)...`);
         }
 
         function sendRailStop() {
