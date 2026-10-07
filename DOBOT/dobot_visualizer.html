@@ -3122,6 +3122,9 @@
         // VÙNG LÀM VIỆC AN TOÀN TRÊN BÀN (SAFE WORKSPACE ZONE)
         // ========================================================
         const workspaceZoneGroup = new THREE.Group();
+        if (typeof isRailModeActive !== 'undefined' && isRailModeActive) {
+            workspaceZoneGroup.position.z = -500 + currentRailL;
+        }
         scene.add(workspaceZoneGroup);
 
         const zoneMat = new THREE.MeshBasicMaterial({
@@ -3742,8 +3745,9 @@
         }
 
         function onTargetGizmoChange() {
+            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
             const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+            const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
             const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
 
             document.getElementById('inp-target-x').value = x.toFixed(1);
@@ -3754,8 +3758,9 @@
         }
 
         function onTargetGizmoDragEnd() {
+            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
             const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+            const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
             const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
 
             document.getElementById('inp-target-x').value = x.toFixed(1);
@@ -3792,12 +3797,13 @@
 
         function updateTargetAncillaries(x, y, zTcp) {
             const floorHeight = L1_BASE + zTcp;
+            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
 
-            // Vòng tâm ngắm ở mặt sàn
-            targetFloorReticle.position.set(x, 0.6, -y);
+            // Vòng tâm ngắm ở mặt sàn (bám theo con trượt Dobot)
+            targetFloorReticle.position.set(x, 0.6, railOffset - y);
 
             // Đường gióng rơi thẳng đứng
-            const pts = [new THREE.Vector3(x, floorHeight, -y), new THREE.Vector3(x, 0.6, -y)];
+            const pts = [new THREE.Vector3(x, floorHeight, railOffset - y), new THREE.Vector3(x, 0.6, railOffset - y)];
             targetDropLine.geometry.setFromPoints(pts);
             targetDropLine.computeLineDistances();
 
@@ -3872,7 +3878,8 @@
             const zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
 
             const floorHeight = L1_BASE + zTcp;
-            targetBeaconGroup.position.set(x, floorHeight, -y);
+            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
+            targetBeaconGroup.position.set(x, floorHeight, railOffset - y);
 
             updateTargetAncillaries(x, y, zTcp);
         }
@@ -3947,9 +3954,10 @@
             const result = raycaster.ray.intersectPlane(plane, hit);
 
             if (result) {
+                const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
                 return {
                     x: Math.round(hit.x * 10) / 10,
-                    y: Math.round(-hit.z * 10) / 10,
+                    y: Math.round(-(hit.z - railOffset) * 10) / 10,
                     z: targetZ,
                     worldPos: hit
                 };
@@ -4260,12 +4268,22 @@
             currentRailL = rail.pos || 0.0;
             isRailModeActive = Boolean(rail.mode);
 
-            // Cập nhật vị trí trên mô hình 3D
+            // Cập nhật vị trí trên mô hình 3D & Vùng an toàn bám theo Dobot
+            const railZ = (-500 + currentRailL);
             if (isRailModeActive) {
                 railGroup.visible = true;
-                railCarriage.position.z = (-500 + currentRailL);
+                railCarriage.position.z = railZ;
+                if (typeof workspaceZoneGroup !== 'undefined' && workspaceZoneGroup) {
+                    workspaceZoneGroup.position.z = railZ;
+                }
             } else {
                 railGroup.visible = false;
+                if (typeof workspaceZoneGroup !== 'undefined' && workspaceZoneGroup) {
+                    workspaceZoneGroup.position.z = 0;
+                }
+            }
+            if (typeof updateTargetMarker === 'function') {
+                updateTargetMarker();
             }
 
             // Cập nhật UI
@@ -4721,8 +4739,9 @@
 
             // Cập nhật vị trí nhãn HUD nổi bám theo cục điểm đích 3D
             if (isTargetGizmoActive && targetBeaconGroup) {
+                const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
                 const x = targetBeaconGroup.position.x;
-                const y = -targetBeaconGroup.position.z;
+                const y = -(targetBeaconGroup.position.z - railOffset);
                 const zTcp = targetBeaconGroup.position.y - L1_BASE;
                 const rHoriz = Math.sqrt(x * x + y * y);
                 const isValid = (rHoriz >= 140 && rHoriz <= 330 && zTcp >= -120 && zTcp <= 150);
@@ -5432,8 +5451,9 @@
 
         function addTargetGizmoPoseToTeach() {
             if (!targetBeaconGroup) return;
+            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
             const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+            const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
             const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
             const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
             const idx = teachWaypoints.length + 1;
@@ -6696,8 +6716,9 @@
 
             // Cập nhật vị trí nhãn HUD nổi bám theo cục điểm đích 3D
             if (isTargetGizmoActive && targetBeaconGroup) {
+                const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
                 const x = targetBeaconGroup.position.x;
-                const y = -targetBeaconGroup.position.z;
+                const y = -(targetBeaconGroup.position.z - railOffset);
                 const zTcp = targetBeaconGroup.position.y - L1_BASE;
                 const rHoriz = Math.sqrt(x * x + y * y);
                 const isValid = (rHoriz >= 140 && rHoriz <= 330 && zTcp >= -120 && zTcp <= 150);
