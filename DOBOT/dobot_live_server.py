@@ -659,8 +659,8 @@ class DobotController:
             # 1. Nhả switch nếu lúc bắt đầu đang bị đè (chạy ra xa switch)
             if self.get_rail_switch():
                 print("[*] Cữ đang chạm, nhích ra xa trước...")
-                release_speed = int(15.0 * PULSES_PER_MM)
-                release_pulses = int(25.0 * PULSES_PER_MM)
+                release_speed = int(8.0 * PULSES_PER_MM)
+                release_pulses = int(12.0 * PULSES_PER_MM)
                 params = struct.pack("<B B i I", RAIL_INDEX, 1, -release_speed, release_pulses)
                 with self.lock:
                     self._send_raw_cmd(136, 3, params=params)
@@ -674,7 +674,7 @@ class DobotController:
                         return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
                     if not self.get_rail_switch():
                         break
-                    time.sleep(0.04)
+                    time.sleep(0.02)
                 self._stop_stepper_pulses()
                 time.sleep(0.2)
 
@@ -683,15 +683,16 @@ class DobotController:
                 self.rail_is_homing = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            # 2. Coarse search (25 mm/s về hướng switch: dir_speed > 0)
-            print("[*] Dò cữ nhanh (25 mm/s về hướng switch)...")
-            step_mm = 20.0
+            # 2. Dò cữ bước ngắn êm ái (bước 4.0mm, tốc độ 10 mm/s chống va đập cơ khí & mất bước)
+            print("[*] Dò cữ bước ngắn êm ái (bước 4.0mm, tốc độ 10 mm/s về hướng switch)...")
+            step_mm = 4.0
             step_pulses = int(step_mm * PULSES_PER_MM)
-            step_speed = int(25.0 * PULSES_PER_MM)
+            step_speed = int(10.0 * PULSES_PER_MM)
             params = struct.pack("<B B i I", RAIL_INDEX, 1, step_speed, step_pulses)
 
             found = False
-            for step_idx in range(65):
+            max_steps = int(RAIL_MAX_MM / step_mm) + 30
+            for step_idx in range(max_steps):
                 if self.stop_requested:
                     self._stop_stepper_pulses()
                     self.rail_is_moving = False
@@ -711,11 +712,12 @@ class DobotController:
                         self.rail_is_moving = False
                         self.rail_is_homing = False
                         return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
-                    self.rail_current_pos = max(0.0, self.rail_current_pos - (25.0 * 0.02))
+                    self.rail_current_pos = max(0.0, self.rail_current_pos - (10.0 * 0.02))
                     if self.get_rail_switch():
+                        self._stop_stepper_pulses()
                         found = True
                         break
-                    time.sleep(0.02)
+                    time.sleep(0.015)
                 if found:
                     break
 
@@ -741,12 +743,12 @@ class DobotController:
                 self.rail_is_homing = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            # 3. Fine search (8 mm/s nhả cữ: dir_speed < 0)
-            print("[*] Tinh chỉnh nhả cữ chậm (8 mm/s)...")
-            fine_step = int(1.0 * PULSES_PER_MM)
-            fine_speed = int(8.0 * PULSES_PER_MM)
+            # 3. Fine search nhả cữ siêu mịn (bước 0.5mm, tốc độ 5 mm/s: dir_speed < 0)
+            print("[*] Tinh chỉnh nhả cữ siêu mịn (bước 0.5mm, tốc độ 5 mm/s)...")
+            fine_step = int(0.5 * PULSES_PER_MM)
+            fine_speed = int(5.0 * PULSES_PER_MM)
             fine_params = struct.pack("<B B i I", RAIL_INDEX, 1, -fine_speed, fine_step)
-            for _ in range(40):
+            for _ in range(50):
                 if self.stop_requested:
                     self._stop_stepper_pulses()
                     self.rail_is_moving = False
@@ -775,12 +777,12 @@ class DobotController:
             self._stop_stepper_pulses()
             time.sleep(0.2)
 
-            # 4. Thoát cữ an toàn (Retreat): Nhích ra xa cữ 5.0mm (tốc độ 15 mm/s)
+            # 4. Thoát cữ an toàn (Retreat): Nhích ra xa cữ 5.0mm (tốc độ 10 mm/s êm dịu)
             print("[*] Thoát cữ an toàn (+5.0mm) để giải phóng hoàn toàn công tắc...")
             self.stop_requested = False
             retreat_mm = 5.0
             retreat_pulses = int(retreat_mm * PULSES_PER_MM)
-            retreat_speed = int(15.0 * PULSES_PER_MM)
+            retreat_speed = int(10.0 * PULSES_PER_MM)
             retreat_params = struct.pack("<B B i I", RAIL_INDEX, 1, -retreat_speed, retreat_pulses)
             with self.lock:
                 self._send_raw_cmd(136, 3, params=retreat_params)
