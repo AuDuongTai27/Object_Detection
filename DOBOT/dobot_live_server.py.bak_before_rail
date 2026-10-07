@@ -76,16 +76,6 @@ ALARM_DICT = {
     0x40: "Lỗi cảm biến công tắc hành trình (Sensor/Limit Switch Alarm)",
 }
 
-# --- CẤU HÌNH HỆ THỐNG RAY TRƯỢT DOBOT (SLIDING RAIL KIT 1000mm) ---
-RAIL_INDEX = 0             # Stepper 1 = index 0
-PULSES_PER_MM = 80.0       # Chuẩn Pulley GT2 20T: 80 xung = 1 mm
-RAIL_MAX_MM = 1000.0       # Hành trình ray tối đa 1000 mm
-DEFAULT_SPEED_MM_S = 40.0  # Vận tốc ray tiêu chuẩn 40 mm/s
-SWITCH_PIN = 14            # Cảm biến công tắc hành trình GP2 (EIO 14, Chân 3)
-
-RAIL_STATE_FILE = BASE_DIR / ".rail_state.json"
-WORKSPACE_SAFETY_FILE = BASE_DIR / "workspace_safety.json"
-
 
 class DobotController:
     def __init__(self):
@@ -97,64 +87,6 @@ class DobotController:
         self.cached_alarms = []
         self.last_pose = None
         self.alarm_poll_counter = 0
-
-        # Khởi tạo trạng thái ray trượt và vùng an toàn
-        self.is_rail_mode = True
-        self.rail_current_pos = self._load_rail_state()
-        self.rail_switch_active = False
-        self.rail_is_homing = False
-        self.rail_is_moving = False
-        self.rail_motion = {"active": False, "start_time": 0.0, "duration": 0.0, "start_pos": 0.0, "target_pos": 0.0}
-        self.safety_limits = self._load_safety_limits()
-
-    def _load_rail_state(self):
-        if RAIL_STATE_FILE.exists():
-            try:
-                with open(RAIL_STATE_FILE, "r", encoding="utf-8") as f:
-                    return float(json.load(f).get("current_pos", 0.0))
-            except Exception:
-                pass
-        return 0.0
-
-    def _save_rail_state(self, pos):
-        self.rail_current_pos = max(0.0, min(float(RAIL_MAX_MM), float(pos)))
-        try:
-            with open(RAIL_STATE_FILE, "w", encoding="utf-8") as f:
-                json.dump({"current_pos": self.rail_current_pos, "updated_at": time.time()}, f, indent=4)
-        except Exception:
-            pass
-
-    def _load_safety_limits(self):
-        default_limits = {
-            "z_min_standalone": -65.0,
-            "z_min_rail": -125.0,
-            "z_max": 165.0,
-            "safe_travel_z": 30.0,
-            "r_min": 140.0,
-            "r_max": 330.0
-        }
-        if WORKSPACE_SAFETY_FILE.exists():
-            try:
-                with open(WORKSPACE_SAFETY_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    default_limits.update(data)
-            except Exception:
-                pass
-        return default_limits
-
-    def update_safety_limits(self, new_limits: dict):
-        for k in ["z_min_standalone", "z_min_rail", "z_max", "safe_travel_z", "r_min", "r_max"]:
-            if k in new_limits:
-                try:
-                    self.safety_limits[k] = float(new_limits[k])
-                except (ValueError, TypeError):
-                    pass
-        try:
-            with open(WORKSPACE_SAFETY_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.safety_limits, f, indent=4)
-        except Exception as e:
-            print(f"[-] Lỗi ghi file cấu hình an toàn: {e}")
-        return self.safety_limits
 
     def auto_detect_port(self):
         # Ưu tiên các cổng USB có CP2102, CH340, FTDI
@@ -358,22 +290,16 @@ class DobotController:
         target_z = cur["z"] + dz
         target_r = cur["r"] + dr
 
-        # Kiểm tra giới hạn an toàn vùng làm việc của Dobot Magician (hỗ trợ Ray trượt)
+        # Kiểm tra giới hạn an toàn vùng làm việc của Dobot Magician
         r_horiz = math.hypot(target_x, target_y)
-        r_min = self.safety_limits.get("r_min", 140.0)
-        r_max = self.safety_limits.get("r_max", 330.0)
-        z_min_key = "z_min_rail" if self.is_rail_mode else "z_min_standalone"
-        z_min_limit = float(self.safety_limits.get(z_min_key, -125.0 if self.is_rail_mode else -65.0))
-        z_max_limit = float(self.safety_limits.get("z_max", 165.0))
-
-        if r_horiz < r_min:
-            return False, f"⚠️ Quá gần chân robot ({r_horiz:.1f}mm < {r_min:.1f}mm)! Dừng để tránh va chạm."
-        if r_horiz > r_max:
-            return False, f"⚠️ Vượt quá tầm với tối đa ({r_horiz:.1f}mm > {r_max:.1f}mm)!"
-        if target_z < z_min_limit:
-            return False, f"⚠️ Độ cao quá thấp ({target_z - 59.5:.1f}mm < {z_min_limit - 59.5:.1f}mm)! Nguy cơ đâm mặt bàn/ray."
-        if target_z > z_max_limit:
-            return False, f"⚠️ Vượt quá độ cao tối đa ({target_z - 59.5:.1f}mm > {z_max_limit - 59.5:.1f}mm)!"
+        if r_horiz < 140.0:
+            return False, f"⚠️ Quá gần chân robot ({r_horiz:.1f}mm < 140mm)! Dừng để tránh va chạm."
+        if r_horiz > 330.0:
+            return False, f"⚠️ Vượt quá tầm với tối đa ({r_horiz:.1f}mm > 330mm)!"
+        if target_z < -65.0: # Flange Z tương ứng đầu hút Z ~ -124mm
+            return False, f"⚠️ Độ cao quá thấp ({target_z - 59.5:.1f}mm)! Nguy cơ đâm mặt bàn."
+        if target_z > 165.0:
+            return False, f"⚠️ Vượt quá độ cao tối đa ({target_z - 59.5:.1f}mm)!"
 
         ok = self.move_to_xyz(target_x, target_y, target_z, target_r, mode=1)
         if ok:
@@ -498,172 +424,6 @@ class DobotController:
                 self._send_raw_cmd(id=62, ctrl=1, params=params)
                 print(f"[+] Giác hút: {'BẬT' if enable else 'TẮT'}")
 
-    # =========================================================================
-    # CÁC HÀM ĐIỀU KHIỂN HỆ THỐNG RAY TRƯỢT DOBOT (SLIDING RAIL KIT)
-    # =========================================================================
-    def get_rail_switch(self) -> bool:
-        """Đọc cảm biến cữ hành trình GP2 EIO 14 (1 = Chạm cữ, 0 = Nhả)"""
-        with self.lock:
-            if not self.connected or not self.ser or not self.ser.is_open:
-                return False
-            try:
-                self.ser.reset_input_buffer()
-                self._send_raw_cmd(id=133, ctrl=0, params=bytes([SWITCH_PIN]))
-                rid, par = self._read_response(expected_id=133, timeout=0.04)
-                if par and len(par) >= 2 and par[0] == SWITCH_PIN:
-                    self.rail_switch_active = (par[1] == 1)
-                    return self.rail_switch_active
-            except Exception:
-                pass
-        return self.rail_switch_active
-
-    def rail_stop(self):
-        """Dừng khẩn cấp động cơ bước ray trượt"""
-        with self.lock:
-            if not self.connected:
-                return False
-            try:
-                params = struct.pack("<B B i I", RAIL_INDEX, 0, 0, 0)
-                self._send_raw_cmd(id=240, ctrl=1)
-                self._send_raw_cmd(id=136, ctrl=3, params=params)
-                self._send_raw_cmd(id=240, ctrl=1)
-                self.rail_is_moving = False
-                self.rail_is_homing = False
-                self.rail_motion["active"] = False
-                self._save_rail_state(self.rail_current_pos)
-                print("[!] Đã gửi lệnh dừng ray trượt.")
-                return True
-            except Exception as e:
-                print(f"[-] Lỗi dừng ray: {e}")
-                return False
-
-    def rail_jog(self, dist_mm: float, speed_mm_s: float = DEFAULT_SPEED_MM_S):
-        """
-        Di chuyển tương đối ray trượt dist_mm (mm)
-        dist_mm > 0: Chạy ra xa cữ (+X)
-        dist_mm < 0: Chạy về phía cữ (-X)
-        """
-        if abs(dist_mm) < 0.1:
-            return True, "Hành trình quá nhỏ"
-        if not self.connected:
-            return False, "Robot chưa kết nối"
-
-        curr = self.rail_current_pos
-        target = curr + dist_mm
-        if target < 0.0 or target > RAIL_MAX_MM:
-            return False, f"⚠️ Vượt quá hành trình ray (0 - {RAIL_MAX_MM:.0f}mm)!"
-
-        # Kiểm tra cữ nếu chạy lùi
-        if dist_mm < 0 and self.get_rail_switch():
-            return False, "⚠️ Cảm biến cữ đang chạm! Không thể chạy lùi thêm."
-
-        pulses = int(abs(dist_mm) * PULSES_PER_MM)
-        safe_speed = max(5.0, min(80.0, float(speed_mm_s)))
-        speed_pulses = int(safe_speed * PULSES_PER_MM)
-        dir_speed = -speed_pulses if dist_mm >= 0 else speed_pulses
-        duration = abs(dist_mm) / safe_speed
-
-        with self.lock:
-            try:
-                self._send_raw_cmd(id=240, ctrl=1)
-                params = struct.pack("<B B i I", RAIL_INDEX, 1, dir_speed, pulses)
-                self._send_raw_cmd(id=136, ctrl=3, params=params)
-                self._send_raw_cmd(id=240, ctrl=1)
-            except Exception as e:
-                return False, f"Lỗi gửi lệnh ray: {e}"
-
-        self.rail_is_moving = True
-        self.rail_motion = {
-            "active": True,
-            "start_time": time.time(),
-            "duration": duration,
-            "start_pos": curr,
-            "target_pos": target
-        }
-        print(f"[+] Ray Jog: {curr:.1f}mm -> {target:.1f}mm ({dist_mm:+.1f}mm, T={duration:.1f}s)")
-        return True, f"Ray đang chạy {dist_mm:+.1f}mm (tới {target:.1f}mm)..."
-
-    def rail_move_to(self, target_mm: float, speed_mm_s: float = DEFAULT_SPEED_MM_S):
-        """Di chuyển ray trượt tới vị trí tuyệt đối target_mm (0 - 1000mm)"""
-        if not self.connected:
-            return False, "Robot chưa kết nối"
-        target_mm = max(0.0, min(float(RAIL_MAX_MM), float(target_mm)))
-        delta = target_mm - self.rail_current_pos
-        return self.rail_jog(delta, speed_mm_s=speed_mm_s)
-
-    def rail_home(self):
-        """Khởi động quy trình dò gốc tọa độ ray trượt trong luồng nền an toàn"""
-        if not self.connected:
-            return False, "Robot chưa kết nối"
-        if self.rail_is_homing:
-            return False, "Quy trình Homing đang chạy"
-
-        def _homing_worker():
-            self.rail_is_homing = True
-            print("[*] BẮT ĐẦU QUY TRÌNH HOMING RAY TRƯỢT...")
-            try:
-                # 1. Nếu cữ đang chạm, nhích ra 15mm
-                if self.get_rail_switch():
-                    print("[*] Cữ đang chạm, nhích ra 15mm trước...")
-                    with self.lock:
-                        params = struct.pack("<B B i I", RAIL_INDEX, 1, -int(20.0 * PULSES_PER_MM), int(15.0 * PULSES_PER_MM))
-                        self._send_raw_cmd(id=240, ctrl=1)
-                        self._send_raw_cmd(id=136, ctrl=3, params=params)
-                        self._send_raw_cmd(id=240, ctrl=1)
-                    time.sleep(1.0)
-
-                # 2. Chạy từng bước 20mm về phía cữ cho đến khi chạm switch
-                step_mm = 20.0
-                pulses = int(step_mm * PULSES_PER_MM)
-                speed_pulses = int(25.0 * PULSES_PER_MM) # Tốc độ dò 25mm/s êm ái
-                max_steps = int(RAIL_MAX_MM / step_mm) + 5
-                found = False
-
-                for step in range(max_steps):
-                    if not self.rail_is_homing:
-                        print("[!] Homing đã bị hủy.")
-                        return
-                    if self.get_rail_switch():
-                        found = True
-                        break
-                    with self.lock:
-                        params = struct.pack("<B B i I", RAIL_INDEX, 1, speed_pulses, pulses)
-                        self._send_raw_cmd(id=240, ctrl=1)
-                        self._send_raw_cmd(id=136, ctrl=3, params=params)
-                        self._send_raw_cmd(id=240, ctrl=1)
-                    time.sleep(0.85)
-
-                if found or self.get_rail_switch():
-                    self.rail_stop()
-                    print("[+] ĐÃ CHẠM CÔNG TẮC HÀNH TRÌNH! Tinh chỉnh nhả cữ...")
-                    time.sleep(0.3)
-                    # Nhích ra 2.5mm để vừa vặn nhả cữ
-                    with self.lock:
-                        params = struct.pack("<B B i I", RAIL_INDEX, 1, -int(10.0 * PULSES_PER_MM), int(2.5 * PULSES_PER_MM))
-                        self._send_raw_cmd(id=240, ctrl=1)
-                        self._send_raw_cmd(id=136, ctrl=3, params=params)
-                        self._send_raw_cmd(id=240, ctrl=1)
-                    time.sleep(0.4)
-                    self._save_rail_state(0.0)
-                    print("[+] HOMING RAY TRƯỢT THÀNH CÔNG -> VỊ TRÍ 0.0 mm!")
-                else:
-                    self.rail_stop()
-                    print("[-] Không tìm thấy cữ sau toàn bộ hành trình.")
-            except Exception as e:
-                print(f"[-] Lỗi trong quá trình Homing ray: {e}")
-                self.rail_stop()
-            finally:
-                self.rail_is_homing = False
-
-        threading.Thread(target=_homing_worker, daemon=True).start()
-        return True, "Đang bắt đầu dò gốc tọa độ ray trượt (Home)..."
-
-    def set_rail_mode(self, enabled: bool):
-        self.is_rail_mode = bool(enabled)
-        print(f"[+] Đã chuyển chế độ: {'Ray trượt 1000mm' if self.is_rail_mode else 'Để bàn độc lập'}")
-        return self.is_rail_mode
-
-
 
 robot = DobotController()
 vision_engine = WebVisionEngine(robot_controller=robot) if HAS_WEB_STUDIO else None
@@ -759,31 +519,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 mode = int(cmd.get("mode", 4))
                 robot.move_joint(j1, j2, j3, j4, mode=mode)
                 self.write_message(json.dumps({"type": "feedback", "msg": f"🔄 Đang xoay khớp: J1={j1:.1f}°, J2={j2:.1f}°, J3={j3:.1f}°"}))
-            # --- CÁC LỆNH ĐIỀU KHIỂN RAY TRƯỢT & VÙNG AN TOÀN ---
-            elif action == "rail_jog":
-                dist = float(cmd.get("dist", 10.0))
-                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
-                ok, msg = robot.rail_jog(dist, speed)
-                self.write_message(json.dumps({"type": "feedback", "msg": msg}))
-            elif action == "rail_move":
-                pos = float(cmd.get("pos", 0.0))
-                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
-                ok, msg = robot.rail_move_to(pos, speed)
-                self.write_message(json.dumps({"type": "feedback", "msg": msg}))
-            elif action == "rail_home":
-                ok, msg = robot.rail_home()
-                self.write_message(json.dumps({"type": "feedback", "msg": msg}))
-            elif action == "rail_stop":
-                ok = robot.rail_stop()
-                self.write_message(json.dumps({"type": "feedback", "msg": "🛑 Đã phát lệnh dừng khẩn cấp ray trượt!"}))
-            elif action == "set_rail_mode":
-                val = bool(cmd.get("enabled", True))
-                robot.set_rail_mode(val)
-                self.write_message(json.dumps({"type": "feedback", "msg": f"Chế độ: {'Ray trượt 1000mm' if val else 'Để bàn độc lập'}"}))
-            elif action == "update_safety_limits":
-                limits = cmd.get("limits", {})
-                robot.update_safety_limits(limits)
-                self.write_message(json.dumps({"type": "feedback", "msg": "💾 Đã cập nhật & lưu thông số vùng an toàn!"}))
         except Exception as e:
             print("[-] Lỗi xử lý lệnh từ client:", e)
 
@@ -804,19 +539,7 @@ class ApiCmdHandler(tornado.web.RequestHandler):
 
     def get(self):
         pose = robot.get_pose() or robot.last_pose or {}
-        self.write({
-            "status": "ok",
-            "pose": pose,
-            "connected": robot.connected,
-            "rail": {
-                "mode": robot.is_rail_mode,
-                "pos": robot.rail_current_pos,
-                "switch": robot.rail_switch_active,
-                "is_homing": robot.rail_is_homing,
-                "is_moving": robot.rail_is_moving,
-            },
-            "safety": robot.safety_limits
-        })
+        self.write({"status": "ok", "pose": pose, "connected": robot.connected})
 
     def post(self):
         try:
@@ -850,70 +573,8 @@ class ApiCmdHandler(tornado.web.RequestHandler):
             elif action == "home":
                 ok = robot.home()
                 self.write({"status": "ok" if ok else "fail"})
-            elif action == "rail_jog":
-                dist = float(cmd.get("dist", 10.0))
-                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
-                ok, msg = robot.rail_jog(dist, speed)
-                self.write({"status": "ok" if ok else "fail", "msg": msg})
-            elif action == "rail_move":
-                pos = float(cmd.get("pos", 0.0))
-                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
-                ok, msg = robot.rail_move_to(pos, speed)
-                self.write({"status": "ok" if ok else "fail", "msg": msg})
-            elif action == "rail_home":
-                ok, msg = robot.rail_home()
-                self.write({"status": "ok" if ok else "fail", "msg": msg})
-            elif action == "rail_stop":
-                ok = robot.rail_stop()
-                self.write({"status": "ok" if ok else "fail"})
-            elif action == "set_rail_mode":
-                val = bool(cmd.get("enabled", True))
-                robot.set_rail_mode(val)
-                self.write({"status": "ok", "is_rail_mode": robot.is_rail_mode})
-            elif action == "update_safety_limits":
-                limits = cmd.get("limits", {})
-                updated = robot.update_safety_limits(limits)
-                self.write({"status": "ok", "limits": updated})
             else:
                 self.write({"status": "error", "msg": f"Unknown action: {action}"})
-        except Exception as e:
-            self.set_status(400)
-            self.write({"status": "error", "error": str(e)})
-
-
-class ApiWorkspaceSafetyHandler(tornado.web.RequestHandler):
-    def set_default_headers(self):
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "Content-Type")
-        self.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-
-    def options(self):
-        self.set_status(204)
-        self.finish()
-
-    def get(self):
-        cur_pose = robot.get_pose() or robot.last_pose or {}
-        self.write({
-            "status": "ok",
-            "is_rail_mode": robot.is_rail_mode,
-            "rail_pos": round(robot.rail_current_pos, 1),
-            "current_pose": cur_pose,
-            "limits": robot.safety_limits
-        })
-
-    def post(self):
-        try:
-            data = json.loads(self.request.body)
-            if "is_rail_mode" in data:
-                robot.set_rail_mode(bool(data["is_rail_mode"]))
-            if "limits" in data:
-                robot.update_safety_limits(data["limits"])
-            self.write({
-                "status": "ok",
-                "is_rail_mode": robot.is_rail_mode,
-                "limits": robot.safety_limits,
-                "message": "Cập nhật vùng an toàn thành công!"
-            })
         except Exception as e:
             self.set_status(400)
             self.write({"status": "error", "error": str(e)})
@@ -962,36 +623,10 @@ poll_counter = 0
 
 def poll_robot_pose():
     global poll_counter
-    # 1. Cập nhật chuyển động ray trượt nội suy nếu đang di chuyển
-    if robot.rail_motion.get("active", False):
-        now = time.time()
-        elapsed = now - robot.rail_motion["start_time"]
-        dur = robot.rail_motion["duration"]
-        if elapsed >= dur:
-            robot.rail_motion["active"] = False
-            robot.rail_is_moving = False
-            robot._save_rail_state(robot.rail_motion["target_pos"])
-        else:
-            prog = min(1.0, max(0.0, elapsed / dur))
-            interp = robot.rail_motion["start_pos"] + prog * (robot.rail_motion["target_pos"] - robot.rail_motion["start_pos"])
-            robot.rail_current_pos = round(interp, 2)
-
     if not connected_clients:
         return
 
     poll_counter += 1
-    # 2. Đọc trạng thái switch cữ hành trình định kỳ mỗi 20 chu kỳ (~1s) hoặc khi đang homing
-    if robot.connected and (poll_counter % 20 == 0 or robot.rail_is_homing):
-        robot.get_rail_switch()
-
-    rail_telemetry = {
-        "mode": robot.is_rail_mode,
-        "pos": round(robot.rail_current_pos, 1),
-        "switch": robot.rail_switch_active,
-        "is_homing": robot.rail_is_homing,
-        "is_moving": robot.rail_is_moving,
-    }
-
     if robot.connected:
         pose = robot.get_pose()
         alarms = robot.cached_alarms
@@ -1004,9 +639,7 @@ def poll_robot_pose():
             "port": robot.port,
             "data": pose or robot.last_pose,
             "alarms": alarms,
-            "has_alarm": has_alarm,
-            "rail": rail_telemetry,
-            "safety": robot.safety_limits
+            "has_alarm": has_alarm
         })
     else:
         # Nếu chưa kết nối robot, gửi gói tin trạng thái nhẹ nhàng mỗi 20 chu kỳ (~1 giây)
@@ -1017,9 +650,7 @@ def poll_robot_pose():
             "connected": False,
             "port": "Chưa kết nối",
             "alarms": [],
-            "has_alarm": False,
-            "rail": rail_telemetry,
-            "safety": robot.safety_limits
+            "has_alarm": False
         })
 
     for client in list(connected_clients):
@@ -1751,8 +1382,6 @@ def main():
         (r"/api/vision/models", ApiVisionModelsHandler),
         (r"/api/vision/drop_targets", ApiDropTargetsHandler),
         (r"/api/calib/info", ApiCalibInfoHandler),
-        (r"/api/workspace/safety", ApiWorkspaceSafetyHandler),
-        (r"/dobot_description/(.*)", tornado.web.StaticFileHandler, {"path": str(BASE_DIR / "dobot_description")}),
     ])
     
     app.listen(port, address="0.0.0.0")

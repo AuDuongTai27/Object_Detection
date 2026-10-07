@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dobot Magician &amp; 1.0m Sliding Rail Kit - 3D URDF Interactive CAD Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/ColladaLoader.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0b1120;
+            --panel-bg: rgba(15, 23, 42, 0.92);
+            --panel-border: rgba(56, 189, 248, 0.25);
+            --primary: #0284c7;
+            --primary-light: #38bdf8;
+            --accent: #10b981;
+            --accent-glow: rgba(16, 185, 129, 0.35);
+            --warning: #f59e0b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #viewport {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        header {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .brand-badge {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            padding: 10px 18px;
+            backdrop-filter: blur(14px);
+            pointer-events: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(2, 132, 199, 0.15);
+        }
+        .brand-title {
+            font-size: 16.5px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ffffff;
+        }
+        .brand-sub {
+            font-size: 11px;
+            color: var(--primary-light);
+            font-weight: 600;
+            margin-top: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            pointer-events: auto;
+        }
+        .nav-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+        }
+        .nav-btn:hover {
+            border-color: var(--primary-light);
+            background: rgba(2, 132, 199, 0.25);
+            color: #ffffff;
+            transform: translateY(-1px);
+        }
+        #panel {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            width: 370px;
+            max-height: calc(100vh - 100px);
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 16px 18px;
+            backdrop-filter: blur(18px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(2, 132, 199, 0.1);
+            overflow-y: auto;
+            z-index: 10;
+        }
+        #panel::-webkit-scrollbar { width: 5px; }
+        #panel::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.3); border-radius: 3px; }
+        .section-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--primary-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 14px 0 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-title:first-child { margin-top: 0; }
+        .mode-toggle-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: rgba(2, 6, 23, 0.7);
+            padding: 3px;
+            border-radius: 10px;
+            gap: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .mode-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            padding: 8px 10px;
+            font-size: 11.5px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .mode-btn.active {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: #ffffff;
+            box-shadow: 0 2px 10px rgba(2, 132, 199, 0.5);
+        }
+        .tool-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+        }
+        .tool-btn {
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-sub);
+            padding: 8px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+        }
+        .tool-btn:hover { color: #ffffff; border-color: rgba(56, 189, 248, 0.4); }
+        .tool-btn.active {
+            border-color: var(--accent);
+            background: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        .mesh-toggle-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: rgba(2, 6, 23, 0.7);
+            padding: 3px;
+            border-radius: 10px;
+            gap: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 6px;
+        }
+        .mesh-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            padding: 6px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .mesh-btn.active {
+            background: rgba(14, 165, 233, 0.3);
+            border: 1px solid var(--primary-light);
+            color: #ffffff;
+        }
+        .joint-row {
+            background: rgba(2, 6, 23, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 8px 12px;
+            border-radius: 10px;
+            margin-bottom: 7px;
+        }
+        .joint-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11.5px;
+            margin-bottom: 5px;
+        }
+        .joint-name { font-weight: 600; color: var(--text-main); }
+        .joint-val { font-family: monospace; font-weight: 700; color: var(--primary-light); }
+        .slider {
+            width: 100%;
+            height: 5px;
+            -webkit-appearance: none;
+            background: #1e293b;
+            border-radius: 3px;
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            background: var(--primary-light);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--primary);
+            transition: transform 0.1s;
+        }
+        .slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .hud-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            background: rgba(2, 6, 23, 0.6);
+            padding: 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+        .hud-item { text-align: center; }
+        .hud-label { font-size: 9.5px; color: var(--text-sub); text-transform: uppercase; }
+        .hud-value { font-size: 13.5px; font-weight: 700; color: #38bdf8; font-family: monospace; margin-top: 2px; }
+        .preset-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .preset-btn {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+            padding: 7px 10px;
+            font-size: 11px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .preset-btn:hover {
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+        }
+        #bottom-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .status-chip {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+        }
+        .status-dot.loading {
+            background: var(--warning);
+            box-shadow: 0 0 8px var(--warning);
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse { from { opacity: 0.4; } to { opacity: 1.0; } }
+    </style>
+</head>
+<body>
+    <header>
+        <div class=brand-badge>
+            <div class=brand-title>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                DOBOT MAGICIAN 5-DOF URDF VIEWER
+            </div>
+            <div class="brand-sub">
+                <span>⭐ Mô hình CAD Chính Hãng Dobot (.dae)</span>
+                <span>&bull;</span>
+                <span>Ray trượt 1.0m</span>
+                <span>&bull;</span>
+                <span>Chuẩn Kinematics URDF</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="/" class="nav-btn" title="Chuyển sang Bảng điều khiển Live Digital Twin">
+                <span>🎮</span> Live Twin Server
+            </a>
+            <a href="/dobot_description/urdf/dobot_magician_with_rail.urdf" target="_blank" class="nav-btn" title="Xem mã nguồn URDF Model chuẩn">
+                <span>📄</span> File URDF
+            </a>
+        </div>
+    </header>
+
+    <div id="panel">
+        <div class="section-title">CHẾ ĐỘ MÔ PHỎNG (SYSTEM MODE)</div>
+        <div class="mode-toggle-box">
+            <button id="btn-mode-rail" class="mode-btn active" onclick="setSystemMode('rail')">Ray trượt 1.0m</button>
+            <button id="btn-mode-alone" class="mode-btn" onclick="setSystemMode('standalone')">Dobot Đơn lẻ</button>
+        </div>
+
+        <div class="section-title">KIỂU DỰNG HÌNH 3D (RENDER MODE)</div>
+        <div class="mesh-toggle-box">
+            <button id="btn-mesh-cad" class="mesh-btn active" onclick="setVisualMode('cad')">🎨 CAD Mesh Gốc</button>
+            <button id="btn-mesh-geom" class="mesh-btn" onclick="setVisualMode('geom')">📐 Khung Đơn Giản</button>
+        </div>
+
+        <div class="section-title">ĐẦU CÔNG TÁC (END-EFFECTOR)</div>
+        <div class="tool-grid">
+            <button id="tool-suction" class="tool-btn active" onclick="setTool('suction_cup')">
+                <span style="font-size: 15px;">🧲</span> Đầu hút (Suction)
+            </button>
+            <button id="tool-gripper" class="tool-btn" onclick="setTool('gripper')">
+                <span style="font-size: 15px;">🤏</span> Kẹp khí (Gripper)
+            </button>
+            <button id="tool-pen" class="tool-btn" onclick="setTool('pen')">
+                <span style="font-size: 15px;">✏️</span> Bút vẽ (Pen)
+            </button>
+        </div>
+
+        <div class="section-title">ĐIỀU KHIỂN KHỚP (KINEMATICS)</div>
+        
+        <div class="joint-row" id="row-rail">
+            <div class="joint-header">
+                <span class="joint-name">Ray Trượt L (Linear)</span>
+                <span class="joint-val" id="val-rail">0.0 mm</span>
+            </div>
+            <input type="range" min="0" max="1000" step="1" value="0" class="slider" id="slider-rail" oninput="onJointChange()">
+        </div>
+
+        <div class="joint-row">
+            <div class="joint-header">
+                <span class="joint-name">J1: Xoay thân (Pan)</span>
+                <span class="joint-val" id="val-j1">0.0°</span>
+            </div>
+            <input type="range" min="-90" max="90" step="0.5" value="0" class="slider" id="slider-j1" oninput="onJointChange()">
+        </div>
+
+        <div class="joint-row">
+            <div class="joint-header">
+                <span class="joint-name">J2: Cánh tay sau (Rear)</span>
+                <span class="joint-val" id="val-j2">0.0°</span>
+            </div>
+            <input type="range" min="0" max="85" step="0.5" value="0" class="slider" id="slider-j2" oninput="onJointChange()">
+        </div>
+
+        <div class="joint-row">
+            <div class="joint-header">
+                <span class="joint-name">J3: Cẳng tay trước (Fore)</span>
+                <span class="joint-val" id="val-j3">0.0°</span>
+            </div>
+            <input type="range" min="-10" max="90" step="0.5" value="0" class="slider" id="slider-j3" oninput="onJointChange()">
+        </div>
+
+        <div class="joint-row">
+            <div class="joint-header">
+                <span class="joint-name">J4 / R: Xoay đầu hút (Roll)</span>
+                <span class="joint-val" id="val-j4">0.0°</span>
+            </div>
+            <input type="range" min="-90" max="90" step="0.5" value="0" class="slider" id="slider-j4" oninput="onJointChange()">
+        </div>
+
+        <div class="section-title">TỌA ĐỘ TRỰC QUAN TCP (XYZ)</div>
+        <div class="hud-grid">
+            <div class="hud-item">
+                <div class="hud-label">X (mm)</div>
+                <div class="hud-value" id="hud-x">207.0</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">Y (mm)</div>
+                <div class="hud-value" id="hud-y">0.0</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">Z (mm)</div>
+                <div class="hud-value" id="hud-z">206.3</div>
+            </div>
+            <div class="hud-item">
+                <div class="hud-label">R (°)</div>
+                <div class="hud-value" id="hud-r">0.0</div>
+            </div>
+        </div>
+
+        <div class="section-title">VỊ TRÍ MẪU (PRESETS)</div>
+        <div class="preset-grid">
+            <button class="preset-btn" onclick="applyPreset(0, 0, 0, 0, 0)">🏠 Home 0.0</button>
+            <button class="preset-btn" onclick="applyPreset(200, 0, 35, 45, 0)">📍 Vị trí gắp 1</button>
+            <button class="preset-btn" onclick="applyPreset(600, 30, 20, 60, 45)">📍 Vị trí thả 2</button>
+            <button class="preset-btn" onclick="applyPreset(900, -45, 40, 30, -30)">📍 Cuối ray 900</button>
+        </div>
+    </div>
+
+    <div id="bottom-bar">
+        <div class="status-chip" id="chip-cad-status">
+            <div class="status-dot loading" id="dot-cad-status"></div>
+            <span id="text-cad-status">Đang tải CAD Meshes chính hãng Dobot...</span>
+        </div>
+        <div class="status-chip" id="chip-ws-status">
+            <div class="status-dot" id="dot-ws-status" style="background: #94a3b8; box-shadow: none;"></div>
+            <span id="text-ws-status">Live Twin: Sẵn sàng</span>
+        </div>
+        <div class="status-chip" style="cursor: pointer;" onclick="toggleTFAxes()">
+            <span>🧭 Bật/Tắt Trục TF (RGB Axes)</span>
+        </div>
+    </div>
+
+    <div id="viewport"></div>
+
+    <script>
+        const L1_BASE = 131.3;
+        const L2_REAR = 135.0;
+        const L3_FORE = 147.0;
+        const L4_WRIST = 60.0;
+        const TOOL_LENGTH_SUCTION = 60.0;
+
+        let scene, camera, renderer, controls;
+        let robotGroup, railGroup, carriageGroup;
+        let rosContainer;
+        let baseGroup, j1Group, j2Group, j3Group, j4WristGroup, toolGroup;
+        let geomRobotGroup;
+        let tfAxesGroup;
+        
+        let currentMode = 'rail';
+        let currentTool = 'suction_cup';
+        let visualMode = 'cad';
+        let showTFAxes = true;
+        let liveSyncEnabled = true;
+
+        const cadNodes = {
+            base: null,
+            link1: null,
+            link2: null,
+            link3: null,
+            link4: null,
+            suction: null,
+            gripper: null
+        };
+        let cadLoadedCount = 0;
+        const totalCadRequired = 6;
+
+        function getMeshUrl(filename) {
+            if (window.location.protocol === 'file:') {
+                return 'dobot_description/meshes/dae/' + filename;
+            }
+            return '/dobot_description/meshes/dae/' + filename;
+        }
+
+        function initScene() {
+            const container = document.getElementById('viewport');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b1120);
+            scene.fog = new THREE.FogExp2(0x0b1120, 0.00035);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 8000);
+            camera.position.set(700, 600, 900);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 150, 0);
+            controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+            scene.add(ambientLight);
+
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.3);
+            keyLight.position.set(600, 1000, 500);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = 2048;
+            keyLight.shadow.mapSize.height = 2048;
+            keyLight.shadow.camera.near = 100;
+            keyLight.shadow.camera.far = 3000;
+            keyLight.shadow.camera.left = -800;
+            keyLight.shadow.camera.right = 800;
+            keyLight.shadow.camera.top = 800;
+            keyLight.shadow.camera.bottom = -800;
+            keyLight.shadow.bias = -0.0005;
+            scene.add(keyLight);
+
+            const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.65);
+            fillLight.position.set(-600, 500, -500);
+            scene.add(fillLight);
+
+            const rimLight = new THREE.DirectionalLight(0x0284c7, 0.4);
+            rimLight.position.set(0, -200, 600);
+            scene.add(rimLight);
+
+            const grid = new THREE.GridHelper(2600, 26, 0x38bdf8, 0x1e293b);
+            grid.position.y = -0.5;
+            scene.add(grid);
+
+            tfAxesGroup = new THREE.Group();
+            scene.add(tfAxesGroup);
+
+            buildSlidingRail();
+            buildRobotHierarchy();
+            loadAllCadMeshes();
+            initWebSocket();
+
+            onJointChange();
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        const matDobotWhite = new THREE.MeshStandardMaterial({ color: 0xf3f4f6, roughness: 0.25, metalness: 0.1 });
+        const matDobotBlack = new THREE.MeshStandardMaterial({ color: 0x181c24, roughness: 0.4, metalness: 0.2 });
+        const matDobotBlue  = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.3 });
+        const matSteelChrome= new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.1, metalness: 0.95 });
+        const matRailAlu    = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.35, metalness: 0.7 });
+        const matBrass      = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3, metalness: 0.7 });
+
+        function buildRobotHierarchy() {
+            robotGroup = new THREE.Group();
+            scene.add(robotGroup);
+
+            rosContainer = new THREE.Group();
+            rosContainer.rotation.x = -Math.PI / 2;
+            robotGroup.add(rosContainer);
+
+            baseGroup = new THREE.Group();
+            rosContainer.add(baseGroup);
+
+            j1Group = new THREE.Group();
+            j1Group.position.set(0, 0, L1_BASE);
+            baseGroup.add(j1Group);
+
+            j2Group = new THREE.Group();
+            j2Group.position.set(0, 0, 0);
+            j1Group.add(j2Group);
+
+            j3Group = new THREE.Group();
+            j3Group.position.set(0, 0, L2_REAR);
+            j2Group.add(j3Group);
+
+            j4WristGroup = new THREE.Group();
+            j4WristGroup.position.set(L3_FORE, 0, 0);
+            j3Group.add(j4WristGroup);
+
+            toolGroup = new THREE.Group();
+            toolGroup.position.set(L4_WRIST, 0, 0);
+            j4WristGroup.add(toolGroup);
+
+            buildProceduralFallback();
+        }
+
+        function buildProceduralFallback() {
+            geomRobotGroup = new THREE.Group();
+            rosContainer.add(geomRobotGroup);
+
+            const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(158, 158, 48), matDobotWhite);
+            baseMesh.position.set(0, 0, 24);
+            baseMesh.castShadow = true;
+            baseGroup.add(baseMesh);
+
+            const ringMesh = new THREE.Mesh(new THREE.CylinderGeometry(56, 56, 4, 32), matDobotBlue);
+            ringMesh.rotation.x = Math.PI / 2;
+            ringMesh.position.set(0, 0, 50);
+            baseGroup.add(ringMesh);
+
+            const tower = new THREE.Mesh(new THREE.CylinderGeometry(52, 64, 88, 32), matDobotWhite);
+            tower.rotation.x = Math.PI / 2;
+            tower.position.set(0, 0, -44);
+            j1Group.add(tower);
+
+            const rearArm = new THREE.Mesh(new THREE.BoxGeometry(26, 22, L2_REAR), matDobotBlack);
+            rearArm.position.set(0, 0, L2_REAR / 2);
+            j2Group.add(rearArm);
+
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, L2_REAR, 16), matSteelChrome);
+            rod.rotation.x = Math.PI / 2;
+            rod.position.set(16, 0, L2_REAR / 2);
+            j2Group.add(rod);
+
+            const foreArm = new THREE.Mesh(new THREE.BoxGeometry(L3_FORE, 22, 26), matDobotBlack);
+            foreArm.position.set(L3_FORE / 2, 0, 0);
+            j3Group.add(foreArm);
+
+            const foreCover = new THREE.Mesh(new THREE.BoxGeometry(L3_FORE * 0.7, 24, 8), matDobotWhite);
+            foreCover.position.set(L3_FORE * 0.45, 0, 15);
+            j3Group.add(foreCover);
+
+            const wrist = new THREE.Mesh(new THREE.BoxGeometry(L4_WRIST, 26, 22), matDobotBlack);
+            wrist.position.set(L4_WRIST / 2, 0, 0);
+            j4WristGroup.add(wrist);
+
+            const servo = new THREE.Mesh(new THREE.BoxGeometry(26, 26, 26), matDobotBlack);
+            servo.position.set(0, 0, -6);
+            toolGroup.add(servo);
+
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 36, 16), matSteelChrome);
+            stem.rotation.x = Math.PI / 2;
+            stem.position.set(0, 0, -30);
+            toolGroup.add(stem);
+
+            const cup = new THREE.Mesh(new THREE.CylinderGeometry(14, 2, 16, 24), matDobotBlack);
+            cup.rotation.x = Math.PI / 2;
+            cup.position.set(0, 0, -52);
+            toolGroup.add(cup);
+
+            geomRobotGroup.proceduralElements = [baseMesh, ringMesh, tower, rearArm, rod, foreArm, foreCover, wrist, servo, stem, cup];
+            geomRobotGroup.proceduralMap = {
+                base: [baseMesh, ringMesh],
+                link1: [tower],
+                link2: [rearArm, rod],
+                link3: [foreArm, foreCover],
+                link4: [wrist],
+                suction: [servo, stem, cup]
+            };
+        }
+
+        function polishCadScene(sceneObj) {
+            sceneObj.scale.set(1000, 1000, 1000);
+            sceneObj.rotation.set(0, 0, 0);
+            sceneObj.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.material) {
+                        child.material.side = THREE.DoubleSide;
+                        if (child.material.isMeshPhongMaterial || child.material.isMeshLambertMaterial) {
+                            child.material.shininess = 35;
+                        }
+                    }
+                }
+            });
+            return sceneObj;
+        }
+
+        function loadAllCadMeshes() {
+            const loader = new THREE.ColladaLoader();
+            const meshesToLoad = [
+                { id: 'base', file: 'magicianBase.dae', group: baseGroup, pos: [0, 0, 131.0], rot: [0, 0, 0] },
+                { id: 'link1', file: 'magicianLink1.dae', group: j1Group, pos: [0, 0, 0], rot: [0, 0, 0] },
+                { id: 'link2', file: 'magicianLink2.dae', group: j2Group, pos: [0, 0, 0], rot: [0, -0.349066, 0] },
+                { id: 'link3', file: 'magicianLink3.dae', group: j3Group, pos: [16.452, 0, -133.994], rot: [0, -0.471239, 0] },
+                { id: 'link4', file: 'magicianLink4_default.dae', group: j4WristGroup, pos: [-177.151, 0, -58.595], rot: [0, 0, 0] },
+                { id: 'suction', file: 'suction_cup.dae', group: toolGroup, pos: [-0.081, 0, -11.843], rot: [0, 0, 0] },
+                { id: 'gripper', file: 'magicianGripper.dae', group: null, pos: [0, 0, 0], rot: [0, 0, 0] }
+            ];
+
+            meshesToLoad.forEach(item => {
+                loader.load(
+                    getMeshUrl(item.file),
+                    function(collada) {
+                        const cadObj = polishCadScene(collada.scene);
+                        cadObj.position.set(item.pos[0], item.pos[1], item.pos[2]);
+                        cadObj.rotation.set(item.rot[0], item.rot[1], item.rot[2]);
+                        cadNodes[item.id] = cadObj;
+
+                        if (item.group) {
+                            item.group.add(cadObj);
+                        }
+
+                        // Immediately hide corresponding procedural parts as each CAD part arrives
+                        if (geomRobotGroup && geomRobotGroup.proceduralMap && geomRobotGroup.proceduralMap[item.id]) {
+                            geomRobotGroup.proceduralMap[item.id].forEach(m => { m.visible = false; });
+                        }
+
+                        cadLoadedCount++;
+                        updateCadLoadingStatus();
+                    },
+                    undefined,
+                    function(error) {
+                        console.warn('CAD Mesh fallback for:', item.file, error);
+                    }
+                );
+            });
+        }
+
+        function updateCadLoadingStatus() {
+            const dot = document.getElementById('dot-cad-status');
+            const txt = document.getElementById('text-cad-status');
+
+            if (cadLoadedCount >= totalCadRequired) {
+                dot.className = 'status-dot';
+                txt.innerText = '✅ 100% CAD Mesh Dobot Chính Hãng (Độ chính xác cao)';
+                if (visualMode === 'cad') {
+                    toggleVisualModeMesh(true);
+                }
+            } else {
+                txt.innerText = 'Đang tải CAD Meshes (' + cadLoadedCount + '/' + totalCadRequired + ')...';
+            }
+        }
+
+        function toggleVisualModeMesh(isCad) {
+            if (geomRobotGroup && geomRobotGroup.proceduralElements) {
+                geomRobotGroup.proceduralElements.forEach(mesh => {
+                    mesh.visible = !isCad;
+                });
+            }
+            for (let key in cadNodes) {
+                if (cadNodes[key]) {
+                    cadNodes[key].visible = isCad;
+                }
+            }
+            updateToolMeshVisibility();
+        }
+
+        function updateToolMeshVisibility() {
+            if (cadNodes.suction) {
+                cadNodes.suction.visible = (visualMode === 'cad' && currentTool === 'suction_cup');
+            }
+            if (cadNodes.gripper) {
+                cadNodes.gripper.visible = (visualMode === 'cad' && currentTool === 'gripper');
+            }
+        }
+
+        function buildSlidingRail() {
+            railGroup = new THREE.Group();
+            scene.add(railGroup);
+
+            const railBase = new THREE.Mesh(new THREE.BoxGeometry(140, 26, 1120), matRailAlu);
+            railBase.position.y = 13;
+            railBase.castShadow = true;
+            railBase.receiveShadow = true;
+            railGroup.add(railBase);
+
+            const beltSlot = new THREE.Mesh(new THREE.BoxGeometry(28, 6, 1090), matDobotBlack);
+            beltSlot.position.y = 24;
+            railGroup.add(beltSlot);
+
+            const shaftGeom = new THREE.CylinderGeometry(6, 6, 1100, 24);
+            const shaft1 = new THREE.Mesh(shaftGeom, matSteelChrome);
+            shaft1.rotation.x = Math.PI / 2;
+            shaft1.position.set(45, 28, 0);
+            shaft1.castShadow = true;
+            railGroup.add(shaft1);
+
+            const shaft2 = new THREE.Mesh(shaftGeom, matSteelChrome);
+            shaft2.rotation.x = Math.PI / 2;
+            shaft2.position.set(-45, 28, 0);
+            shaft2.castShadow = true;
+            railGroup.add(shaft2);
+
+            const motor = new THREE.Mesh(new THREE.BoxGeometry(110, 50, 70), matDobotBlack);
+            motor.position.set(0, 30, -535);
+            motor.castShadow = true;
+            railGroup.add(motor);
+
+            const sw = new THREE.Mesh(new THREE.BoxGeometry(16, 20, 24), matBrass);
+            sw.position.set(55, 32, -470);
+            railGroup.add(sw);
+
+            const idler = new THREE.Mesh(new THREE.BoxGeometry(110, 40, 50), matDobotBlack);
+            idler.position.set(0, 25, 535);
+            railGroup.add(idler);
+
+            carriageGroup = new THREE.Group();
+            carriageGroup.position.set(0, 26, -500);
+            railGroup.add(carriageGroup);
+
+            const plate = new THREE.Mesh(new THREE.BoxGeometry(170, 16, 170), matDobotBlack);
+            plate.position.y = 8;
+            plate.castShadow = true;
+            plate.receiveShadow = true;
+            carriageGroup.add(plate);
+
+            const flag = new THREE.Mesh(new THREE.BoxGeometry(6, 12, 14), matBrass);
+            flag.position.set(55, 12, 0);
+            carriageGroup.add(flag);
+
+            if (currentMode === 'rail') {
+                carriageGroup.add(robotGroup);
+                robotGroup.position.set(0, 16, 0);
+            }
+        }
+
+        function setSystemMode(mode) {
+            currentMode = mode;
+            document.getElementById('btn-mode-rail').classList.toggle('active', mode === 'rail');
+            document.getElementById('btn-mode-alone').classList.toggle('active', mode === 'standalone');
+            document.getElementById('row-rail').style.display = mode === 'rail' ? 'block' : 'none';
+
+            if (mode === 'rail') {
+                railGroup.visible = true;
+                carriageGroup.add(robotGroup);
+                robotGroup.position.set(0, 16, 0);
+            } else {
+                railGroup.visible = false;
+                scene.add(robotGroup);
+                robotGroup.position.set(0, 0, 0);
+            }
+            onJointChange();
+        }
+
+        function setVisualMode(vMode) {
+            visualMode = vMode;
+            document.getElementById('btn-mesh-cad').classList.toggle('active', vMode === 'cad');
+            document.getElementById('btn-mesh-geom').classList.toggle('active', vMode === 'geom');
+            toggleVisualModeMesh(vMode === 'cad');
+        }
+
+        function setTool(toolName) {
+            currentTool = toolName;
+            document.getElementById('tool-suction').classList.toggle('active', toolName === 'suction_cup');
+            document.getElementById('tool-gripper').classList.toggle('active', toolName === 'gripper');
+            document.getElementById('tool-pen').classList.toggle('active', toolName === 'pen');
+
+            if (cadNodes.gripper && !cadNodes.gripper.parent) {
+                toolGroup.add(cadNodes.gripper);
+            }
+            updateToolMeshVisibility();
+            onJointChange();
+        }
+
+        function onJointChange() {
+            const railMm = parseFloat(document.getElementById('slider-rail').value);
+            const j1Deg  = parseFloat(document.getElementById('slider-j1').value);
+            const j2Deg  = parseFloat(document.getElementById('slider-j2').value);
+            const j3Deg  = parseFloat(document.getElementById('slider-j3').value);
+            const j4Deg  = parseFloat(document.getElementById('slider-j4').value);
+
+            document.getElementById('val-rail').innerText = railMm.toFixed(1) + ' mm';
+            document.getElementById('val-j1').innerText = j1Deg.toFixed(1) + '°';
+            document.getElementById('val-j2').innerText = j2Deg.toFixed(1) + '°';
+            document.getElementById('val-j3').innerText = j3Deg.toFixed(1) + '°';
+            document.getElementById('val-j4').innerText = j4Deg.toFixed(1) + '°';
+
+            if (currentMode === 'rail') {
+                carriageGroup.position.z = -500 + railMm;
+            }
+
+            j1Group.rotation.z = THREE.MathUtils.degToRad(j1Deg);
+            j2Group.rotation.y = THREE.MathUtils.degToRad(j2Deg);
+            j3Group.rotation.y = THREE.MathUtils.degToRad(j3Deg - j2Deg);
+            j4WristGroup.rotation.y = -THREE.MathUtils.degToRad(j3Deg);
+            toolGroup.rotation.z = THREE.MathUtils.degToRad(j4Deg);
+
+            const rad1 = THREE.MathUtils.degToRad(j1Deg);
+            const rad2 = THREE.MathUtils.degToRad(j2Deg);
+            const rad3 = THREE.MathUtils.degToRad(j3Deg);
+
+            const r_arm = L2_REAR * Math.sin(rad2) + L3_FORE * Math.cos(rad3) + L4_WRIST;
+            const x_pos = r_arm * Math.cos(rad1);
+            const y_pos = r_arm * Math.sin(rad1);
+            const z_pos = L1_BASE + L2_REAR * Math.cos(rad2) - L3_FORE * Math.sin(rad3) - TOOL_LENGTH_SUCTION;
+
+            document.getElementById('hud-x').innerText = x_pos.toFixed(1);
+            document.getElementById('hud-y').innerText = y_pos.toFixed(1);
+            document.getElementById('hud-z').innerText = z_pos.toFixed(1);
+            document.getElementById('hud-r').innerText = j4Deg.toFixed(1);
+
+            updateTFAxes();
+        }
+
+        function applyPreset(rail, j1, j2, j3, j4) {
+            document.getElementById('slider-rail').value = rail;
+            document.getElementById('slider-j1').value = j1;
+            document.getElementById('slider-j2').value = j2;
+            document.getElementById('slider-j3').value = j3;
+            document.getElementById('slider-j4').value = j4;
+            onJointChange();
+        }
+
+        function toggleTFAxes() {
+            showTFAxes = !showTFAxes;
+            tfAxesGroup.visible = showTFAxes;
+        }
+
+        function updateTFAxes() {
+            while(tfAxesGroup.children.length > 0) {
+                tfAxesGroup.remove(tfAxesGroup.children[0]);
+            }
+            if (!showTFAxes) return;
+
+            const addAxesAt = (obj, size) => {
+                const helper = new THREE.AxesHelper(size);
+                helper.matrixAutoUpdate = false;
+                obj.updateWorldMatrix(true, false);
+                helper.matrix.copy(obj.matrixWorld);
+                tfAxesGroup.add(helper);
+            };
+
+            if (currentMode === 'rail') {
+                addAxesAt(railGroup, 80);
+                addAxesAt(carriageGroup, 60);
+            }
+            addAxesAt(baseGroup, 70);
+            addAxesAt(j1Group, 60);
+            addAxesAt(j2Group, 50);
+            addAxesAt(j3Group, 50);
+            addAxesAt(toolGroup, 60);
+        }
+
+        let ws = null;
+        function initWebSocket() {
+            if (window.location.protocol === 'file:') {
+                document.getElementById('text-ws-status').innerText = 'Chế độ xem Local (Offline)';
+                return;
+            }
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const wsUrl = wsProtocol + window.location.host + '/ws';
+            const dotWs = document.getElementById('dot-ws-status');
+            const textWs = document.getElementById('text-ws-status');
+
+            try {
+                ws = new WebSocket(wsUrl);
+                ws.onopen = function() {
+                    dotWs.style.background = '#10b981';
+                    dotWs.style.boxShadow = '0 0 8px #10b981';
+                    textWs.innerText = 'Live Server: Đã kết nối';
+                };
+
+                ws.onmessage = function(event) {
+                    if (!liveSyncEnabled) return;
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'pose' && msg.data) {
+                            const d = msg.data;
+                            if (d.l !== undefined && currentMode === 'rail') {
+                                document.getElementById('slider-rail').value = d.l;
+                            }
+                            if (d.j1 !== undefined) document.getElementById('slider-j1').value = d.j1;
+                            if (d.j2 !== undefined) document.getElementById('slider-j2').value = d.j2;
+                            if (d.j3 !== undefined) document.getElementById('slider-j3').value = d.j3;
+                            if (d.j4 !== undefined) document.getElementById('slider-j4').value = d.j4;
+                            onJointChange();
+                        }
+                    } catch(e) {}
+                };
+
+                ws.onclose = function() {
+                    dotWs.style.background = '#94a3b8';
+                    dotWs.style.boxShadow = 'none';
+                    textWs.innerText = 'Live Server: Chưa kết nối';
+                    setTimeout(initWebSocket, 4000);
+                };
+            } catch(e) {
+                textWs.innerText = 'Live Server: Offline';
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = initScene;
+    </script>
+</body>
+</html>

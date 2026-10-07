@@ -1,0 +1,473 @@
+<?xml version="1.0"?>
+<!-- =================================================================================== -->
+<!-- |    DOBOT MAGICIAN MODULAR URDF / XACRO SYSTEM                                    | -->
+<!-- |    Supports:                                                                      | -->
+<!-- |    1. Standalone Dobot Magician 4-DOF or 5-DOF on 1.0m Linear Sliding Rail       | -->
+<!-- |    2. Interchangeable Tools: Suction Cup, Pneumatic Gripper, Writing Pen          | -->
+<!-- |    3. Photorealistic Collada (.dae) Meshes with Full Texture & Color Support      | -->
+<!-- |    4. Closed-chain Parallelogram Kinematics / Mimic Linkage                       | -->
+<!-- =================================================================================== -->
+<robot name="dobot_magician_system" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ==================== CONFIGURATION ARGUMENTS ==================== -->
+  <xacro:arg name="has_rail" default="true" />
+  <xacro:arg name="tool" default="suction_cup" />
+  <xacro:arg name="rail_length" default="1.000" />
+  <xacro:arg name="mesh_path" default="package://dobot_description/meshes/dae" />
+
+  <!-- ==================== KINEMATIC CONSTANTS ==================== -->
+  <xacro:property name="PI" value="3.1415926535897931" />
+  <xacro:property name="L1_BASE_HEIGHT" value="0.138" />
+  <xacro:property name="L2_REAR_ARM"    value="0.135" />
+  <xacro:property name="L3_FOREARM"     value="0.147" />
+  <xacro:property name="L4_WRIST"       value="0.060" />
+  <xacro:property name="RAIL_STROKE"    value="$(arg rail_length)" />
+  <xacro:property name="MESH_DIR"       value="$(arg mesh_path)" />
+
+  <!-- ==================== MATERIALS ==================== -->
+  <material name="mat_dobot_white">
+    <color rgba="0.94 0.95 0.96 1.0"/>
+  </material>
+  <material name="mat_dobot_black">
+    <color rgba="0.14 0.16 0.18 1.0"/>
+  </material>
+  <material name="mat_dobot_blue">
+    <color rgba="0.094 0.392 0.671 1.0"/>
+  </material>
+  <material name="mat_rail_silver">
+    <color rgba="0.75 0.78 0.82 1.0"/>
+  </material>
+  <material name="mat_steel_chrome">
+    <color rgba="0.92 0.94 0.96 1.0"/>
+  </material>
+  <material name="mat_brass">
+    <color rgba="0.82 0.68 0.21 1.0"/>
+  </material>
+
+  <!-- ==================== WORLD / ROOT LINK ==================== -->
+  <link name="world"/>
+
+  <!-- ==================== OPTIONAL SLIDING RAIL KIT (1.0m) ==================== -->
+  <xacro:if value="$(arg has_rail)">
+    <!-- Base mounting joint to world -->
+    <joint name="world_to_rail_joint" type="fixed">
+      <parent link="world"/>
+      <child link="rail_base_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="rail_base_link">
+      <!-- Main aluminum profile -->
+      <visual>
+        <origin xyz="0 0 0.013" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.140 1.120 0.026"/>
+        </geometry>
+        <material name="mat_rail_silver"/>
+      </visual>
+      <!-- Dual chrome guide shafts (12mm dia) -->
+      <visual>
+        <origin xyz="0.045 0 0.028" rpy="${PI/2} 0 0"/>
+        <geometry>
+          <cylinder radius="0.006" length="1.100"/>
+        </geometry>
+        <material name="mat_steel_chrome"/>
+      </visual>
+      <visual>
+        <origin xyz="-0.045 0 0.028" rpy="${PI/2} 0 0"/>
+        <geometry>
+          <cylinder radius="0.006" length="1.100"/>
+        </geometry>
+        <material name="mat_steel_chrome"/>
+      </visual>
+      <!-- Timing belt slot -->
+      <visual>
+        <origin xyz="0 0 0.020" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.028 1.060 0.006"/>
+        </geometry>
+        <material name="mat_dobot_black"/>
+      </visual>
+      <!-- NEMA Stepper Motor Enclosure -->
+      <visual>
+        <origin xyz="0 -0.535 0.030" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.110 0.070 0.050"/>
+        </geometry>
+        <material name="mat_dobot_black"/>
+      </visual>
+      <!-- End plate & Idler pulley block -->
+      <visual>
+        <origin xyz="0 0.535 0.025" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.110 0.050 0.040"/>
+        </geometry>
+        <material name="mat_dobot_black"/>
+      </visual>
+      <!-- Limit switch (Homing sensor at 0mm) -->
+      <visual>
+        <origin xyz="0.055 -0.470 0.032" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.015 0.025 0.020"/>
+        </geometry>
+        <material name="mat_brass"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.020" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.160 1.140 0.050"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0.015" rpy="0 0 0"/>
+        <mass value="4.85"/>
+        <inertia ixx="0.508" ixy="0.0" ixz="0.0" iyy="0.012" iyz="0.0" izz="0.518"/>
+      </inertial>
+    </link>
+
+    <!-- Rail Prismatic Joint (L-Axis: 0 to 1.000m) -->
+    <joint name="rail_joint" type="prismatic">
+      <parent link="rail_base_link"/>
+      <child link="rail_carriage_link"/>
+      <origin xyz="0 -0.500 0.026" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="0.0" upper="${RAIL_STROKE}" effort="150.0" velocity="0.08"/>
+      <dynamics damping="15.0" friction="5.0"/>
+    </joint>
+
+    <link name="rail_carriage_link">
+      <!-- Carriage plate -->
+      <visual>
+        <origin xyz="0 0 0.008" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.170 0.170 0.016"/>
+        </geometry>
+        <material name="mat_dobot_black"/>
+      </visual>
+      <!-- Trip flag for limit switch -->
+      <visual>
+        <origin xyz="0.055 0.020 0.006" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.008 0.015 0.012"/>
+        </geometry>
+        <material name="mat_brass"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.008" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.170 0.170 0.016"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0.008" rpy="0 0 0"/>
+        <mass value="0.95"/>
+        <inertia ixx="0.0024" ixy="0.0" ixz="0.0" iyy="0.0024" iyz="0.0" izz="0.0046"/>
+      </inertial>
+    </link>
+
+    <!-- Dobot mounted on Carriage Plate -->
+    <joint name="dobot_root_joint" type="fixed">
+      <parent link="rail_carriage_link"/>
+      <child link="dobot_base_link"/>
+      <origin xyz="0 0 0.016" rpy="0 0 0"/>
+    </joint>
+  </xacro:if>
+
+  <!-- ==================== STANDALONE MODE (NO RAIL) ==================== -->
+  <xacro:unless value="$(arg has_rail)">
+    <joint name="dobot_root_joint" type="fixed">
+      <parent link="world"/>
+      <child link="dobot_base_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:unless>
+
+  <!-- ==================== DOBOT MAGICIAN ARM LINKS & JOINTS ==================== -->
+
+  <!-- 1. BASE LINK -->
+  <link name="dobot_base_link">
+    <visual>
+      <origin xyz="0 0 0.0486" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${MESH_DIR}/magicianBase.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.045" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.080" length="0.090"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <mass value="1.20"/>
+      <inertia ixx="0.003" ixy="0.0" ixz="0.0" iyy="0.003" iyz="0.0" izz="0.004"/>
+    </inertial>
+  </link>
+
+  <!-- 2. JOINT 1 (Pan / Rotation around Z: -90° to +90°) -->
+  <joint name="dobot_joint_1" type="revolute">
+    <parent link="dobot_base_link"/>
+    <child link="dobot_link_1"/>
+    <origin xyz="0 0 0.1313" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-${PI/2}" upper="${PI/2}" effort="10.0" velocity="5.5"/>
+    <dynamics damping="0.5" friction="0.1"/>
+  </joint>
+
+  <link name="dobot_link_1">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${MESH_DIR}/magicianLink1.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.056" length="0.050"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      <mass value="0.85"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <!-- 3. JOINT 2 (Rear Arm / Pitch: 0° to 85°) -->
+  <joint name="dobot_joint_2" type="revolute">
+    <parent link="dobot_link_1"/>
+    <child link="dobot_link_2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0" upper="${85 * PI / 180}" effort="12.0" velocity="5.5"/>
+    <dynamics damping="0.5" friction="0.1"/>
+  </joint>
+
+  <link name="dobot_link_2">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -0.349066 0"/>
+      <geometry>
+        <mesh filename="${MESH_DIR}/magicianLink2.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${L2_REAR_ARM/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.030 0.045 ${L2_REAR_ARM}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 ${L2_REAR_ARM/2}" rpy="0 0 0"/>
+      <mass value="0.75"/>
+      <inertia ixx="0.0015" ixy="0.0" ixz="0.0" iyy="0.0015" iyz="0.0" izz="0.0003"/>
+    </inertial>
+  </link>
+
+  <!-- 4. JOINT 3 (Forearm / Pitch: -10° to 90°) -->
+  <joint name="dobot_joint_3" type="revolute">
+    <parent link="dobot_link_2"/>
+    <child link="dobot_link_3"/>
+    <origin xyz="0 0 ${L2_REAR_ARM}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-${10 * PI / 180}" upper="${PI/2}" effort="10.0" velocity="5.5"/>
+    <dynamics damping="0.5" friction="0.1"/>
+  </joint>
+
+  <link name="dobot_link_3">
+    <visual>
+      <origin xyz="0.016452 0 -0.133994" rpy="0 -0.471239 0"/>
+      <geometry>
+        <mesh filename="${MESH_DIR}/magicianLink3.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="${L3_FOREARM/2} 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${L3_FOREARM} 0.036 0.024"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="${L3_FOREARM/2} 0 0" rpy="0 0 0"/>
+      <mass value="0.65"/>
+      <inertia ixx="0.0002" ixy="0.0" ixz="0.0" iyy="0.0012" iyz="0.0" izz="0.0012"/>
+    </inertial>
+  </link>
+
+  <!-- 5. JOINT 4 (Wrist / End-effector pitch alignment with base) -->
+  <joint name="dobot_joint_4" type="revolute">
+    <parent link="dobot_link_3"/>
+    <child link="dobot_link_4"/>
+    <origin xyz="${L3_FOREARM} 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-${PI}" upper="${PI}" effort="5.0" velocity="8.0"/>
+    <dynamics damping="0.2" friction="0.05"/>
+    <mimic joint="dobot_joint_2" multiplier="-1" offset="0"/>
+  </joint>
+
+  <link name="dobot_link_4">
+    <visual>
+      <origin xyz="-0.177151 0 -0.058595" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${MESH_DIR}/magicianLink4_default.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.040 0.035 0.040"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.25"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <!-- 6. JOINT 5 (Wrist Servo R - Rotation around Z: -90° to +90°) -->
+  <joint name="dobot_joint_5_r" type="revolute">
+    <parent link="dobot_link_4"/>
+    <child link="dobot_tool_mount_link"/>
+    <origin xyz="${L4_WRIST} 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-${PI/2}" upper="${PI/2}" effort="5.0" velocity="8.0"/>
+    <dynamics damping="0.1" friction="0.02"/>
+  </joint>
+
+  <link name="dobot_tool_mount_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.012" length="0.010"/>
+      </geometry>
+      <material name="mat_steel_chrome"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.012" length="0.010"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001"/>
+    </inertial>
+  </link>
+
+  <!-- ==================== END-EFFECTOR TOOL OPTIONS ==================== -->
+
+  <!-- OPTION A: SUCTION CUP (Default) -->
+  <xacro:if value="${'$(arg tool)' == 'suction_cup'}">
+    <joint name="tool_suction_joint" type="fixed">
+      <parent link="dobot_tool_mount_link"/>
+      <child link="dobot_tool_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="dobot_tool_link">
+      <visual>
+        <origin xyz="-0.000081 0 -0.011843" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${MESH_DIR}/suction_cup.dae"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 -0.030" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.010" length="0.060"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 -0.030" rpy="0 0 0"/>
+        <mass value="0.10"/>
+        <inertia ixx="0.00005" ixy="0.0" ixz="0.0" iyy="0.00005" iyz="0.0" izz="0.00002"/>
+      </inertial>
+    </link>
+
+    <!-- TCP (Tool Center Point) -->
+    <joint name="tcp_joint" type="fixed">
+      <parent link="dobot_tool_link"/>
+      <child link="dobot_tcp"/>
+      <origin xyz="0 0 -0.060" rpy="0 0 0"/>
+    </joint>
+    <link name="dobot_tcp"/>
+  </xacro:if>
+
+  <!-- OPTION B: PNEUMATIC GRIPPER -->
+  <xacro:if value="${'$(arg tool)' == 'gripper'}">
+    <joint name="tool_gripper_joint" type="fixed">
+      <parent link="dobot_tool_mount_link"/>
+      <child link="dobot_tool_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="dobot_tool_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${MESH_DIR}/magicianGripper.dae"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 -0.040" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.035 0.055 0.080"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 -0.040" rpy="0 0 0"/>
+        <mass value="0.18"/>
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.00005"/>
+      </inertial>
+    </link>
+
+    <!-- TCP (Tool Center Point at Gripper tips) -->
+    <joint name="tcp_joint" type="fixed">
+      <parent link="dobot_tool_link"/>
+      <child link="dobot_tcp"/>
+      <origin xyz="0 0 -0.080" rpy="0 0 0"/>
+    </joint>
+    <link name="dobot_tcp"/>
+  </xacro:if>
+
+  <!-- OPTION C: DRAWING PEN -->
+  <xacro:if value="${'$(arg tool)' == 'pen'}">
+    <joint name="tool_pen_joint" type="fixed">
+      <parent link="dobot_tool_mount_link"/>
+      <child link="dobot_tool_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="dobot_tool_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${MESH_DIR}/magician_pen.dae"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 -0.050" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.005" length="0.100"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 -0.050" rpy="0 0 0"/>
+        <mass value="0.08"/>
+        <inertia ixx="0.00004" ixy="0.0" ixz="0.0" iyy="0.00004" iyz="0.0" izz="0.00001"/>
+      </inertial>
+    </link>
+
+    <!-- TCP (Tool Center Point at Pen tip) -->
+    <joint name="tcp_joint" type="fixed">
+      <parent link="dobot_tool_link"/>
+      <child link="dobot_tcp"/>
+      <origin xyz="0 0 -0.100" rpy="0 0 0"/>
+    </joint>
+    <link name="dobot_tcp"/>
+  </xacro:if>
+
+</robot>
