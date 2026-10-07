@@ -3160,7 +3160,7 @@
 
         function getMeshUrl(filename) {
             if (window.location.protocol === 'file:') {
-                return 'http://localhost:8080/dobot_description/meshes/dae/' + filename;
+                return 'dobot_description/meshes/dae/' + filename;
             }
             return '/dobot_description/meshes/dae/' + filename;
         }
@@ -3192,7 +3192,7 @@
                 { id: 'link1',   file: 'magicianLink1.dae',        group: j1Group,       pos: [0, 0, 0],               rot: [0, 0, 0] },
                 { id: 'link2',   file: 'magicianLink2.dae',        group: j2Group,       pos: [0, 0, 0],               rot: [0, -0.349066, 0] },
                 { id: 'link3',   file: 'magicianLink3.dae',        group: j3Group,       pos: [16.452, 0, -133.994],   rot: [0, -0.471239, 0] },
-                { id: 'link4',   file: 'magicianLink4_default.dae', group: j4WristGroup, pos: [-177.151, 0, -58.595],  rot: [0, 0, 0] },
+                { id: 'link4',   file: 'magicianLink4.dae',        group: j4WristGroup, pos: [-177.151, 0, -58.595],  rot: [0, 0, 0] },
                 { id: 'suction', file: 'suction_cup.dae',          group: toolGroup,     pos: [-0.081, 0, -11.843],    rot: [0, 0, 0] },
                 { id: 'gripper', file: 'magicianGripper.dae',      group: null,          pos: [0, 0, 0],               rot: [0, 0, 0] }
             ];
