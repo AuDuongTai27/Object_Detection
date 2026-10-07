@@ -3927,8 +3927,6 @@
                 alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: ${rMin} - ${rMax}mm)\nFlange Z: ${zFlange.toFixed(1)}mm (Z đầu hút: ${zTcp.toFixed(1)}mm)\nGiới hạn an toàn Flange: [${zMinLimit}, ${zMaxLimit}]mm`);
                 return;
             }
-
-            const zFlange = zTcp + toolOffset;
             if (typeof isSimulationMode === 'function' && isSimulationMode()) {
                 showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
                 await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
