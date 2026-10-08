@@ -3699,6 +3699,8 @@
         // ========================================================
         // ĐIỀU KHIỂN CỤC ĐIỂM ĐÍCH 3D (TARGET BEACON & GIZMO)
         // ========================================================
+        let lastGizmoDragEndTime = 0;
+
         function initTransformGizmo() {
             if (typeof THREE.TransformControls !== 'undefined') {
                 transformControl = new THREE.TransformControls(camera, renderer.domElement);
@@ -3711,6 +3713,7 @@
                     controls.enabled = !event.value; // Tạm khóa OrbitControls khi đang kéo mũi tên
                     isDraggingGizmo = event.value;
                     if (!event.value) {
+                        lastGizmoDragEndTime = Date.now();
                         onTargetGizmoDragEnd();
                     }
                 });
@@ -4171,102 +4174,113 @@
             showToast(`🎯 Đã chọn điểm đích: X=${x}, Y=${y}, Z=${z}`);
         }
 
+        let isExecutingMotion = false;
+
         async function executeGoToPoint(mode) {
-            const x = parseFloat(document.getElementById('inp-target-x').value);
-            const y = parseFloat(document.getElementById('inp-target-y').value);
-            const zTcp = parseFloat(document.getElementById('inp-target-z').value);
-            const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
-            const zFlange = zTcp + toolOffset;
+            if (isExecutingMotion) {
+                console.warn("⚠️ Robot đang thực hiện di chuyển, bỏ qua lệnh trùng lặp!");
+                return;
+            }
+            isExecutingMotion = true;
+            try {
+                const x = parseFloat(document.getElementById('inp-target-x').value);
+                const y = parseFloat(document.getElementById('inp-target-y').value);
+                const zTcp = parseFloat(document.getElementById('inp-target-z').value);
+                const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
+                const zFlange = zTcp + toolOffset;
 
-            const zMinLimit = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
-            const zMaxLimit = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
+                const zMinLimit = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
+                const zMaxLimit = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
 
-            if (isRailModeActive) {
-                // Tọa độ mục tiêu trong không gian 3D World
-                const zWorld = targetBeaconGroup.position.z;
-                const xWorld = targetBeaconGroup.position.x;
-                const sol = solveRailKinematics(xWorld, zWorld, currentRailL);
+                if (isRailModeActive) {
+                    // Tọa độ mục tiêu trong không gian 3D World
+                    const zWorld = targetBeaconGroup.position.z;
+                    const xWorld = targetBeaconGroup.position.x;
+                    const sol = solveRailKinematics(xWorld, zWorld, currentRailL);
 
-                // 1. Kiểm tra an toàn mở rộng (nhờ có ray)
-                if (!sol || zFlange < zMinLimit || zFlange > zMaxLimit) {
-                    alert(`⚠️ Điểm đích nằm ngoài vùng an toàn mở rộng của Robot + Ray trượt!\n\n` +
-                          `• Tọa độ bàn làm việc: X = ${xWorld.toFixed(1)} mm, Z = ${zWorld.toFixed(1)} mm\n` +
-                          `• Cao độ Flange: ${zFlange.toFixed(1)} mm (Z đầu hút: ${zTcp.toFixed(1)} mm | Cho phép: [${zMinLimit}, ${zMaxLimit}] mm)\n\n` +
-                          `Không thể thực hiện di chuyển đến điểm ngoài vùng an toàn!`);
-                    return;
-                }
-
-                const lOptimal = sol.l;
-                const xArm = sol.xArm;
-                const yArm = sol.yArm;
-                const railSpeed = parseFloat(document.getElementById('slider-rail-speed')?.value || 40);
-                const deltaL = Math.abs(lOptimal - currentRailL);
-
-                // 2. BƯỚC 1: DI CHUYỂN RAY ĐẾN VỊ TRÍ ĐÓN (CHỈ KHI CẦN THIẾT)
-                if (deltaL > 0.5 && !sol.inCurrentReach) {
-                    showToast(`🚄 [Bước 1/2] Đang di chuyển ray trượt tới L = ${lOptimal.toFixed(0)} mm...`);
-                    // Luôn gửi rail_move qua WebSocket để server cập nhật và đồng bộ rail_current_pos
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        sendAction('rail_move', { pos: lOptimal, l: lOptimal, speed: railSpeed });
+                    // 1. Kiểm tra an toàn mở rộng (nhờ có ray)
+                    if (!sol || zFlange < zMinLimit || zFlange > zMaxLimit) {
+                        alert(`⚠️ Điểm đích nằm ngoài vùng an toàn mở rộng của Robot + Ray trượt!\n\n` +
+                              `• Tọa độ bàn làm việc: X = ${xWorld.toFixed(1)} mm, Z = ${zWorld.toFixed(1)} mm\n` +
+                              `• Cao độ Flange: ${zFlange.toFixed(1)} mm (Z đầu hút: ${zTcp.toFixed(1)} mm | Cho phép: [${zMinLimit}, ${zMaxLimit}] mm)\n\n` +
+                              `Không thể thực hiện di chuyển đến điểm ngoài vùng an toàn!`);
+                        return;
                     }
-                    if (ws && ws.readyState === WebSocket.OPEN && isRobotConnected && currentMode === 'live') {
-                        const estDurationMs = (deltaL / railSpeed) * 1000;
-                        const maxWaitMs = estDurationMs + 5000;
-                        const tStart = Date.now();
-                        await sleepMs(300); // Chờ server nhận lệnh và bật cờ moving
-                        while (Date.now() - tStart < maxWaitMs) {
-                            if (!isRailHardwareMoving && Math.abs(currentRailL - lOptimal) <= 1.5) {
-                                break; // Ray đã tới đích và dừng hẳn
+
+                    const lOptimal = sol.l;
+                    const xArm = sol.xArm;
+                    const yArm = sol.yArm;
+                    const railSpeed = parseFloat(document.getElementById('slider-rail-speed')?.value || 40);
+                    const deltaL = Math.abs(lOptimal - currentRailL);
+
+                    // 2. BƯỚC 1: DI CHUYỂN RAY ĐẾN VỊ TRÍ ĐÓN (CHỈ KHI CẦN THIẾT)
+                    if (deltaL > 0.5 && !sol.inCurrentReach) {
+                        showToast(`🚄 [Bước 1/2] Đang di chuyển ray trượt tới L = ${lOptimal.toFixed(0)} mm...`);
+                        // Luôn gửi rail_move qua WebSocket để server cập nhật và đồng bộ rail_current_pos
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            sendAction('rail_move', { pos: lOptimal, l: lOptimal, speed: railSpeed });
+                        }
+                        if (ws && ws.readyState === WebSocket.OPEN && isRobotConnected && currentMode === 'live') {
+                            const estDurationMs = (deltaL / railSpeed) * 1000;
+                            const maxWaitMs = estDurationMs + 5000;
+                            const tStart = Date.now();
+                            await sleepMs(300); // Chờ server nhận lệnh và bật cờ moving
+                            while (Date.now() - tStart < maxWaitMs) {
+                                if (!isRailHardwareMoving && Math.abs(currentRailL - lOptimal) <= 1.5) {
+                                    break; // Ray đã tới đích và dừng hẳn
+                                }
+                                await sleepMs(50);
                             }
-                            await sleepMs(50);
+                            if (Math.abs(currentRailL - lOptimal) > 3.0) {
+                                showToast(`⚠️ Ray chưa tới đích yêu cầu (${currentRailL.toFixed(1)} != ${lOptimal.toFixed(1)} mm)! Đã hủy bước 2.`);
+                                return;
+                            }
+                        } else {
+                            await animateRailMove(lOptimal, railSpeed);
                         }
-                        if (Math.abs(currentRailL - lOptimal) > 3.0) {
-                            showToast(`⚠️ Ray chưa tới đích yêu cầu (${currentRailL.toFixed(1)} != ${lOptimal.toFixed(1)} mm)! Đã hủy bước 2.`);
-                            return;
+                        currentRailL = lOptimal;
+                        targetRailL = lOptimal;
+                    } else {
+                        showToast(`🎯 Điểm trong tầm an toàn của Dobot (L = ${currentRailL.toFixed(0)} mm) ➔ Dobot gắp luôn tại chỗ!`);
+                    }
+
+                    // 3. BƯỚC 2: DI CHUYỂN DOBOT TỚI ĐÍCH
+                    showToast(`🎯 [Bước 2/2] Dobot đang vươn tới đích (X=${xArm.toFixed(0)}, Y=${yArm.toFixed(0)}, Z=${zTcp.toFixed(0)})...`);
+                    if (ws && ws.readyState === WebSocket.OPEN && isRobotConnected && currentMode === 'live') {
+                        if (mode === 'safe') {
+                            sendAction('safe_jump', { x: xArm, y: yArm, z: zFlange, r: r });
+                        } else {
+                            sendAction('move_xyz', { x: xArm, y: yArm, z: zFlange, r: r, mode: 1 });
                         }
                     } else {
-                        await animateRailMove(lOptimal, railSpeed);
+                        await animateRobotCartesian(xArm, yArm, zTcp, r, mode, mode === 'safe' ? 600 : 450);
                     }
-                    currentRailL = lOptimal;
-                    targetRailL = lOptimal;
+                    showToast(`🎉 Hoàn tất di chuyển tới đích (L=${currentRailL.toFixed(0)}mm)!`);
                 } else {
-                    showToast(`🎯 Điểm trong tầm an toàn của Dobot (L = ${currentRailL.toFixed(0)} mm) ➔ Dobot gắp luôn tại chỗ!`);
-                }
+                    // CHẾ ĐỘ STANDALONE ĐỂ BÀN ĐỘC LẬP
+                    const rHoriz = Math.sqrt(x * x + y * y);
+                    const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
+                    const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
 
-                // 3. BƯỚC 2: DI CHUYỂN DOBOT TỚI ĐÍCH
-                showToast(`🎯 [Bước 2/2] Dobot đang vươn tới đích (X=${xArm.toFixed(0)}, Y=${yArm.toFixed(0)}, Z=${zTcp.toFixed(0)})...`);
-                if (ws && ws.readyState === WebSocket.OPEN && isRobotConnected && currentMode === 'live') {
-                    if (mode === 'safe') {
-                        sendAction('safe_jump', { x: xArm, y: yArm, z: zFlange, r: r });
-                    } else {
-                        sendAction('move_xyz', { x: xArm, y: yArm, z: zFlange, r: r, mode: 1 });
+                    if (rHoriz < rMin || rHoriz > rMax || zFlange < zMinLimit || zFlange > zMaxLimit) {
+                        alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: ${rMin} - ${rMax}mm)\nFlange Z: ${zFlange.toFixed(1)}mm (Z đầu hút: ${zTcp.toFixed(1)}mm)\nGiới hạn an toàn Flange: [${zMinLimit}, ${zMaxLimit}]mm`);
+                        return;
                     }
-                } else {
-                    await animateRobotCartesian(xArm, yArm, zTcp, r, mode, mode === 'safe' ? 600 : 450);
-                }
-                showToast(`🎉 Hoàn tất di chuyển tới đích (L=${currentRailL.toFixed(0)}mm)!`);
-            } else {
-                // CHẾ ĐỘ STANDALONE ĐỂ BÀN ĐỘC LẬP
-                const rHoriz = Math.sqrt(x * x + y * y);
-                const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
-                const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
-
-                if (rHoriz < rMin || rHoriz > rMax || zFlange < zMinLimit || zFlange > zMaxLimit) {
-                    alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: ${rMin} - ${rMax}mm)\nFlange Z: ${zFlange.toFixed(1)}mm (Z đầu hút: ${zTcp.toFixed(1)}mm)\nGiới hạn an toàn Flange: [${zMinLimit}, ${zMaxLimit}]mm`);
-                    return;
-                }
-                if (typeof isSimulationMode === 'function' && isSimulationMode()) {
-                    showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
-                    await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
-                } else {
-                    if (mode === 'safe') {
-                        sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
-                        showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    if (typeof isSimulationMode === 'function' && isSimulationMode()) {
+                        showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                        await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
                     } else {
-                        sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
-                        showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                        if (mode === 'safe') {
+                            sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
+                            showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                        } else {
+                            sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
+                            showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                        }
                     }
                 }
+            } finally {
+                isExecutingMotion = false;
             }
         }
 

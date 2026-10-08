@@ -573,12 +573,17 @@ class DobotController:
                 self.rail_is_moving = False
                 return False, "⚠️ Công tắc hành trình đang chạm, không thể lùi thêm!"
 
-            if self.connected:
-                with self.lock:
-                    self._send_raw_cmd(id=240, ctrl=1)
-                    params = struct.pack("<B B i I", RAIL_INDEX, 1, dir_speed, pulses)
-                    self._send_raw_cmd(id=136, ctrl=3, params=params)
-                    self._send_raw_cmd(id=240, ctrl=1)
+            if not self.connected:
+                self.rail_current_pos = max(0.0, min(RAIL_MAX_MM, target_pos))
+                self._save_rail_state(self.rail_current_pos)
+                self.rail_is_moving = False
+                return True, f"✅ [Mô phỏng] Ray đã ở vị trí L = {self.rail_current_pos:.1f} mm"
+
+            with self.lock:
+                self._send_raw_cmd(id=240, ctrl=1)
+                params = struct.pack("<B B i I", RAIL_INDEX, 1, dir_speed, pulses)
+                self._send_raw_cmd(id=136, ctrl=3, params=params)
+                self._send_raw_cmd(id=240, ctrl=1)
 
             t_duration = pulses / float(speed_pulses)
             t0 = time.time()
