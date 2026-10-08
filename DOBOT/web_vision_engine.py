@@ -85,6 +85,15 @@ COLOR_MAP = {
 }
 
 
+try:
+    from dobot_auto_sort import solve_rail_kinematics
+except ImportError:
+    try:
+        from .dobot_auto_sort import solve_rail_kinematics
+    except Exception:
+        solve_rail_kinematics = None
+
+
 class WebVisionEngine:
     def __init__(self, robot_controller=None, default_cam=None):
         self.robot = robot_controller
@@ -413,16 +422,28 @@ class WebVisionEngine:
 
                     color = COLOR_MAP.get(cls_name, (0, 255, 255))
 
+                    sol_rail = None
+                    is_rail = bool(getattr(self.robot, "is_rail_mode", False))
+                    if dobot_x is not None and dobot_y is not None:
+                        r_dist = (dobot_x**2 + dobot_y**2)**0.5
+                        if (r_dist < 140.0 or r_dist > 330.0 or dobot_x < 70.0) and is_rail:
+                            cur_l = float(getattr(self.robot, "rail_current_pos", 0.0))
+                            sol_rail = solve_rail_kinematics(dobot_x, dobot_y, current_rail_l=cur_l, calib_rail_l=0.0)
+
                     # Vẽ Bounding Box & tâm
-                    cv2.rectangle(display, (x1, y1), (x2, y2), color, 2)
-                    cv2.circle(display, (int(u_center), int(v_center)), 4, (0, 0, 255), -1)
+                    box_color = (255, 215, 0) if sol_rail is not None else color
+                    cv2.rectangle(display, (x1, y1), (x2, y2), box_color, 2)
+                    cv2.circle(display, (int(u_center), int(v_center)), 4, (0, 0, 255) if sol_rail is None else (255, 255, 0), -1)
 
                     # Nhãn & Tọa độ
                     label_text = f"{cls_name} {conf:.2f}"
-                    coord_text = f"X:{dobot_x:.1f} Y:{dobot_y:.1f}" if dobot_x is not None else ""
+                    if sol_rail is not None:
+                        coord_text = f"X:{dobot_x:.1f} Y:{dobot_y:.1f} [RAY L={sol_rail['optimal_l']:.0f}]"
+                    else:
+                        coord_text = f"X:{dobot_x:.1f} Y:{dobot_y:.1f}" if dobot_x is not None else ""
 
                     cv2.putText(display, label_text, (x1, max(18, y1 - 8)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, box_color, 2)
                     if coord_text:
                         cv2.putText(display, coord_text, (x1, y2 + 18),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
@@ -435,7 +456,8 @@ class WebVisionEngine:
                         "dobot_coord": {"x": round(dobot_x, 1) if dobot_x else None, "y": round(dobot_y, 1) if dobot_y else None},
                         "dobot_x": round(dobot_x, 1) if dobot_x else None,
                         "dobot_y": round(dobot_y, 1) if dobot_y else None,
-                        "bbox": [int(x1), int(y1), int(x2), int(y2)]
+                        "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                        "sol_rail": sol_rail
                     })
         except Exception:
             pass
@@ -512,8 +534,28 @@ class WebVisionEngine:
 
                 print(f"[VisionEngine] 🚀 Bắt đầu gắp {cube_name} tại ({pick_x:.1f}, {pick_y:.1f}) -> Thả ({drop_x}, {drop_y})")
 
+                # Kiểm tra chế độ ray trượt
+                is_rail = bool(getattr(self.robot, "is_rail_mode", False))
+                actual_pick_x = pick_x
+                actual_pick_y = pick_y
+
+                if is_rail:
+                    cur_rail_l = float(getattr(self.robot, "rail_current_pos", 0.0))
+                    sol = solve_rail_kinematics(pick_x, pick_y, current_rail_l=cur_rail_l, calib_rail_l=0.0)
+                    if sol is not None:
+                        rail_pick_l = sol["optimal_l"]
+                        actual_pick_x = sol["x_arm"]
+                        actual_pick_y = sol["y_arm"]
+                        delta_pick = abs(rail_pick_l - cur_rail_l)
+                        if delta_pick > 1.0 and not sol.get("in_current_reach", False):
+                            print(f"[VisionEngine] 🚄 Di chuyển ray tới L = {rail_pick_l:.1f} mm đón phôi ({cube_name})")
+                            self.robot.rail_move_to(rail_pick_l, speed_mm_s=40.0)
+                            time.sleep(0.3)
+                        else:
+                            print(f"[VisionEngine] 🎯 Phôi ({cube_name}) trong tầm với an toàn tại L = {cur_rail_l:.1f} mm -> Gắp luôn tại chỗ!")
+
                 # 1. Bay an toàn tới điểm trên phôi
-                self.robot.move_safe_jump(pick_x, pick_y, Z_PICK_FLANGE, r=0.0, safe_z=Z_SAFE_FLANGE)
+                self.robot.move_safe_jump(actual_pick_x, actual_pick_y, Z_PICK_FLANGE, r=0.0, safe_z=Z_SAFE_FLANGE)
                 time.sleep(1.2)
 
                 # 2. Bật giác hút
@@ -521,18 +563,25 @@ class WebVisionEngine:
                 time.sleep(0.4)
 
                 # 3. Nhấc lên độ cao an toàn
-                self.robot.move_to_xyz(pick_x, pick_y, Z_SAFE_FLANGE, r=0.0)
+                self.robot.move_to_xyz(actual_pick_x, actual_pick_y, Z_SAFE_FLANGE, r=0.0)
                 time.sleep(0.6)
 
-                # 4. Bay sang điểm thả
+                # 4. Nếu có ray, di chuyển ray về vị trí khay thả (mặc định L=0.0)
+                if is_rail:
+                    tray_rail_l = float(target_tray.get("rail_l", 0.0))
+                    print(f"[VisionEngine] 🚄 Di chuyển ray về khay thả L = {tray_rail_l:.1f} mm...")
+                    self.robot.rail_move_to(tray_rail_l, speed_mm_s=40.0)
+                    time.sleep(0.3)
+
+                # 5. Bay sang điểm thả
                 self.robot.move_safe_jump(drop_x, drop_y, drop_z, r=0.0, safe_z=Z_SAFE_FLANGE)
                 time.sleep(1.2)
 
-                # 5. Tắt giác hút
+                # 6. Tắt giác hút
                 self.robot.set_suction(False)
                 time.sleep(0.3)
 
-                # 6. Nhấc lên an toàn hoàn tất chu trình
+                # 7. Nhấc lên an toàn hoàn tất chu trình
                 self.robot.move_to_xyz(drop_x, drop_y, Z_SAFE_FLANGE, r=0.0)
                 time.sleep(0.6)
 
@@ -568,8 +617,19 @@ class WebVisionEngine:
                     for c in self.detected_cubes:
                         coord = c.get("dobot_coord", {})
                         if coord.get("x") is not None and coord.get("y") is not None:
-                            r = (coord["x"]**2 + coord["y"]**2)**0.5
-                            if 150 <= r <= 320:
+                            cx = float(coord["x"])
+                            cy = float(coord["y"])
+                            r = (cx**2 + cy**2)**0.5
+                            is_reachable = False
+                            if 140.0 <= r <= 330.0 and cx >= 70.0:
+                                is_reachable = True
+                            elif getattr(self.robot, "is_rail_mode", False):
+                                cur_l = float(getattr(self.robot, "rail_current_pos", 0.0))
+                                sol = solve_rail_kinematics(cx, cy, current_rail_l=cur_l, calib_rail_l=0.0)
+                                if sol is not None:
+                                    is_reachable = True
+
+                            if is_reachable:
                                 target_cube = c
                                 break
 

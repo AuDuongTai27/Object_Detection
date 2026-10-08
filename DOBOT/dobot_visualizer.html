@@ -3747,55 +3747,286 @@
             showToast(isTargetGizmoActive ? '🎯 Đã hiện cục điểm đích! Kéo mũi tên xanh lá để chỉnh Z, đỏ/xanh dương để chỉnh XY' : 'Đã ẩn cục điểm đích 3D');
         }
 
-        function onTargetGizmoChange() {
-            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
-            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
-            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE - railYOffset) * 10) / 10;
+        let targetRailL = 0.0;
+        let isRailHardwareMoving = false;
+        let railAnimationFrameId = null;
+        let isRailAnimating = false;
 
-            document.getElementById('inp-target-x').value = x.toFixed(1);
-            document.getElementById('inp-target-y').value = y.toFixed(1);
-            document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+        // ========================================================
+        // GIẢI THUẬT ĐỘNG HỌC RAY TRƯỢT THÔNG MINH (RAIL KINEMATICS SOLVER)
+        // Dựa trên kiến trúc hệ thống Dobot-Fablab:
+        // Dobot có bán kính với cơ khí an toàn [140, 330] mm.
+        // Khi gắn trên ray trượt 1000mm, các điểm ngoài tầm với (dọc ray hoặc gần ray 70..150mm)
+        // được giải tự động bằng cách dịch bàn trượt dọc theo ray và vươn tới điểm đích.
+        // ========================================================
+        function solveRailKinematics(xWorld, zWorld, preferredL = (typeof currentRailL !== 'undefined' ? currentRailL : 500.0)) {
+            if (xWorld < 70.0 || xWorld > 330.0) return null;
 
-            updateTargetAncillaries(x, y, zTcp);
+            const curL = Math.max(0.0, Math.min(1000.0, parseFloat(preferredL !== undefined && preferredL !== null ? preferredL : currentRailL) || 0.0));
+            const zcCur = curL - 500.0;
+            const yArmCur = -(zWorld - zcCur);
+            const rCur = Math.sqrt(xWorld * xWorld + yArmCur * yArmCur);
+            const j1CurDeg = THREE.MathUtils.radToDeg(Math.atan2(yArmCur, xWorld));
+
+            // 1. KIỂM TRA ƯU TIÊN: Nếu điểm ĐÃ NẰM TRONG TẦM VỚI AN TOÀN của Dobot tại vị trí ray hiện tại,
+            // thì giữ nguyên vị trí ray, gắp luôn tại chỗ, KHÔNG cần di chuyển ray!
+            if (rCur >= 140.0 && rCur <= 330.0 && Math.abs(j1CurDeg) <= 85.0) {
+                return {
+                    l: curL,
+                    optimal_l: curL,
+                    zCarriage: zcCur,
+                    xArm: xWorld,
+                    yArm: yArmCur,
+                    r: rCur,
+                    j1Deg: j1CurDeg,
+                    inCurrentReach: true
+                };
+            }
+
+            // 2. Nếu nằm ngoài tầm tại vị trí hiện tại: Giải vị trí ray tối ưu
+            // Thử vươn thẳng trực tiếp (bàn trượt căn thẳng hàng với mục tiêu dọc trục ray)
+            const zCarriageDirect = Math.max(-500.0, Math.min(500.0, zWorld));
+            const yArmDirect = -(zWorld - zCarriageDirect);
+            const rDirect = Math.sqrt(xWorld * xWorld + yArmDirect * yArmDirect);
+            const j1DirectDeg = THREE.MathUtils.radToDeg(Math.atan2(yArmDirect, xWorld));
+
+            if (xWorld >= 150.0 && rDirect >= 140.0 && rDirect <= 330.0 && Math.abs(j1DirectDeg) <= 85.0) {
+                return {
+                    l: zCarriageDirect + 500.0,
+                    optimal_l: zCarriageDirect + 500.0,
+                    zCarriage: zCarriageDirect,
+                    xArm: xWorld,
+                    yArm: yArmDirect,
+                    r: rDirect,
+                    j1Deg: j1DirectDeg,
+                    inCurrentReach: false
+                };
+            }
+
+            // 3. Vươn chéo rTarget = 180mm khi xWorld < 150mm
+            const rTarget = 180.0;
+            const dy = Math.sqrt(Math.max(0.0, rTarget * rTarget - xWorld * xWorld));
+            const candidates = [
+                zWorld - dy,
+                zWorld + dy
+            ];
+
+            let best = null;
+            let minDiff = Infinity;
+
+            for (const zc of candidates) {
+                const zcClamped = Math.max(-500.0, Math.min(500.0, zc));
+                const lCandidate = zcClamped + 500.0;
+                const yArm = -(zWorld - zcClamped);
+                const r = Math.sqrt(xWorld * xWorld + yArm * yArm);
+                const j1Deg = THREE.MathUtils.radToDeg(Math.atan2(yArm, xWorld));
+
+                if (r >= 140.0 && r <= 330.0 && Math.abs(j1Deg) <= 85.0) {
+                    const diff = Math.abs(lCandidate - curL);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        best = {
+                            l: lCandidate,
+                            optimal_l: lCandidate,
+                            zCarriage: zcClamped,
+                            xArm: xWorld,
+                            yArm: yArm,
+                            r: r,
+                            j1Deg: j1Deg,
+                            inCurrentReach: false
+                        };
+                    }
+                }
+            }
+
+            // 4. Quét dự phòng dọc toàn bộ hành trình ray (0..1000mm)
+            if (!best) {
+                for (let l = 0; l <= 1000; l += 10) {
+                    const zc = l - 500.0;
+                    const yArm = -(zWorld - zc);
+                    const r = Math.sqrt(xWorld * xWorld + yArm * yArm);
+                    const j1Deg = THREE.MathUtils.radToDeg(Math.atan2(yArm, xWorld));
+                    if (r >= 140.0 && r <= 330.0 && Math.abs(j1Deg) <= 85.0) {
+                        const diff = Math.abs(l - curL);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            best = {
+                                l: l,
+                                optimal_l: l,
+                                zCarriage: zc,
+                                xArm: xWorld,
+                                yArm: yArm,
+                                r: r,
+                                j1Deg: j1Deg,
+                                inCurrentReach: false
+                            };
+                        }
+                    }
+                }
+            }
+
+            return best;
         }
 
-        function onTargetGizmoDragEnd() {
-            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
-            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
-            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-(targetBeaconGroup.position.z - railOffset) * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE - railYOffset) * 10) / 10;
+        function isPointInRailWorkspace(xWorld, zWorld, zTcp) {
+            if (zTcp < -180.0 || zTcp > 165.0) return false;
+            return solveRailKinematics(xWorld, zWorld) !== null;
+        }
 
-            document.getElementById('inp-target-x').value = x.toFixed(1);
-            document.getElementById('inp-target-y').value = y.toFixed(1);
-            document.getElementById('inp-target-z').value = zTcp.toFixed(1);
-
-            updateTargetAncillaries(x, y, zTcp);
-
-            const rHoriz = Math.sqrt(x * x + y * y);
-            const rMinCheck = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
-            const rMaxCheck = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
-            const zMinCheck = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
-            const zMaxCheck = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
-            const zFlangeCheck = zTcp + toolOffset;
-
-            if (rHoriz < rMinCheck || rHoriz > rMaxCheck || zFlangeCheck < zMinCheck || zFlangeCheck > zMaxCheck) {
-                showToast(`⚠️ Điểm đích (X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}) nằm ngoài vùng an toàn!`);
+        // Hoạt hình trượt 3D mượt mà cho Ray trượt trong mô phỏng
+        async function animateRailMove(targetL, speedMmS=40.0) {
+            targetL = Math.max(0.0, Math.min(1000.0, parseFloat(targetL) || 0.0));
+            const startL = currentRailL;
+            const dist = Math.abs(targetL - startL);
+            if (dist < 0.2) {
+                currentRailL = targetL;
+                targetRailL = targetL;
+                const railZ = -500 + currentRailL;
+                if (railCarriage) railCarriage.position.z = railZ;
+                if (typeof workspaceZoneGroup !== 'undefined' && workspaceZoneGroup) {
+                    workspaceZoneGroup.position.z = railZ;
+                }
+                const disp = document.getElementById('rail-pos-display');
+                if (disp) disp.innerText = targetL.toFixed(1) + ' mm';
+                const pbar = document.getElementById('rail-progress-bar');
+                if (pbar) pbar.style.width = Math.min(100, Math.max(0, (targetL / 1000.0) * 100)) + '%';
                 return;
             }
 
-            const autoMove = document.getElementById('chk-auto-move-drag');
-            if (autoMove && autoMove.checked) {
-                showToast(`🎯 Thả chuột ➔ Robot đang di chuyển tới X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
-                executeGoToPoint('safe');
+            if (railAnimationFrameId) {
+                cancelAnimationFrame(railAnimationFrameId);
+                railAnimationFrameId = null;
+            }
+
+            const durationMs = Math.max(200, Math.min(3000, (dist / speedMmS) * 1000));
+            const startTime = performance.now();
+            isRailAnimating = true;
+
+            return new Promise((resolve) => {
+                function step(now) {
+                    if (!isRailAnimating) {
+                        railAnimationFrameId = null;
+                        resolve();
+                        return;
+                    }
+                    const elapsed = now - startTime;
+                    const progress = Math.min(1.0, elapsed / durationMs);
+                    const eased = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+                    const newL = startL + (targetL - startL) * eased;
+                    currentRailL = newL;
+                    targetRailL = targetL;
+
+                    const railZ = -500 + newL;
+                    if (railCarriage) railCarriage.position.z = railZ;
+                    if (typeof workspaceZoneGroup !== 'undefined' && workspaceZoneGroup) {
+                        workspaceZoneGroup.position.z = railZ;
+                    }
+
+                    const disp = document.getElementById('rail-pos-display');
+                    if (disp) disp.innerText = newL.toFixed(1) + ' mm';
+                    const pbar = document.getElementById('rail-progress-bar');
+                    if (pbar) pbar.style.width = Math.min(100, Math.max(0, (newL / 1000.0) * 100)) + '%';
+
+                    if (progress < 1.0) {
+                        railAnimationFrameId = requestAnimationFrame(step);
+                    } else {
+                        currentRailL = targetL;
+                        targetRailL = targetL;
+                        isRailAnimating = false;
+                        railAnimationFrameId = null;
+                        resolve();
+                    }
+                }
+                railAnimationFrameId = requestAnimationFrame(step);
+            });
+        }
+
+        function onTargetGizmoChange() {
+            const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE - railYOffset) * 10) / 10;
+
+            if (isRailModeActive) {
+                const zWorld = targetBeaconGroup.position.z;
+                const xWorld = targetBeaconGroup.position.x;
+                const sol = solveRailKinematics(xWorld, zWorld, currentRailL);
+                const lOpt = sol ? sol.l : Math.max(0.0, Math.min(1000.0, zWorld + 500.0));
+                targetRailL = lOpt;
+                const zCarriage = lOpt - 500.0;
+                const xArm = sol ? Math.round(sol.xArm * 10) / 10 : Math.round(xWorld * 10) / 10;
+                const yArm = sol ? Math.round(sol.yArm * 10) / 10 : Math.round(-(zWorld - zCarriage) * 10) / 10;
+
+                document.getElementById('inp-target-x').value = xArm.toFixed(1);
+                document.getElementById('inp-target-y').value = yArm.toFixed(1);
+                document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+                updateTargetAncillaries(xArm, yArm, zTcp);
             } else {
-                showToast(`📍 Đã ghim điểm: X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
-                const btnSafe = document.querySelector('.btn-safe-jump');
-                if (btnSafe) {
-                    btnSafe.style.transform = 'scale(1.05)';
-                    setTimeout(() => { btnSafe.style.transform = ''; }, 400);
+                const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
+                const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+                document.getElementById('inp-target-x').value = x.toFixed(1);
+                document.getElementById('inp-target-y').value = y.toFixed(1);
+                document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+                updateTargetAncillaries(x, y, zTcp);
+            }
+        }
+
+        function onTargetGizmoDragEnd() {
+            onTargetGizmoChange();
+            const x = parseFloat(document.getElementById('inp-target-x').value) || 0;
+            const y = parseFloat(document.getElementById('inp-target-y').value) || 0;
+            const zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
+            const zFlangeCheck = zTcp + toolOffset;
+            const zMinCheck = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
+            const zMaxCheck = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
+
+            if (isRailModeActive) {
+                const zWorld = targetBeaconGroup.position.z;
+                const xWorld = targetBeaconGroup.position.x;
+                const sol = solveRailKinematics(xWorld, zWorld, currentRailL);
+                if (!sol || zFlangeCheck < zMinCheck || zFlangeCheck > zMaxCheck) {
+                    showToast(`⚠️ Điểm đích nằm ngoài vùng an toàn mở rộng của Ray trượt + Dobot!`);
+                    return;
+                }
+                const autoMove = document.getElementById('chk-auto-move-drag');
+                if (autoMove && autoMove.checked) {
+                    if (sol.inCurrentReach) {
+                        showToast(`🎯 Thả chuột ➔ Điểm trong tầm với (L=${currentRailL.toFixed(0)}mm), Dobot gắp luôn tại chỗ!`);
+                    } else {
+                        showToast(`🎯 Thả chuột ➔ Tự động phối hợp Ray (L=${sol.l.toFixed(0)}mm) + Dobot tới đích!`);
+                    }
+                    executeGoToPoint('safe');
+                } else {
+                    if (sol.inCurrentReach) {
+                        showToast(`📍 Điểm trong tầm an toàn: L=${currentRailL.toFixed(0)}mm, X=${sol.xArm.toFixed(0)}, Y=${sol.yArm.toFixed(0)}. Bấm [Nhấc An Toàn] để gắp luôn!`);
+                    } else {
+                        showToast(`📍 Cần trượt ray: L=${sol.l.toFixed(0)}mm, X=${sol.xArm.toFixed(0)}, Y=${sol.yArm.toFixed(0)}, Z=${zTcp.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
+                    }
+                    const btnSafe = document.querySelector('.btn-safe-jump');
+                    if (btnSafe) {
+                        btnSafe.style.transform = 'scale(1.05)';
+                        setTimeout(() => { btnSafe.style.transform = ''; }, 400);
+                    }
+                }
+            } else {
+                const rHoriz = Math.sqrt(x * x + y * y);
+                const rMinCheck = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
+                const rMaxCheck = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
+
+                if (rHoriz < rMinCheck || rHoriz > rMaxCheck || zFlangeCheck < zMinCheck || zFlangeCheck > zMaxCheck) {
+                    showToast(`⚠️ Điểm đích (X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}) nằm ngoài vùng an toàn!`);
+                    return;
+                }
+
+                const autoMove = document.getElementById('chk-auto-move-drag');
+                if (autoMove && autoMove.checked) {
+                    showToast(`🎯 Thả chuột ➔ Robot đang di chuyển tới X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    executeGoToPoint('safe');
+                } else {
+                    showToast(`📍 Đã ghim điểm: X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
+                    const btnSafe = document.querySelector('.btn-safe-jump');
+                    if (btnSafe) {
+                        btnSafe.style.transform = 'scale(1.05)';
+                        setTimeout(() => { btnSafe.style.transform = ''; }, 400);
+                    }
                 }
             }
         }
@@ -3803,18 +4034,16 @@
         function updateTargetAncillaries(x, y, zTcp) {
             const railYOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? 42 : 0;
             const floorHeight = railYOffset + L1_BASE + zTcp;
-            const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
 
-            // Vòng tâm ngắm ở mặt sàn (bám theo con trượt Dobot)
-            targetFloorReticle.position.set(x, 0.6, railOffset - y);
+            // Vòng tâm ngắm ở mặt sàn
+            targetFloorReticle.position.set(targetBeaconGroup.position.x, 0.6, targetBeaconGroup.position.z);
 
             // Đường gióng rơi thẳng đứng
-            const pts = [new THREE.Vector3(x, floorHeight, railOffset - y), new THREE.Vector3(x, 0.6, railOffset - y)];
+            const pts = [new THREE.Vector3(targetBeaconGroup.position.x, floorHeight, targetBeaconGroup.position.z), new THREE.Vector3(targetBeaconGroup.position.x, 0.6, targetBeaconGroup.position.z)];
             targetDropLine.geometry.setFromPoints(pts);
             targetDropLine.computeLineDistances();
 
             // Kiểm tra an toàn dựa trên cấu hình Vùng An Toàn (Safety Limits)
-            const rHoriz = Math.sqrt(x * x + y * y);
             const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
             const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
             const zMin = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
@@ -3822,20 +4051,46 @@
             const zFlange = zTcp + toolOffset;
 
             let isValid = true;
-            let msg = `✅ Trong tầm với an toàn (R: ${rHoriz.toFixed(1)} mm, Z_TCP: ${zTcp.toFixed(1)} mm)`;
+            let msg = '';
 
-            if (rHoriz < rMin) {
-                isValid = false;
-                msg = `⚠️ Quá gần thân robot (${rHoriz.toFixed(1)}mm < ${rMin.toFixed(0)}mm)!`;
-            } else if (rHoriz > rMax) {
-                isValid = false;
-                msg = `⚠️ Vượt quá tầm với tối đa (${rHoriz.toFixed(1)}mm > ${rMax.toFixed(0)}mm)!`;
-            } else if (zFlange < zMin) {
-                isValid = false;
-                msg = `⚠️ Cao độ Flange quá thấp (${zFlange.toFixed(1)}mm < ${zMin.toFixed(0)}mm đáy an toàn)!`;
-            } else if (zFlange > zMax) {
-                isValid = false;
-                msg = `⚠️ Cao độ Flange quá cao (${zFlange.toFixed(1)}mm > ${zMax.toFixed(0)}mm đỉnh an toàn)!`;
+            if (isRailModeActive) {
+                const zWorld = targetBeaconGroup.position.z;
+                const xWorld = targetBeaconGroup.position.x;
+                const sol = solveRailKinematics(xWorld, zWorld, currentRailL);
+                if (!sol) {
+                    isValid = false;
+                    msg = `⚠️ Ngoài tầm với của Ray trượt + Dobot (X: ${xWorld.toFixed(0)}mm)!`;
+                } else if (zFlange < zMin) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Flange quá thấp (${zFlange.toFixed(1)}mm < ${zMin.toFixed(0)}mm)!`;
+                } else if (zFlange > zMax) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Flange quá cao (${zFlange.toFixed(1)}mm > ${zMax.toFixed(0)}mm)!`;
+                } else {
+                    targetRailL = sol.l;
+                    const deltaL = Math.abs(sol.l - currentRailL);
+                    if (deltaL > 0.5 && !sol.inCurrentReach) {
+                        msg = `✅ Trong tầm với Ray (Tự trượt tới L = ${sol.l.toFixed(0)}mm | Dobot: X=${sol.xArm.toFixed(0)}, Y=${sol.yArm.toFixed(0)})`;
+                    } else {
+                        msg = `✅ Trong tầm với hiện tại (L = ${currentRailL.toFixed(0)}mm | Dobot gắp luôn: R=${sol.r.toFixed(0)}mm)`;
+                    }
+                }
+            } else {
+                const rHoriz = Math.sqrt(x * x + y * y);
+                msg = `✅ Trong tầm với an toàn (R: ${rHoriz.toFixed(1)} mm, Z_TCP: ${zTcp.toFixed(1)} mm)`;
+                if (rHoriz < rMin) {
+                    isValid = false;
+                    msg = `⚠️ Quá gần thân robot (${rHoriz.toFixed(1)}mm < ${rMin.toFixed(0)}mm)!`;
+                } else if (rHoriz > rMax) {
+                    isValid = false;
+                    msg = `⚠️ Vượt quá tầm với tối đa (${rHoriz.toFixed(1)}mm > ${rMax.toFixed(0)}mm)!`;
+                } else if (zFlange < zMin) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Flange quá thấp (${zFlange.toFixed(1)}mm < ${zMin.toFixed(0)}mm đáy an toàn)!`;
+                } else if (zFlange > zMax) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Flange quá cao (${zFlange.toFixed(1)}mm > ${zMax.toFixed(0)}mm đỉnh an toàn)!`;
+                }
             }
 
             const badge = document.getElementById('target-reachability-badge');
@@ -3872,7 +4127,11 @@
                 label.style.display = 'block';
                 label.style.borderColor = isValid ? '#51cf66' : '#ff6b6b';
                 label.style.color = isValid ? '#51cf66' : '#ff6b6b';
-                label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
+                if (isRailModeActive && typeof targetRailL !== 'undefined') {
+                    label.innerText = `🎯 ĐÍCH (L=${targetRailL.toFixed(0)}mm): (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
+                } else {
+                    label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
+                }
             } else {
                 label.style.display = 'none';
             }
@@ -3896,8 +4155,9 @@
             document.getElementById('inp-target-y').value = currentY.toFixed(1);
             document.getElementById('inp-target-z').value = currentZ.toFixed(1);
             document.getElementById('inp-target-r').value = currentR.toFixed(1);
+            if (isRailModeActive) targetRailL = currentRailL;
             updateTargetMarker();
-        renderTeachList();
+            renderTeachList();
             showToast('📍 Đã nạp vị trí thực tế của đầu hút vào ô nhập!');
         }
 
@@ -3906,6 +4166,7 @@
             document.getElementById('inp-target-y').value = y;
             document.getElementById('inp-target-z').value = z;
             document.getElementById('inp-target-r').value = r;
+            if (isRailModeActive) targetRailL = currentRailL;
             updateTargetMarker();
             showToast(`🎯 Đã chọn điểm đích: X=${x}, Y=${y}, Z=${z}`);
         }
@@ -3914,29 +4175,97 @@
             const x = parseFloat(document.getElementById('inp-target-x').value);
             const y = parseFloat(document.getElementById('inp-target-y').value);
             const zTcp = parseFloat(document.getElementById('inp-target-z').value);
-            const r = parseFloat(document.getElementById('inp-target-r').value);
-
-            const rHoriz = Math.sqrt(x * x + y * y);
-            const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
-            const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
-            const zMinLimit = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
-            const zMaxLimit = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
+            const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
             const zFlange = zTcp + toolOffset;
 
-            if (rHoriz < rMin || rHoriz > rMax || zFlange < zMinLimit || zFlange > zMaxLimit) {
-                alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: ${rMin} - ${rMax}mm)\nFlange Z: ${zFlange.toFixed(1)}mm (Z đầu hút: ${zTcp.toFixed(1)}mm)\nGiới hạn an toàn Flange: [${zMinLimit}, ${zMaxLimit}]mm`);
-                return;
-            }
-            if (typeof isSimulationMode === 'function' && isSimulationMode()) {
-                showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
-                await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
-            } else {
-                if (mode === 'safe') {
-                    sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
-                    showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+            const zMinLimit = cachedSafetyLimits ? (isRailModeActive ? (cachedSafetyLimits.z_min_rail ?? -180.0) : (cachedSafetyLimits.z_min_standalone ?? -65.0)) : -65.0;
+            const zMaxLimit = (cachedSafetyLimits && cachedSafetyLimits.z_max !== undefined) ? cachedSafetyLimits.z_max : 165.0;
+
+            if (isRailModeActive) {
+                // Tọa độ mục tiêu trong không gian 3D World
+                const zWorld = targetBeaconGroup.position.z;
+                const xWorld = targetBeaconGroup.position.x;
+                const sol = solveRailKinematics(xWorld, zWorld, currentRailL);
+
+                // 1. Kiểm tra an toàn mở rộng (nhờ có ray)
+                if (!sol || zFlange < zMinLimit || zFlange > zMaxLimit) {
+                    alert(`⚠️ Điểm đích nằm ngoài vùng an toàn mở rộng của Robot + Ray trượt!\n\n` +
+                          `• Tọa độ bàn làm việc: X = ${xWorld.toFixed(1)} mm, Z = ${zWorld.toFixed(1)} mm\n` +
+                          `• Cao độ Flange: ${zFlange.toFixed(1)} mm (Z đầu hút: ${zTcp.toFixed(1)} mm | Cho phép: [${zMinLimit}, ${zMaxLimit}] mm)\n\n` +
+                          `Không thể thực hiện di chuyển đến điểm ngoài vùng an toàn!`);
+                    return;
+                }
+
+                const lOptimal = sol.l;
+                const xArm = sol.xArm;
+                const yArm = sol.yArm;
+                const railSpeed = parseFloat(document.getElementById('slider-rail-speed')?.value || 40);
+                const deltaL = Math.abs(lOptimal - currentRailL);
+
+                // 2. BƯỚC 1: DI CHUYỂN RAY ĐẾN VỊ TRÍ ĐÓN (CHỈ KHI CẦN THIẾT)
+                if (deltaL > 0.5 && !sol.inCurrentReach) {
+                    showToast(`🚄 [Bước 1/2] Đang di chuyển ray trượt tới L = ${lOptimal.toFixed(0)} mm...`);
+                    // Luôn gửi rail_move qua WebSocket để server cập nhật và đồng bộ rail_current_pos
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        sendAction('rail_move', { pos: lOptimal, l: lOptimal, speed: railSpeed });
+                    }
+                    if (ws && ws.readyState === WebSocket.OPEN && isRobotConnected && currentMode === 'live') {
+                        const estDurationMs = (deltaL / railSpeed) * 1000;
+                        const maxWaitMs = estDurationMs + 5000;
+                        const tStart = Date.now();
+                        await sleepMs(300); // Chờ server nhận lệnh và bật cờ moving
+                        while (Date.now() - tStart < maxWaitMs) {
+                            if (!isRailHardwareMoving && Math.abs(currentRailL - lOptimal) <= 1.5) {
+                                break; // Ray đã tới đích và dừng hẳn
+                            }
+                            await sleepMs(50);
+                        }
+                        if (Math.abs(currentRailL - lOptimal) > 3.0) {
+                            showToast(`⚠️ Ray chưa tới đích yêu cầu (${currentRailL.toFixed(1)} != ${lOptimal.toFixed(1)} mm)! Đã hủy bước 2.`);
+                            return;
+                        }
+                    } else {
+                        await animateRailMove(lOptimal, railSpeed);
+                    }
+                    currentRailL = lOptimal;
+                    targetRailL = lOptimal;
                 } else {
-                    sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
-                    showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    showToast(`🎯 Điểm trong tầm an toàn của Dobot (L = ${currentRailL.toFixed(0)} mm) ➔ Dobot gắp luôn tại chỗ!`);
+                }
+
+                // 3. BƯỚC 2: DI CHUYỂN DOBOT TỚI ĐÍCH
+                showToast(`🎯 [Bước 2/2] Dobot đang vươn tới đích (X=${xArm.toFixed(0)}, Y=${yArm.toFixed(0)}, Z=${zTcp.toFixed(0)})...`);
+                if (ws && ws.readyState === WebSocket.OPEN && isRobotConnected && currentMode === 'live') {
+                    if (mode === 'safe') {
+                        sendAction('safe_jump', { x: xArm, y: yArm, z: zFlange, r: r });
+                    } else {
+                        sendAction('move_xyz', { x: xArm, y: yArm, z: zFlange, r: r, mode: 1 });
+                    }
+                } else {
+                    await animateRobotCartesian(xArm, yArm, zTcp, r, mode, mode === 'safe' ? 600 : 450);
+                }
+                showToast(`🎉 Hoàn tất di chuyển tới đích (L=${currentRailL.toFixed(0)}mm)!`);
+            } else {
+                // CHẾ ĐỘ STANDALONE ĐỂ BÀN ĐỘC LẬP
+                const rHoriz = Math.sqrt(x * x + y * y);
+                const rMin = (cachedSafetyLimits && cachedSafetyLimits.r_min !== undefined) ? cachedSafetyLimits.r_min : 140.0;
+                const rMax = (cachedSafetyLimits && cachedSafetyLimits.r_max !== undefined) ? cachedSafetyLimits.r_max : 330.0;
+
+                if (rHoriz < rMin || rHoriz > rMax || zFlange < zMinLimit || zFlange > zMaxLimit) {
+                    alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: ${rMin} - ${rMax}mm)\nFlange Z: ${zFlange.toFixed(1)}mm (Z đầu hút: ${zTcp.toFixed(1)}mm)\nGiới hạn an toàn Flange: [${zMinLimit}, ${zMaxLimit}]mm`);
+                    return;
+                }
+                if (typeof isSimulationMode === 'function' && isSimulationMode()) {
+                    showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
+                } else {
+                    if (mode === 'safe') {
+                        sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
+                        showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    } else {
+                        sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
+                        showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    }
                 }
             }
         }
@@ -3966,41 +4295,83 @@
             const result = raycaster.ray.intersectPlane(plane, hit);
 
             if (result) {
-                const railOffset = (typeof isRailModeActive !== 'undefined' && isRailModeActive) ? (-500 + currentRailL) : 0;
-                return {
-                    x: Math.round(hit.x * 10) / 10,
-                    y: Math.round(-(hit.z - railOffset) * 10) / 10,
-                    z: targetZ,
-                    worldPos: hit
-                };
+                if (isRailModeActive) {
+                    const sol = solveRailKinematics(hit.x, hit.z, currentRailL);
+                    const lOpt = sol ? sol.l : Math.max(0.0, Math.min(1000.0, hit.z + 500.0));
+                    const zCarriage = lOpt - 500.0;
+                    const xArm = sol ? Math.round(sol.xArm * 10) / 10 : Math.round(hit.x * 10) / 10;
+                    const yArm = sol ? Math.round(sol.yArm * 10) / 10 : Math.round(-(hit.z - zCarriage) * 10) / 10;
+                    return {
+                        x: xArm,
+                        y: yArm,
+                        z: targetZ,
+                        l: Math.round(lOpt * 10) / 10,
+                        worldPos: hit
+                    };
+                } else {
+                    return {
+                        x: Math.round(hit.x * 10) / 10,
+                        y: Math.round(-hit.z * 10) / 10,
+                        z: targetZ,
+                        l: 0,
+                        worldPos: hit
+                    };
+                }
             }
             return null;
         }
 
-        function applyPickedPoint(rawX, rawY, rawZ) {
-            // Giữ nguyên độ cao Z hiện tại, chỉ snap X, Y
+        function applyPickedPoint(rawX, rawY, rawZ, pickedL=null) {
             const curZ = parseFloat(document.getElementById('inp-target-z').value) || 0;
             document.getElementById('inp-target-x').value = rawX.toFixed(1);
             document.getElementById('inp-target-y').value = rawY.toFixed(1);
 
-            updateTargetMarker();
+            if (isRailModeActive) {
+                if (pickedL !== null) targetRailL = pickedL;
+                const railYOffset = 42;
+                const floorHeight = railYOffset + L1_BASE + curZ;
+                const zCarriage = (targetRailL !== null ? targetRailL : currentRailL) - 500;
+                targetBeaconGroup.position.set(rawX, floorHeight, zCarriage - rawY);
+                updateTargetAncillaries(rawX, rawY, curZ);
 
-            const rHoriz = Math.sqrt(rawX * rawX + rawY * rawY);
-            if (rHoriz < 140.0) {
-                showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) quá gần đế robot (< 140mm)!`);
-                return;
-            }
-            if (rHoriz > 330.0) {
-                showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) vượt quá tầm với (> 330mm)!`);
-                return;
-            }
-
-            const autoMove = document.getElementById('chk-auto-move-drag');
-            if (autoMove && autoMove.checked) {
-                showToast(`🎯 Click chọn ➔ Robot đang di chuyển tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}, Z=${curZ.toFixed(0)}`);
-                executeGoToPoint('safe');
+                const sol = solveRailKinematics(rawX, targetBeaconGroup.position.z, currentRailL);
+                if (!sol) {
+                    showToast(`⚠️ Điểm ngoài vùng làm việc của Ray trượt!`);
+                    return;
+                }
+                const autoMove = document.getElementById('chk-auto-move-drag');
+                if (autoMove && autoMove.checked) {
+                    if (sol.inCurrentReach) {
+                        showToast(`🎯 Click chọn ➔ Điểm trong tầm an toàn (L=${currentRailL.toFixed(0)}mm), Dobot gắp luôn tại chỗ!`);
+                    } else {
+                        showToast(`🎯 Click chọn ➔ Tự động phối hợp Ray (L=${sol.l.toFixed(0)}mm) + Dobot tới đích!`);
+                    }
+                    executeGoToPoint('safe');
+                } else {
+                    if (sol.inCurrentReach) {
+                        showToast(`📍 Trong tầm với an toàn: L=${currentRailL.toFixed(0)}mm, X=${sol.xArm.toFixed(0)}, Y=${sol.yArm.toFixed(0)}. Bấm [Nhấc An Toàn] để gắp luôn!`);
+                    } else {
+                        showToast(`📍 Đã ghim điểm: L=${sol.l.toFixed(0)}mm, X=${sol.xArm.toFixed(0)}, Y=${sol.yArm.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
+                    }
+                }
             } else {
-                showToast(`📍 Đã ghim điểm đích tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}. Kéo mũi tên xanh lá để chỉnh Z!`);
+                updateTargetMarker();
+                const rHoriz = Math.sqrt(rawX * rawX + rawY * rawY);
+                if (rHoriz < 140.0) {
+                    showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) quá gần đế robot (< 140mm)!`);
+                    return;
+                }
+                if (rHoriz > 330.0) {
+                    showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) vượt quá tầm với (> 330mm)!`);
+                    return;
+                }
+                const autoMove = document.getElementById('chk-auto-move-drag');
+                if (autoMove && autoMove.checked) {
+                    showToast(`🎯 Click chọn ➔ Robot đang di chuyển tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}, Z=${curZ.toFixed(0)}`);
+                    executeGoToPoint('safe');
+                } else {
+                    showToast(`📍 Đã ghim điểm đích tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}. Kéo mũi tên xanh lá để chỉnh Z!`);
+                }
             }
         }
 
@@ -4043,7 +4414,7 @@
             if (e.shiftKey || (isTargetGizmoActive && e.button === 0)) {
                 const pt = get3DPointFromMouse(e);
                 if (pt) {
-                    applyPickedPoint(pt.x, pt.y, pt.z);
+                    applyPickedPoint(pt.x, pt.y, pt.z, pt.l);
                 }
             }
         });
@@ -4277,8 +4648,20 @@
         // CÁC HÀM XỬ LÝ ĐIỀU KHIỂN RAY TRƯỢT & VÙNG AN TOÀN TRÊN GIAO DIỆN
         // =========================================================================
         function updateRailTelemetry(rail) {
-            currentRailL = rail.pos || 0.0;
+            // Khi đang chạy hoạt hình trượt ray trên giao diện mô phỏng, không để telemetry định kỳ làm ngắt quãng
+            if (isRailAnimating) return;
+
+            // Nếu kết nối robot thật: nhận vị trí thực tế
+            // Nếu mô phỏng: chỉ nhận nếu server đang chủ động điều khiển chuyển động (is_moving / is_homing)
+            if (isRobotConnected) {
+                currentRailL = (rail.pos !== undefined) ? rail.pos : currentRailL;
+            } else if (rail.is_moving || rail.is_homing) {
+                currentRailL = (rail.pos !== undefined) ? rail.pos : currentRailL;
+            }
+            // Trong mô phỏng khi server nghỉ, giữ nguyên vị trí ray hiện tại của client!
+
             isRailModeActive = Boolean(rail.mode);
+            isRailHardwareMoving = Boolean(rail.is_moving || rail.is_homing);
 
             // Cập nhật vị trí trên mô hình 3D & Vùng an toàn bám theo Dobot
             const railZ = (-500 + currentRailL);
@@ -4293,9 +4676,6 @@
                 if (typeof workspaceZoneGroup !== 'undefined' && workspaceZoneGroup) {
                     workspaceZoneGroup.position.z = 0;
                 }
-            }
-            if (typeof updateTargetMarker === 'function') {
-                updateTargetMarker();
             }
 
             // Cập nhật UI

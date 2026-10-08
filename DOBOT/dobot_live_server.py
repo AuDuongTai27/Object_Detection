@@ -928,7 +928,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 threading.Thread(target=_do_jog, daemon=True).start()
                 self.write_message(json.dumps({"type": "feedback", "msg": f"🛤️ Đang jog ray {dist:+.1f} mm..."}))
             elif action == "rail_move":
-                pos = float(cmd.get("pos", 0.0))
+                pos = float(cmd.get("pos") if cmd.get("pos") is not None else cmd.get("l", 0.0))
                 speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
                 def _do_move():
                     ok, res_msg = robot.rail_move_to(pos, speed)
@@ -1192,7 +1192,7 @@ def poll_robot_pose():
         })
     else:
         # Nếu đang di chuyển ray hoặc homing (kể cả mô phỏng), gửi liên tục mỗi chu kỳ 50ms; nếu nghỉ thì gửi mỗi 20 chu kỳ (~1s)
-        if not robot.rail_motion.get("active", False) and not robot.rail_is_homing and (poll_counter % 20 != 0):
+        if not robot.rail_is_moving and not robot.rail_is_homing and (poll_counter % 20 != 0):
             return
         msg = json.dumps({
             "type": "pose",

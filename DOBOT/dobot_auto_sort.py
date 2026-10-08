@@ -217,6 +217,103 @@ def is_safe_workspace(rx, ry, r_min=140.0, r_max=330.0, x_min=70.0):
     return (r_min <= r <= r_max) and (rx >= x_min)
 
 
+def solve_rail_kinematics(rx, ry, current_rail_l=0.0, calib_rail_l=0.0):
+    """
+    Giải động học ray trượt 1000mm cho tọa độ camera (rx, ry) đã calib tại calib_rail_l.
+    Tọa độ Dobot: X vươn xa từ ray, Y dọc theo hướng ray.
+    Tọa độ World tương ứng:
+      x_world = rx
+      z_world = (calib_rail_l - 500.0) - ry
+    Returns: dict { 'l', 'optimal_l', 'z_carriage', 'x', 'y', 'r', 'j1', ... } hoặc None nếu ngoài tầm ray 1000mm.
+    """
+    x_world = float(rx)
+    z_world = float((calib_rail_l - 500.0) - ry)
+
+    # Giới hạn vật lý khi Dobot gắn trên ray trượt:
+    # Mép thanh nhôm định hình ray tại X ~ 70mm, tầm với tối đa của tay robot là ~330mm
+    if x_world < 70.0 or x_world > 330.0:
+        return None
+
+    cur_l = max(0.0, min(1000.0, float(current_rail_l)))
+    zc_cur = cur_l - 500.0
+    y_arm_cur = -(z_world - zc_cur)
+    r_cur = math.hypot(x_world, y_arm_cur)
+    j1_cur_deg = math.degrees(math.atan2(y_arm_cur, x_world))
+
+    def _make_res(l_val, zc_val, ya, r_val, j1_val, in_current_reach=False):
+        l_f = round(float(l_val), 1)
+        ya_f = round(float(ya), 1)
+        r_f = round(float(r_val), 1)
+        xw_f = round(float(x_world), 1)
+        return {
+            "l": l_f,
+            "optimal_l": l_f,
+            "z_carriage": round(float(zc_val), 1),
+            "x": xw_f,
+            "x_arm": xw_f,
+            "y": ya_f,
+            "y_arm": ya_f,
+            "r": r_f,
+            "r_arm": r_f,
+            "j1": round(float(j1_val), 1),
+            "x_world": xw_f,
+            "z_world": round(float(z_world), 1),
+            "in_current_reach": in_current_reach
+        }
+
+    # 1. KIỂM TRA ƯU TIÊN: Nếu điểm ĐÃ NẰM TRONG TẦM VỚI AN TOÀN tại vị trí ray hiện tại (current_rail_l),
+    # thì giữ nguyên vị trí ray, gắp luôn tại chỗ, KHÔNG cần di chuyển ray!
+    if 140.0 <= r_cur <= 330.0 and abs(j1_cur_deg) <= 85.0:
+        return _make_res(cur_l, zc_cur, y_arm_cur, r_cur, j1_cur_deg, in_current_reach=True)
+
+    # 2. Nếu nằm ngoài tầm tại vị trí hiện tại: Giải vị trí ray tối ưu
+    # Thử nghiệm vươn thẳng (bàn trượt căn thẳng hàng với mục tiêu z_world dọc trục ray)
+    z_carriage_direct = max(-500.0, min(500.0, z_world))
+    y_arm_direct = -(z_world - z_carriage_direct)
+    r_direct = math.hypot(x_world, y_arm_direct)
+    j1_direct_deg = math.degrees(math.atan2(y_arm_direct, x_world))
+
+    if x_world >= 150.0 and 140.0 <= r_direct <= 330.0 and abs(j1_direct_deg) <= 85.0:
+        return _make_res(z_carriage_direct + 500.0, z_carriage_direct, y_arm_direct, r_direct, j1_direct_deg, in_current_reach=False)
+
+    # 3. Khi x_world < 150mm (ví dụ 70mm <= x_world < 150mm):
+    # Dịch bàn trượt dọc theo ray để robot với chéo ở bán kính thoải mái r_target = 180mm.
+    r_target = 180.0
+    dy = math.sqrt(max(0.0, r_target * r_target - x_world * x_world))
+    candidates = [z_world - dy, z_world + dy]
+
+    best = None
+    min_diff = float("inf")
+
+    for zc in candidates:
+        zc_clamped = max(-500.0, min(500.0, zc))
+        l_cand = zc_clamped + 500.0
+        y_arm = -(z_world - zc_clamped)
+        r = math.hypot(x_world, y_arm)
+        j1_deg = math.degrees(math.atan2(y_arm, x_world))
+
+        if 140.0 <= r <= 330.0 and abs(j1_deg) <= 85.0:
+            diff = abs(l_cand - cur_l)
+            if diff < min_diff:
+                min_diff = diff
+                best = _make_res(l_cand, zc_clamped, y_arm, r, j1_deg, in_current_reach=False)
+
+    # 4. Quét dự phòng dọc toàn bộ hành trình ray (0..1000mm)
+    if not best:
+        for l in range(0, 1001, 10):
+            zc = float(l - 500.0)
+            y_arm = -(z_world - zc)
+            r = math.hypot(x_world, y_arm)
+            j1_deg = math.degrees(math.atan2(y_arm, x_world))
+            if 140.0 <= r <= 330.0 and abs(j1_deg) <= 85.0:
+                diff = abs(l - cur_l)
+                if diff < min_diff:
+                    min_diff = diff
+                    best = _make_res(l, zc, y_arm, r, j1_deg, in_current_reach=False)
+
+    return best
+
+
 # ==============================================================================
 # 2. BỘ ĐIỀU KHIỂN DOBOT (HỖ TRỢ CẢ HTTP API VÀ SERIAL TRỰC TIẾP)
 # ==============================================================================
@@ -227,10 +324,53 @@ class DobotExecutor:
         self.pick_z = pick_z
         self.ser = None
         self.is_busy = False
+        self.is_rail_mode = False
+        self.rail_current_pos = 0.0
         self.use_http = self.check_http_server()
+
+        if self.use_http:
+            self.fetch_rail_status()
 
         if not self.use_http:
             self.init_serial()
+
+    def fetch_rail_status(self):
+        """Lấy trạng thái ray trượt và chế độ hoạt động từ Live Server."""
+        if not self.use_http:
+            return self.is_rail_mode, self.rail_current_pos
+        try:
+            req = urllib.request.Request("http://127.0.0.1:8080/api/state", method="GET")
+            with urllib.request.urlopen(req, timeout=0.8) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode())
+                    self.is_rail_mode = bool(data.get("is_rail_mode", False))
+                    self.rail_current_pos = float(data.get("rail_pos", self.rail_current_pos))
+        except Exception:
+            pass
+        return self.is_rail_mode, self.rail_current_pos
+
+    def move_rail_and_wait(self, target_l, speed=40.0, timeout=18.0):
+        """Di chuyển ray tới vị trí target_l (0..1000mm) và đợi dừng hẳn."""
+        target_l = max(0.0, min(1000.0, float(target_l)))
+        self.fetch_rail_status()
+        delta = abs(target_l - self.rail_current_pos)
+        if delta < 1.0:
+            return True
+
+        print(f"[Rail] 🚄 Đang di chuyển ray trượt tới L = {target_l:.1f} mm (Hiện tại: {self.rail_current_pos:.1f} mm)...")
+        ok = self.send_cmd({"action": "rail_move", "pos": target_l, "l": target_l, "speed": speed})
+        if not ok:
+            return False
+
+        t0 = time.time()
+        time.sleep(0.3)
+        while time.time() - t0 < timeout:
+            self.fetch_rail_status()
+            if abs(self.rail_current_pos - target_l) <= 1.5:
+                print(f"[Rail] ✅ Ray đã tới đích L = {self.rail_current_pos:.1f} mm.")
+                return True
+            time.sleep(0.1)
+        return False
 
     def check_http_server(self):
         try:
@@ -318,63 +458,89 @@ class DobotExecutor:
             print("[!] Robot đang bận thực hiện chu trình trước!")
             return False
 
-        if not is_safe_workspace(pick_x, pick_y):
-            print(f"[!] Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}) nằm ngoài vùng an toàn robot! Hủy lệnh.")
-            return False
-
-        t = threading.Thread(target=self._pick_and_place_worker, args=(pick_x, pick_y, cube_name, on_complete), daemon=True)
-        t.start()
-        return True
-
-    def _pick_and_place_worker(self, pick_x, pick_y, cube_name, on_complete):
-        self.is_busy = True
-        if DROP_TARGETS_MODE == "all":
-            target = self.drop_target
+        self.fetch_rail_status()
+        if self.is_rail_mode:
+            sol = solve_rail_kinematics(pick_x, pick_y, current_rail_l=self.rail_current_pos, calib_rail_l=0.0)
+            if not sol:
+                print(f"[!] Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}) nằm ngoài tầm với của cả Dobot + Ray trượt! Hủy lệnh.")
+                return False
+            t = threading.Thread(target=self._pick_and_place_worker, args=(sol["x"], sol["y"], cube_name, on_complete, sol["l"]), daemon=True)
+            t.start()
+            return True
         else:
-            target = DROP_TARGETS_BY_COLOR.get(cube_name, self.drop_target)
-        place_x = target.get("x", self.drop_target["x"])
-        place_y = target.get("y", self.drop_target["y"])
-        place_z = target.get("z", self.drop_target["z"])
-        tray_name = target.get("name", f"({place_x:.1f}, {place_y:.1f})")
+            if not is_safe_workspace(pick_x, pick_y):
+                print(f"[!] Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}) nằm ngoài vùng an toàn robot! Hủy lệnh.")
+                return False
 
-        print(f"\n🚀 BẮT ĐẦU GẮP: {cube_name} tại ({pick_x:.1f}, {pick_y:.1f}) ➔ Thả vào {tray_name} (X={place_x:.1f}, Y={place_y:.1f})")
+            t = threading.Thread(target=self._pick_and_place_worker, args=(pick_x, pick_y, cube_name, on_complete, None), daemon=True)
+            t.start()
+            return True
 
-        # 1. Bay trên đỉnh phôi ở độ cao an toàn (Safe Arch)
-        self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-        time.sleep(1.6)
+    def _pick_and_place_worker(self, pick_x, pick_y, cube_name, on_complete, rail_pick_l=None):
+        self.is_busy = True
+        try:
+            if DROP_TARGETS_MODE == "all":
+                target = self.drop_target
+            else:
+                target = DROP_TARGETS_BY_COLOR.get(cube_name, self.drop_target)
+            place_x = target.get("x", self.drop_target["x"])
+            place_y = target.get("y", self.drop_target["y"])
+            place_z = target.get("z", self.drop_target["z"])
+            tray_name = target.get("name", f"({place_x:.1f}, {place_y:.1f})")
 
-        # 2. Bật bơm hút
-        self.send_cmd({"action": "suction", "value": True})
-        time.sleep(0.3)
+            # 1. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY ĐÓN PHÔI NẾU CẦN THIẾT
+            if self.is_rail_mode and rail_pick_l is not None:
+                delta_pick = abs(rail_pick_l - self.rail_current_pos)
+                if delta_pick > 1.0:
+                    print(f"[*] 🚄 Phôi ngoài tầm hiện tại -> Di chuyển ray tới L = {rail_pick_l:.1f} mm đón phôi...")
+                    self.move_rail_and_wait(rail_pick_l)
+                else:
+                    print(f"[*] 🎯 Phôi trong tầm an toàn tại L = {self.rail_current_pos:.1f} mm -> Dobot gắp luôn tại chỗ!")
 
-        # 3. Hạ thẳng xuống gắp khối màu (Z_pick = -49.7mm tương ứng Z_TCP = -109.2mm)
-        self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
-        time.sleep(1.2)
+            print(f"\n🚀 BẮT ĐẦU GẮP: {cube_name} tại Dobot Arm (X={pick_x:.1f}, Y={pick_y:.1f}) ➔ Thả vào {tray_name} (X={place_x:.1f}, Y={place_y:.1f})")
 
-        # 4. Nhấc lên cao an toàn
-        self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-        time.sleep(1.2)
+            # 2. Bay trên đỉnh phôi ở độ cao an toàn (Safe Arch)
+            self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
+            time.sleep(1.6)
 
-        # 5. Bay sang khay phân loại
-        self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-        time.sleep(1.8)
+            # 3. Bật bơm hút
+            self.send_cmd({"action": "suction", "value": True})
+            time.sleep(0.3)
 
-        # 6. Hạ vào khay
-        self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": place_z, "r": 0.0, "mode": 1})
-        time.sleep(1.0)
+            # 4. Hạ thẳng xuống gắp khối màu (Z_pick = -49.7mm tương ứng Z_TCP = -109.2mm)
+            self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
+            time.sleep(1.2)
 
-        # 7. Nhả phôi (Tắt bơm & xả khí)
-        self.send_cmd({"action": "suction", "value": False})
-        time.sleep(0.5)
+            # 5. Nhấc lên cao an toàn
+            self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
+            time.sleep(1.2)
 
-        # 8. Nhấc lên an toàn và hoàn tất
-        self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-        time.sleep(1.0)
+            # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ
+            if self.is_rail_mode:
+                tray_rail_l = float(target.get("rail_l", 0.0))
+                self.move_rail_and_wait(tray_rail_l)
 
-        print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
-        self.is_busy = False
-        if on_complete:
-            on_complete()
+            # 7. Bay sang khay phân loại
+            self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
+            time.sleep(1.8)
+
+            # 8. Hạ vào khay
+            self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": place_z, "r": 0.0, "mode": 1})
+            time.sleep(1.0)
+
+            # 9. Nhả phôi (Tắt bơm & xả khí)
+            self.send_cmd({"action": "suction", "value": False})
+            time.sleep(0.5)
+
+            # 10. Nhấc lên an toàn và hoàn tất
+            self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
+            time.sleep(1.0)
+
+            print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
+        finally:
+            self.is_busy = False
+            if on_complete:
+                on_complete()
 
 
 # ==============================================================================
@@ -519,12 +685,23 @@ def main():
                 if bx <= x <= bx + bw and by <= y <= by + bh:
                     rx, ry = cube["rx"], cube["ry"]
                     r_dist = math.hypot(rx, ry)
-                    if not is_safe_workspace(rx, ry):
+                    sol_rail = None
+                    can_pick = is_safe_workspace(rx, ry)
+                    if not can_pick and executor.is_rail_mode:
+                        sol_rail = solve_rail_kinematics(rx, ry, current_rail_l=executor.rail_current_pos)
+                        if sol_rail is not None:
+                            can_pick = True
+
+                    if not can_pick:
                         print(f"\n[!] TỪ CHỐI GẮP: {cube['name']} nằm ngoài vùng an toàn (X={rx:.1f}, Y={ry:.1f}, R={r_dist:.1f}mm)!")
                         alert_info["msg"] = f"CANH BAO: {cube['name']} NGOAI VUNG AN TOAN! (R={r_dist:.1f}mm | YEU CAU 140 <= R <= 330 mm)"
                         alert_info["expire"] = time.time() + 3.0
                         break
-                    print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | R={r_dist:.1f}mm")
+                    
+                    if sol_rail is not None:
+                        print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | CẦN DI CHUYỂN RAY ĐẾN L={sol_rail['optimal_l']:.1f}mm")
+                    else:
+                        print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | R={r_dist:.1f}mm")
                     executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"])
                     break
 
@@ -537,7 +714,7 @@ def main():
     print("\n" + "=" * 65)
     print(" HƯỚNG DẪN ĐIỀU KHIỂN:")
     print(" - CLICK CHUỘT vào bất kỳ khối màu nào trên màn hình để gắp khối đó")
-    print(" - Nhấn [SPACE] : Gắp khối màu đầu tiên nằm trong vùng an toàn")
+    print(" - Nhấn [SPACE] : Gắp khối màu đầu tiên nằm trong vùng an toàn (hoặc tầm với ray)")
     print(" - Nhấn [A]     : Bật / Tắt chế độ Tự Động Hoàn Toàn (Auto Sorting)")
     print(" - Nhấn [W]     : Bật / Tắt hiển thị Vùng Làm Việc An Toàn (ROI)")
     print(" - Nhấn [Q]     : Thoát chương trình")
@@ -625,6 +802,9 @@ def main():
             rx, ry = cube["rx"], cube["ry"]
             r_dist = math.hypot(rx, ry)
             safe = is_safe_workspace(rx, ry)
+            sol_rail = None
+            if not safe and executor.is_rail_mode:
+                sol_rail = solve_rail_kinematics(rx, ry, current_rail_l=executor.rail_current_pos)
 
             if safe:
                 # Phôi nằm trong vùng an toàn: Viền màu theo phôi, chấm tròn tâm xanh
@@ -634,6 +814,17 @@ def main():
                 label = f"{name} [SAFE] | X={rx:.1f}, Y={ry:.1f} (R={r_dist:.0f})"
                 t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
                 cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), color, -1)
+                cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+            elif sol_rail is not None:
+                # Phôi ngoài tầm hiện tại nhưng ĐẠT ĐƯỢC KHI TRƯỢT RAY: Viền Vàng Kim/Cyan
+                rail_color = (255, 215, 0)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), rail_color, 2)
+                cv2.circle(frame, cube["center"], 4, (255, 255, 0), -1)
+
+                opt_l = sol_rail["optimal_l"]
+                label = f"{name} [CAN RAY L={opt_l:.0f}mm] | X={rx:.1f}, Y={ry:.1f}"
+                t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)[0]
+                cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), (180, 100, 0), -1)
                 cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
             else:
                 # Phôi ngoài vùng an toàn: Viền ĐỎ RỰC, gạch chéo ❌, nhãn cảnh báo BLOCKED
@@ -654,9 +845,10 @@ def main():
         status_color = (0, 165, 255) if executor.is_busy else (0, 255, 0)
         mode_text = "[AUTO ON]" if auto_sort_enabled else "[MANUAL]"
         roi_text = "[W] ROI: ON" if show_workspace_roi else "[W] ROI: OFF"
+        rail_txt = f" | RAY: L={executor.rail_current_pos:.1f}mm" if executor.is_rail_mode else ""
 
-        header_text = f"Dobot: {engine_name} | {len(detected_cubes)} cube | {robot_status} | {mode_text} | {roi_text}"
-        cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, status_color, 2, cv2.LINE_AA)
+        header_text = f"Dobot: {engine_name} | {len(detected_cubes)} cube | {robot_status} | {mode_text} | {roi_text}{rail_txt}"
+        cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, status_color, 2, status_color, 2, cv2.LINE_AA) if False else cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, status_color, 2, cv2.LINE_AA)
 
         # 6. Banner cảnh báo đỏ OSD nổi bật nếu người dùng click nhầm ngoài vùng
         if time.time() < alert_info["expire"]:
@@ -667,8 +859,8 @@ def main():
         # 7. Xử lý chế độ Tự Động (Auto Sort)
         if auto_sort_enabled and not executor.is_busy:
             if time.time() - last_auto_pick_time > 2.0 and len(detected_cubes) > 0:
-                # Chọn cube trong tầm với an toàn
-                valid_cubes = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"])]
+                # Chọn cube trong tầm với an toàn (hoặc cần trượt ray)
+                valid_cubes = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
                 if valid_cubes:
                     target = valid_cubes[0]
                     print(f"[*] AUTO TRIGGER: Gắp {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
@@ -682,13 +874,13 @@ def main():
             break
         elif key == ord(' '): # Phím cách: Gắp khối đầu tiên an toàn
             if not executor.is_busy and len(detected_cubes) > 0:
-                safe_candidates = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"])]
+                safe_candidates = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
                 if safe_candidates:
                     target = safe_candidates[0]
                     print(f"[+] NHẤN SPACE: Gắp {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
                     executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
                 else:
-                    print("[!] Không có phôi nào nằm trong vùng an toàn của Robot để gắp!")
+                    print("[!] Không có phôi nào nằm trong tầm với của Robot (kể cả ray trượt) để gắp!")
         elif key in [ord('a'), ord('A')]: # Bật/Tắt Auto Sort
             auto_sort_enabled = not auto_sort_enabled
             print(f"[*] Chế độ Tự Động Phân Loại (Auto Sort): {'BẬT' if auto_sort_enabled else 'TẮT'}")
