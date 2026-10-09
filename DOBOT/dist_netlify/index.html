@@ -1719,8 +1719,8 @@
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #94a3b8;">
                         <span>Vận tốc:</span>
-                        <input type="range" id="slider-rail-speed" min="10" max="60" value="40" style="flex: 1;" oninput="document.getElementById('rail-speed-val').innerText = this.value + ' mm/s'">
-                        <span id="rail-speed-val" style="color: #cbd5e1; font-weight: 600; min-width: 50px;">40 mm/s</span>
+                        <input type="range" id="slider-rail-speed" min="20" max="150" value="100" style="flex: 1;" oninput="document.getElementById('rail-speed-val').innerText = this.value + ' mm/s'">
+                        <span id="rail-speed-val" style="color: #cbd5e1; font-weight: 600; min-width: 50px;">100 mm/s</span>
                     </div>
                 </div>
 
@@ -4240,7 +4240,7 @@
                     const lOptimal = sol.l;
                     const xArm = sol.xArm;
                     const yArm = sol.yArm;
-                    const railSpeed = parseFloat(document.getElementById('slider-rail-speed')?.value || 40);
+                    const railSpeed = parseFloat(document.getElementById('slider-rail-speed')?.value || 100);
                     const deltaL = Math.abs(lOptimal - currentRailL);
 
                     // 2. BƯỚC 1: DI CHUYỂN RAY ĐẾN VỊ TRÍ ĐÓN (CHỈ KHI CẦN THIẾT)
@@ -4883,7 +4883,7 @@
         }
 
         function sendRailJog(dist) {
-            const speed = parseFloat(document.getElementById('slider-rail-speed')?.value || 40);
+            const speed = parseFloat(document.getElementById('slider-rail-speed')?.value || 100);
             const targetPos = Math.max(0, Math.min(1000, currentRailL + dist));
             
             // Cập nhật vị trí tức thời trên 3D & giao diện khi đang ở chế độ mô phỏng hoặc chưa kết nối
@@ -4903,7 +4903,7 @@
 
         function sendRailMoveFromInput() {
             const pos = Math.max(0, Math.min(1000, parseFloat(document.getElementById('inp-rail-target-l')?.value || 0)));
-            const speed = parseFloat(document.getElementById('slider-rail-speed')?.value || 40);
+            const speed = parseFloat(document.getElementById('slider-rail-speed')?.value || 100);
             
             if (!isRobotConnected || currentMode === 'manual') {
                 currentRailL = pos;
@@ -8197,7 +8197,7 @@
                         action: 'rail_move_to',
                         target_mm: l,
                         target_l: l,
-                        speed: 50.0
+                        speed: 100.0
                     })
                 });
                 const data = await res.json();

@@ -361,7 +361,7 @@ class DobotExecutor:
                 pass
         return self.is_rail_mode, self.rail_current_pos
 
-    def move_rail_and_wait(self, target_l, speed=40.0, timeout=18.0):
+    def move_rail_and_wait(self, target_l, speed=100.0, timeout=15.0):
         """Di chuyển ray tới vị trí target_l (0..1000mm) và đợi dừng hẳn."""
         target_l = max(0.0, min(1000.0, float(target_l)))
         self.fetch_rail_status()

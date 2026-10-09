@@ -555,7 +555,7 @@ class WebVisionEngine:
                         if cur_p.get("z", 0.0) < Z_SAFE_FLANGE - 5.0:
                             self.robot.move_to_xyz(cur_p["x"], cur_p["y"], Z_SAFE_FLANGE, r=0.0)
                             time.sleep(1.0)
-                        self.robot.rail_move_to(pick_station_l, speed_mm_s=50.0)
+                        self.robot.rail_move_to(pick_station_l, speed_mm_s=100.0)
                         time.sleep(0.4)
                     else:
                         print(f"[VisionEngine] 🎯 Robot đã sẵn sàng tại vị trí bàn gắp L = {cur_rail_l:.1f} mm!")
@@ -584,7 +584,7 @@ class WebVisionEngine:
                     cur_now_l = float(getattr(self.robot, "rail_current_pos", 0.0))
                     if abs(tray_rail_l - cur_now_l) > 1.0:
                         print(f"[VisionEngine] 🚄 Di chuyển ray về khay thả L = {tray_rail_l:.1f} mm...")
-                        self.robot.rail_move_to(tray_rail_l, speed_mm_s=50.0)
+                        self.robot.rail_move_to(tray_rail_l, speed_mm_s=100.0)
                         time.sleep(0.4)
                     else:
                         print(f"[VisionEngine] 🎯 Khay thả đã nằm ngay tại L = {cur_now_l:.1f} mm!")
