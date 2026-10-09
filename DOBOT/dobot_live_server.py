@@ -78,7 +78,8 @@ ALARM_DICT = {
 
 # --- CẤU HÌNH HỆ THỐNG RAY TRƯỢT DOBOT (SLIDING RAIL KIT 1000mm) ---
 RAIL_INDEX = 0             # Stepper 1 = index 0
-PULSES_PER_MM = 80.0       # Chuẩn Pulley GT2 20T: 80 xung = 1 mm
+# Chuẩn Dobot Sliding Rail Kit (Driver vi bước 1/8, Pulley GT2 20T: 1600 xung / 40mm = 40 xung = 1 mm)
+PULSES_PER_MM = 40.0
 RAIL_MAX_MM = 1000.0       # Hành trình ray tối đa 1000 mm
 DEFAULT_SPEED_MM_S = 40.0  # Vận tốc ray tiêu chuẩn 40 mm/s
 SWITCH_PIN = 14            # Cảm biến công tắc hành trình GP2 (EIO 14, Chân 3)
@@ -108,6 +109,8 @@ class DobotController:
         self.rail_lock = threading.Lock()
         self.stop_requested = False
         self.last_reconnect_time = 0.0
+        self.safety_limits = self._load_safety_limits()
+        self.pulses_per_mm = float(self.safety_limits.get("pulses_per_mm", PULSES_PER_MM))
         self.rail_motion = {"active": False, "start_time": 0.0, "duration": 0.0, "start_pos": 0.0, "target_pos": 0.0}
         self.safety_limits = self._load_safety_limits()
 
@@ -130,6 +133,7 @@ class DobotController:
 
     def _load_safety_limits(self):
         default_limits = {
+            "pulses_per_mm": PULSES_PER_MM,
             "z_min_standalone": -65.0,
             "z_min_rail": -180.0,
             "z_max": 165.0,
@@ -147,12 +151,14 @@ class DobotController:
         return default_limits
 
     def update_safety_limits(self, new_limits: dict):
-        for k in ["z_min_standalone", "z_min_rail", "z_max", "safe_travel_z", "r_min", "r_max"]:
+        for k in ["z_min_standalone", "z_min_rail", "z_max", "safe_travel_z", "r_min", "r_max", "pulses_per_mm"]:
             if k in new_limits:
                 try:
                     self.safety_limits[k] = float(new_limits[k])
                 except (ValueError, TypeError):
                     pass
+        if "pulses_per_mm" in self.safety_limits:
+            self.pulses_per_mm = float(self.safety_limits["pulses_per_mm"])
         try:
             with open(WORKSPACE_SAFETY_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.safety_limits, f, indent=4)
@@ -497,6 +503,21 @@ class DobotController:
                 return True
         return False
 
+    def wait_pose_reached(self, target_x: float, target_y: float, target_z: float, tol: float = 6.0, timeout: float = 4.0) -> bool:
+        """Chờ tay robot di chuyển tới tọa độ đích với độ lệch tol (mm)."""
+        if not self.connected:
+            return True
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            p = self.get_pose()
+            if p:
+                if (abs(p.get("x", 0.0) - float(target_x)) <= tol and
+                    abs(p.get("y", 0.0) - float(target_y)) <= tol and
+                    abs(p.get("z", 0.0) - float(target_z)) <= tol):
+                    return True
+            time.sleep(0.08)
+        return False
+
     def set_suction(self, enable: bool):
         with self.lock:
             if not self.connected:
@@ -564,9 +585,9 @@ class DobotController:
 
             self.stop_requested = False
             self.rail_is_moving = True
-            pulses = int(abs(clamped_dist) * PULSES_PER_MM)
+            pulses = int(abs(clamped_dist) * self.pulses_per_mm)
             safe_speed = max(5.0, min(80.0, float(speed_mm_s)))
-            speed_pulses = int(safe_speed * PULSES_PER_MM)
+            speed_pulses = int(safe_speed * self.pulses_per_mm)
             dir_speed = -speed_pulses if clamped_dist >= 0 else speed_pulses
 
             if clamped_dist < 0 and self.get_rail_switch():
@@ -664,8 +685,8 @@ class DobotController:
             # 1. Nhả switch nếu lúc bắt đầu đang bị đè (chạy ra xa switch)
             if self.get_rail_switch():
                 print("[*] Cữ đang chạm, nhích ra xa trước...")
-                release_speed = int(8.0 * PULSES_PER_MM)
-                release_pulses = int(12.0 * PULSES_PER_MM)
+                release_speed = int(8.0 * self.pulses_per_mm)
+                release_pulses = int(12.0 * self.pulses_per_mm)
                 params = struct.pack("<B B i I", RAIL_INDEX, 1, -release_speed, release_pulses)
                 with self.lock:
                     self._send_raw_cmd(136, 3, params=params)
@@ -691,8 +712,8 @@ class DobotController:
             # 2. Dò cữ bước ngắn êm ái (bước 4.0mm, tốc độ 10 mm/s chống va đập cơ khí & mất bước)
             print("[*] Dò cữ bước ngắn êm ái (bước 4.0mm, tốc độ 10 mm/s về hướng switch)...")
             step_mm = 4.0
-            step_pulses = int(step_mm * PULSES_PER_MM)
-            step_speed = int(10.0 * PULSES_PER_MM)
+            step_pulses = int(step_mm * self.pulses_per_mm)
+            step_speed = int(10.0 * self.pulses_per_mm)
             params = struct.pack("<B B i I", RAIL_INDEX, 1, step_speed, step_pulses)
 
             found = False
@@ -750,8 +771,8 @@ class DobotController:
 
             # 3. Fine search nhả cữ siêu mịn (bước 0.5mm, tốc độ 5 mm/s: dir_speed < 0)
             print("[*] Tinh chỉnh nhả cữ siêu mịn (bước 0.5mm, tốc độ 5 mm/s)...")
-            fine_step = int(0.5 * PULSES_PER_MM)
-            fine_speed = int(5.0 * PULSES_PER_MM)
+            fine_step = int(0.5 * self.pulses_per_mm)
+            fine_speed = int(5.0 * self.pulses_per_mm)
             fine_params = struct.pack("<B B i I", RAIL_INDEX, 1, -fine_speed, fine_step)
             for _ in range(50):
                 if self.stop_requested:
@@ -786,8 +807,8 @@ class DobotController:
             print("[*] Thoát cữ an toàn (+5.0mm) để giải phóng hoàn toàn công tắc...")
             self.stop_requested = False
             retreat_mm = 5.0
-            retreat_pulses = int(retreat_mm * PULSES_PER_MM)
-            retreat_speed = int(10.0 * PULSES_PER_MM)
+            retreat_pulses = int(retreat_mm * self.pulses_per_mm)
+            retreat_speed = int(10.0 * self.pulses_per_mm)
             retreat_params = struct.pack("<B B i I", RAIL_INDEX, 1, -retreat_speed, retreat_pulses)
             with self.lock:
                 self._send_raw_cmd(136, 3, params=retreat_params)
@@ -985,10 +1006,14 @@ class ApiCmdHandler(tornado.web.RequestHandler):
 
     def get(self):
         pose = robot.get_pose() or robot.last_pose or {}
+        if isinstance(pose, dict):
+            pose["l"] = robot.rail_current_pos
         self.write({
             "status": "ok",
             "pose": pose,
             "connected": robot.connected,
+            "is_rail_mode": robot.is_rail_mode,
+            "rail_pos": robot.rail_current_pos,
             "rail": {
                 "mode": robot.is_rail_mode,
                 "pos": robot.rail_current_pos,
@@ -1009,6 +1034,14 @@ class ApiCmdHandler(tornado.web.RequestHandler):
                 z = float(cmd.get("z", 100))
                 r = float(cmd.get("r", 0))
                 mode = int(cmd.get("mode", 1))
+                target_l = cmd.get("l", cmd.get("rail_l"))
+                if target_l is not None and robot.is_rail_mode:
+                    try:
+                        target_l = float(target_l)
+                        if abs(target_l - robot.rail_current_pos) > 1.0:
+                            robot.rail_move_to(target_l)
+                    except Exception as e:
+                        print(f"[ApiCmd] Lỗi di chuyển ray: {e}")
                 ok = robot.move_to_xyz(x, y, z, r, mode=mode)
                 self.write({"status": "ok" if ok else "fail"})
             elif action == "safe_jump":
@@ -1019,6 +1052,14 @@ class ApiCmdHandler(tornado.web.RequestHandler):
                 safe_z = cmd.get("safe_z")
                 if safe_z is not None:
                     safe_z = float(safe_z)
+                target_l = cmd.get("l", cmd.get("rail_l"))
+                if target_l is not None and robot.is_rail_mode:
+                    try:
+                        target_l = float(target_l)
+                        if abs(target_l - robot.rail_current_pos) > 1.0:
+                            robot.rail_move_to(target_l)
+                    except Exception as e:
+                        print(f"[ApiCmd] Lỗi di chuyển ray trong safe_jump: {e}")
                 ok = robot.move_safe_jump(x, y, z, r, safe_z=safe_z)
                 self.write({"status": "ok" if ok else "fail"})
             elif action == "suction":
@@ -1036,8 +1077,8 @@ class ApiCmdHandler(tornado.web.RequestHandler):
                 speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
                 threading.Thread(target=robot.rail_jog, args=(dist, speed), daemon=True).start()
                 self.write({"status": "ok", "msg": f"Đang jog ray {dist:+.1f} mm"})
-            elif action == "rail_move":
-                pos = float(cmd.get("pos", 0.0) or cmd.get("l", 0.0))
+            elif action in ("rail_move", "rail_move_to"):
+                pos = float(cmd.get("pos", cmd.get("target_mm", cmd.get("l", 0.0))))
                 speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
                 threading.Thread(target=robot.rail_move_to, args=(pos, speed), daemon=True).start()
                 self.write({"status": "ok", "msg": f"Đang di chuyển ray tới L={pos:.1f} mm"})
@@ -1856,12 +1897,12 @@ class ApiDropTargetsHandler(tornado.web.RequestHandler):
                 pass
         default_data = {
             "mode": "all",
-            "default": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Mặc Định"},
+            "default": {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Mặc Định"},
             "by_color": {
-                "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Đỏ"},
-                "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Lục"},
-                "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Dương"},
-                "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Vàng"}
+                "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Đỏ"},
+                "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Xanh Lục"},
+                "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Xanh Dương"},
+                "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Vàng"}
             }
         }
         self.write({"status": "ok", "data": default_data})
@@ -1876,6 +1917,8 @@ class ApiDropTargetsHandler(tornado.web.RequestHandler):
                 try:
                     import web_vision_engine
                     web_vision_engine.load_drop_targets()
+                    if "calib_rail_l" in data:
+                        vision_engine.calib_rail_l = float(data["calib_rail_l"])
                 except Exception:
                     pass
             print(f"[LiveServer] 💾 Đã lưu cấu hình khay thả: {drop_file}")
@@ -1907,6 +1950,7 @@ def main():
         (r"/index.html", MainHandler),
         (r"/ws", WebSocketHandler),
         (r"/api/cmd", ApiCmdHandler),
+        (r"/api/state", ApiCmdHandler),
         (r"/api/robot/connect", ApiRobotConnectHandler),
         (r"/api/robot/disconnect", ApiRobotDisconnectHandler),
         (r"/api/robot/ports", ApiRobotPortsHandler),

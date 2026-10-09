@@ -1,4 +1,5 @@
 {
+    "pulses_per_mm": 40.0,
     "z_min_standalone": -180.0,
     "z_min_rail": -180.0,
     "z_max": 165.0,

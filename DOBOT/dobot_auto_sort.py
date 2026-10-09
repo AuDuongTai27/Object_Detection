@@ -56,21 +56,24 @@ DEFAULT_DROP_TARGET = {
     "x": 49.2,
     "y": -230.1,
     "z": -44.0,
+    "l": 0.0,
+    "rail_l": 0.0,
     "name": "Khay Thả (49.2, -230.1)"
 }
 
 DROP_TARGETS_BY_COLOR = {
-    "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Đỏ (49.2, -230.1)"},
-    "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Lục (49.2, -230.1)"},
-    "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Dương (49.2, -230.1)"},
-    "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Vàng (49.2, -230.1)"},
+    "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Đỏ (49.2, -230.1)"},
+    "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Xanh Lục (49.2, -230.1)"},
+    "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Xanh Dương (49.2, -230.1)"},
+    "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Vàng (49.2, -230.1)"},
 }
 
 DROP_TARGETS_MODE = "all"
+CALIB_RAIL_L = 360.0
 
 def load_drop_targets():
     """Tự động nạp tọa độ khay thả & Z gắp từ file drop_targets.json do Web Studio thiết lập."""
-    global DEFAULT_DROP_TARGET, DROP_TARGETS_BY_COLOR, DROP_TARGETS_MODE, Z_PICK_FLANGE
+    global DEFAULT_DROP_TARGET, DROP_TARGETS_BY_COLOR, DROP_TARGETS_MODE, Z_PICK_FLANGE, CALIB_RAIL_L
     if DROP_TARGETS_JSON_PATH.exists():
         try:
             with open(DROP_TARGETS_JSON_PATH, "r", encoding="utf-8") as f:
@@ -79,11 +82,13 @@ def load_drop_targets():
                 Z_PICK_FLANGE = float(data["pick_z"])
             if "mode" in data:
                 DROP_TARGETS_MODE = data["mode"]
+            if "calib_rail_l" in data:
+                CALIB_RAIL_L = float(data["calib_rail_l"])
             if "default" in data:
                 DEFAULT_DROP_TARGET.update(data["default"])
             if "by_color" in data:
                 DROP_TARGETS_BY_COLOR.update(data["by_color"])
-            print(f"[+] Đã nạp cấu hình vị trí thả đồ (Chế độ: {DROP_TARGETS_MODE}, Z_Pick={Z_PICK_FLANGE}mm) từ: {DROP_TARGETS_JSON_PATH}")
+            print(f"[+] Đã nạp cấu hình vị trí thả đồ (Chế độ: {DROP_TARGETS_MODE}, Z_Pick={Z_PICK_FLANGE}mm, Calib_L={CALIB_RAIL_L}mm) từ: {DROP_TARGETS_JSON_PATH}")
         except Exception as e:
             print(f"[!] Lỗi khi nạp drop_targets.json: {e}")
 
@@ -261,20 +266,24 @@ def solve_rail_kinematics(rx, ry, current_rail_l=0.0, calib_rail_l=0.0):
             "in_current_reach": in_current_reach
         }
 
-    # 1. KIỂM TRA ƯU TIÊN: Nếu điểm ĐÃ NẰM TRONG TẦM VỚI AN TOÀN tại vị trí ray hiện tại (current_rail_l),
-    # thì giữ nguyên vị trí ray, gắp luôn tại chỗ, KHÔNG cần di chuyển ray!
-    if 140.0 <= r_cur <= 330.0 and abs(j1_cur_deg) <= 85.0:
-        return _make_res(cur_l, zc_cur, y_arm_cur, r_cur, j1_cur_deg, in_current_reach=True)
-
-    # 2. Nếu nằm ngoài tầm tại vị trí hiện tại: Giải vị trí ray tối ưu
-    # Thử nghiệm vươn thẳng (bàn trượt căn thẳng hàng với mục tiêu z_world dọc trục ray)
+    # 2. Vị trí ray tối ưu (thẳng mặt mục tiêu z_world dọc trục ray)
     z_carriage_direct = max(-500.0, min(500.0, z_world))
+    optimal_l_direct = z_carriage_direct + 500.0
     y_arm_direct = -(z_world - z_carriage_direct)
     r_direct = math.hypot(x_world, y_arm_direct)
     j1_direct_deg = math.degrees(math.atan2(y_arm_direct, x_world))
 
+    # 1. KIỂM TRA ƯU TIÊN GẮP TẠI CHỖ:
+    # Điểm chỉ được coi là "trong tầm gắp tại chỗ" khi xe trượt đang ở ngay sát vị trí tối ưu (lệch <= 40mm)
+    # VÀ cánh tay ở tư thế tự nhiên thoải mái (bán kính 140..320mm, góc J1 <= 25 độ).
+    # Nếu xe trượt đang ở xa (ví dụ đang ở khay thả L=150mm hay L=500mm), bắt buộc phải chạy ray về đón phôi!
+    diff_l = abs(cur_l - optimal_l_direct)
+    if diff_l <= 40.0 and 140.0 <= r_cur <= 320.0 and abs(j1_cur_deg) <= 25.0:
+        return _make_res(cur_l, zc_cur, y_arm_cur, r_cur, j1_cur_deg, in_current_reach=True)
+
+    # 3. Nếu đang ở xa hoặc góc lệch lớn: Giải vị trí ray tối ưu để đón phôi
     if x_world >= 150.0 and 140.0 <= r_direct <= 330.0 and abs(j1_direct_deg) <= 85.0:
-        return _make_res(z_carriage_direct + 500.0, z_carriage_direct, y_arm_direct, r_direct, j1_direct_deg, in_current_reach=False)
+        return _make_res(optimal_l_direct, z_carriage_direct, y_arm_direct, r_direct, j1_direct_deg, in_current_reach=False)
 
     # 3. Khi x_world < 150mm (ví dụ 70mm <= x_world < 150mm):
     # Dịch bàn trượt dọc theo ray để robot với chéo ở bán kính thoải mái r_target = 180mm.
@@ -324,7 +333,7 @@ class DobotExecutor:
         self.pick_z = pick_z
         self.ser = None
         self.is_busy = False
-        self.is_rail_mode = False
+        self.is_rail_mode = True
         self.rail_current_pos = 0.0
         self.use_http = self.check_http_server()
 
@@ -338,15 +347,18 @@ class DobotExecutor:
         """Lấy trạng thái ray trượt và chế độ hoạt động từ Live Server."""
         if not self.use_http:
             return self.is_rail_mode, self.rail_current_pos
-        try:
-            req = urllib.request.Request("http://127.0.0.1:8080/api/state", method="GET")
-            with urllib.request.urlopen(req, timeout=0.8) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode())
-                    self.is_rail_mode = bool(data.get("is_rail_mode", False))
-                    self.rail_current_pos = float(data.get("rail_pos", self.rail_current_pos))
-        except Exception:
-            pass
+        for endpoint in ["http://127.0.0.1:8080/api/state", "http://127.0.0.1:8080/api/cmd"]:
+            try:
+                req = urllib.request.Request(endpoint, method="GET")
+                with urllib.request.urlopen(req, timeout=0.8) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode())
+                        rail_info = data.get("rail", {})
+                        self.is_rail_mode = bool(data.get("is_rail_mode", rail_info.get("mode", True)))
+                        self.rail_current_pos = float(data.get("rail_pos", rail_info.get("pos", self.rail_current_pos)))
+                        break
+            except Exception:
+                pass
         return self.is_rail_mode, self.rail_current_pos
 
     def move_rail_and_wait(self, target_l, speed=40.0, timeout=18.0):
@@ -459,82 +471,73 @@ class DobotExecutor:
             return False
 
         self.fetch_rail_status()
-        if self.is_rail_mode:
-            sol = solve_rail_kinematics(pick_x, pick_y, current_rail_l=self.rail_current_pos, calib_rail_l=0.0)
-            if not sol:
-                print(f"[!] Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}) nằm ngoài tầm với của cả Dobot + Ray trượt! Hủy lệnh.")
-                return False
-            t = threading.Thread(target=self._pick_and_place_worker, args=(sol["x"], sol["y"], cube_name, on_complete, sol["l"]), daemon=True)
-            t.start()
-            return True
-        else:
-            if not is_safe_workspace(pick_x, pick_y):
-                print(f"[!] Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}) nằm ngoài vùng an toàn robot! Hủy lệnh.")
-                return False
+        t = threading.Thread(target=self._pick_and_place_worker, args=(pick_x, pick_y, cube_name, on_complete), daemon=True)
+        t.start()
+        return True
 
-            t = threading.Thread(target=self._pick_and_place_worker, args=(pick_x, pick_y, cube_name, on_complete, None), daemon=True)
-            t.start()
-            return True
-
-    def _pick_and_place_worker(self, pick_x, pick_y, cube_name, on_complete, rail_pick_l=None):
+    def _pick_and_place_worker(self, pick_x, pick_y, cube_name, on_complete):
         self.is_busy = True
         try:
             if DROP_TARGETS_MODE == "all":
                 target = self.drop_target
             else:
                 target = DROP_TARGETS_BY_COLOR.get(cube_name, self.drop_target)
-            place_x = target.get("x", self.drop_target["x"])
-            place_y = target.get("y", self.drop_target["y"])
-            place_z = target.get("z", self.drop_target["z"])
+            place_x = float(target.get("x", self.drop_target["x"]))
+            place_y = float(target.get("y", self.drop_target["y"]))
+            place_z = float(target.get("z", self.drop_target["z"]))
             tray_name = target.get("name", f"({place_x:.1f}, {place_y:.1f})")
 
-            # 1. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY ĐÓN PHÔI NẾU CẦN THIẾT
-            if self.is_rail_mode and rail_pick_l is not None:
-                delta_pick = abs(rail_pick_l - self.rail_current_pos)
+            # 1. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ BÀN GẮP (CALIB L)
+            calib_rail_l = float(CALIB_RAIL_L)
+            if self.is_rail_mode:
+                delta_pick = abs(calib_rail_l - self.rail_current_pos)
                 if delta_pick > 1.0:
-                    print(f"[*] 🚄 Phôi ngoài tầm hiện tại -> Di chuyển ray tới L = {rail_pick_l:.1f} mm đón phôi...")
-                    self.move_rail_and_wait(rail_pick_l)
+                    print(f"[*] 🚄 Di chuyển ray về vị trí bàn gắp L = {calib_rail_l:.1f} mm...")
+                    # Nâng tay lên an toàn trước khi di chuyển ray
+                    self.send_cmd({"action": "move_xyz", "x": 200.0, "y": 0.0, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
+                    time.sleep(1.0)
+                    self.move_rail_and_wait(calib_rail_l)
                 else:
-                    print(f"[*] 🎯 Phôi trong tầm an toàn tại L = {self.rail_current_pos:.1f} mm -> Dobot gắp luôn tại chỗ!")
+                    print(f"[*] 🎯 Robot đã sẵn sàng tại vị trí bàn gắp L = {self.rail_current_pos:.1f} mm!")
 
             print(f"\n🚀 BẮT ĐẦU GẮP: {cube_name} tại Dobot Arm (X={pick_x:.1f}, Y={pick_y:.1f}) ➔ Thả vào {tray_name} (X={place_x:.1f}, Y={place_y:.1f})")
 
             # 2. Bay trên đỉnh phôi ở độ cao an toàn (Safe Arch)
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
+            time.sleep(1.8)
+
+            # 3. Hạ thẳng xuống gắp khối màu
+            self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
             time.sleep(1.6)
 
-            # 3. Bật bơm hút
+            # 4. Bật bơm hút
             self.send_cmd({"action": "suction", "value": True})
-            time.sleep(0.3)
-
-            # 4. Hạ thẳng xuống gắp khối màu (Z_pick = -49.7mm tương ứng Z_TCP = -109.2mm)
-            self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
-            time.sleep(1.2)
+            time.sleep(0.5)
 
             # 5. Nhấc lên cao an toàn
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(1.2)
+            time.sleep(1.5)
 
             # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ
             if self.is_rail_mode:
-                tray_rail_l = float(target.get("rail_l", 0.0))
+                tray_rail_l = float(target.get("rail_l", target.get("l", 0.0)))
                 self.move_rail_and_wait(tray_rail_l)
 
             # 7. Bay sang khay phân loại
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(1.8)
+            time.sleep(2.0)
 
             # 8. Hạ vào khay
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": place_z, "r": 0.0, "mode": 1})
-            time.sleep(1.0)
+            time.sleep(1.5)
 
             # 9. Nhả phôi (Tắt bơm & xả khí)
             self.send_cmd({"action": "suction", "value": False})
-            time.sleep(0.5)
+            time.sleep(0.4)
 
             # 10. Nhấc lên an toàn và hoàn tất
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(1.0)
+            time.sleep(1.2)
 
             print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
         finally:

@@ -43,21 +43,24 @@ DEFAULT_DROP_TARGET = {
     "x": 49.2,
     "y": -230.1,
     "z": -44.0,
+    "l": 0.0,
+    "rail_l": 0.0,
     "name": "Khay Thả (49.2, -230.1)"
 }
 
 DROP_TARGETS_BY_COLOR = {
-    "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Đỏ (49.2, -230.1)"},
-    "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Lục (49.2, -230.1)"},
-    "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Xanh Dương (49.2, -230.1)"},
-    "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "name": "Khay Vàng (49.2, -230.1)"},
+    "cube_red":    {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Đỏ (49.2, -230.1)"},
+    "cube_green":  {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Xanh Lục (49.2, -230.1)"},
+    "cube_blue":   {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Xanh Dương (49.2, -230.1)"},
+    "cube_yellow": {"x": 49.2, "y": -230.1, "z": -44.0, "l": 0.0, "rail_l": 0.0, "name": "Khay Vàng (49.2, -230.1)"},
 }
 
 DROP_TARGETS_MODE = "all"
+CALIB_RAIL_L = 0.0
 
 def load_drop_targets():
     """Tự động nạp tọa độ khay thả & Z gắp từ file drop_targets.json."""
-    global DEFAULT_DROP_TARGET, DROP_TARGETS_BY_COLOR, DROP_TARGETS_MODE, Z_PICK_FLANGE
+    global DEFAULT_DROP_TARGET, DROP_TARGETS_BY_COLOR, DROP_TARGETS_MODE, Z_PICK_FLANGE, CALIB_RAIL_L
     if DROP_TARGETS_JSON_PATH.exists():
         try:
             with open(DROP_TARGETS_JSON_PATH, "r", encoding="utf-8") as f:
@@ -66,11 +69,13 @@ def load_drop_targets():
                 Z_PICK_FLANGE = float(data["pick_z"])
             if "mode" in data:
                 DROP_TARGETS_MODE = data["mode"]
+            if "calib_rail_l" in data:
+                CALIB_RAIL_L = float(data["calib_rail_l"])
             if "default" in data:
                 DEFAULT_DROP_TARGET.update(data["default"])
             if "by_color" in data:
                 DROP_TARGETS_BY_COLOR.update(data["by_color"])
-            print(f"[VisionEngine] Đã nạp cấu hình vị trí thả đồ (Chế độ: {DROP_TARGETS_MODE}, Z_Pick={Z_PICK_FLANGE}mm) từ: {DROP_TARGETS_JSON_PATH}")
+            print(f"[VisionEngine] Đã nạp cấu hình vị trí thả đồ (Chế độ: {DROP_TARGETS_MODE}, Z_Pick={Z_PICK_FLANGE}mm, Calib_L={CALIB_RAIL_L}mm) từ: {DROP_TARGETS_JSON_PATH}")
         except Exception as e:
             print(f"[VisionEngine] Lỗi nạp drop_targets.json: {e}")
 
@@ -219,7 +224,8 @@ class WebVisionEngine:
                 with open(HOMOGRAPHY_JSON_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.homography_matrix = np.array(data["homography_matrix"], dtype=np.float64)
-                    print(f"[VisionEngine] Đã nạp ma trận Homography từ {HOMOGRAPHY_JSON_PATH}")
+                    self.calib_rail_l = float(data.get("rail_l", data.get("calib_rail_l", CALIB_RAIL_L)))
+                    print(f"[VisionEngine] Đã nạp ma trận Homography từ {HOMOGRAPHY_JSON_PATH} (calib_rail_l={self.calib_rail_l:.1f}mm)")
             except Exception as e:
                 print(f"[VisionEngine] Lỗi nạp Homography: {e}")
 
@@ -516,10 +522,10 @@ class WebVisionEngine:
 
     def execute_pick_and_place(self, pick_x: float, pick_y: float, cube_name="cube", on_complete=None):
         if not self.robot or not self.robot.connected:
-            return {"success": False, "error": "Robot Dobot chưa kết nối!"}
+            return {"success": False, "status": "error", "error": "Robot Dobot chưa kết nối!", "message": "Robot Dobot chưa kết nối!"}
 
         if self.is_picking:
-            return {"success": False, "error": "Robot đang bận thực hiện chu trình gắp trước!"}
+            return {"success": False, "status": "error", "error": "Robot đang bận thực hiện chu trình trước!", "message": "Robot đang bận thực hiện chu trình trước!"}
 
         def _worker():
             self.is_picking = True
@@ -528,62 +534,79 @@ class WebVisionEngine:
                     target_tray = DEFAULT_DROP_TARGET
                 else:
                     target_tray = DROP_TARGETS_BY_COLOR.get(cube_name, DEFAULT_DROP_TARGET)
-                drop_x = target_tray["x"]
-                drop_y = target_tray["y"]
-                drop_z = target_tray["z"]
+                drop_x = float(target_tray["x"])
+                drop_y = float(target_tray["y"])
+                drop_z = float(target_tray["z"])
+                tray_rail_l = float(target_tray.get("rail_l", target_tray.get("l", 0.0)))
+                pick_station_l = float(getattr(self, "calib_rail_l", CALIB_RAIL_L))
 
-                print(f"[VisionEngine] 🚀 Bắt đầu gắp {cube_name} tại ({pick_x:.1f}, {pick_y:.1f}) -> Thả ({drop_x}, {drop_y})")
+                print(f"[VisionEngine] 🚀 Bắt đầu gắp {cube_name} tại ({pick_x:.1f}, {pick_y:.1f}) -> Thả khay ({drop_x:.1f}, {drop_y:.1f}, Z={drop_z:.1f}, L={tray_rail_l:.1f})")
 
                 # Kiểm tra chế độ ray trượt
                 is_rail = bool(getattr(self.robot, "is_rail_mode", False))
-                actual_pick_x = pick_x
-                actual_pick_y = pick_y
 
+                # Bước 0: Nếu có ray trượt và robot chưa ở vị trí bàn gắp (vị trí calib L = pick_station_l)
                 if is_rail:
                     cur_rail_l = float(getattr(self.robot, "rail_current_pos", 0.0))
-                    sol = solve_rail_kinematics(pick_x, pick_y, current_rail_l=cur_rail_l, calib_rail_l=0.0)
-                    if sol is not None:
-                        rail_pick_l = sol["optimal_l"]
-                        actual_pick_x = sol["x_arm"]
-                        actual_pick_y = sol["y_arm"]
-                        delta_pick = abs(rail_pick_l - cur_rail_l)
-                        if delta_pick > 1.0 and not sol.get("in_current_reach", False):
-                            print(f"[VisionEngine] 🚄 Di chuyển ray tới L = {rail_pick_l:.1f} mm đón phôi ({cube_name})")
-                            self.robot.rail_move_to(rail_pick_l, speed_mm_s=40.0)
-                            time.sleep(0.3)
-                        else:
-                            print(f"[VisionEngine] 🎯 Phôi ({cube_name}) trong tầm với an toàn tại L = {cur_rail_l:.1f} mm -> Gắp luôn tại chỗ!")
+                    if abs(cur_rail_l - pick_station_l) > 1.0:
+                        print(f"[VisionEngine] 🚄 Di chuyển ray về vị trí calib đón phôi L = {pick_station_l:.1f} mm...")
+                        # Nâng tay lên an toàn trước khi di chuyển ray
+                        cur_p = self.robot.get_pose() or {"x": 200.0, "y": 0.0, "z": Z_SAFE_FLANGE}
+                        if cur_p.get("z", 0.0) < Z_SAFE_FLANGE - 5.0:
+                            self.robot.move_to_xyz(cur_p["x"], cur_p["y"], Z_SAFE_FLANGE, r=0.0)
+                            time.sleep(1.0)
+                        self.robot.rail_move_to(pick_station_l, speed_mm_s=50.0)
+                        time.sleep(0.4)
+                    else:
+                        print(f"[VisionEngine] 🎯 Robot đã sẵn sàng tại vị trí bàn gắp L = {cur_rail_l:.1f} mm!")
 
-                # 1. Bay an toàn tới điểm trên phôi
-                self.robot.move_safe_jump(actual_pick_x, actual_pick_y, Z_PICK_FLANGE, r=0.0, safe_z=Z_SAFE_FLANGE)
-                time.sleep(1.2)
+                # Bước 1: Bay an toàn tới phôi và hạ xuống gắp
+                print(f"[VisionEngine] 🦾 Hạ tay gắp phôi {cube_name} tại ({pick_x:.1f}, {pick_y:.1f}, Z={Z_PICK_FLANGE:.1f})")
+                self.robot.move_safe_jump(pick_x, pick_y, Z_PICK_FLANGE, r=0.0, safe_z=Z_SAFE_FLANGE)
+                if hasattr(self.robot, "wait_pose_reached"):
+                    self.robot.wait_pose_reached(pick_x, pick_y, Z_PICK_FLANGE, tol=6.0, timeout=3.5)
+                else:
+                    time.sleep(2.5)
 
-                # 2. Bật giác hút
+                # Bước 2: Bật giác hút
                 self.robot.set_suction(True)
+                time.sleep(0.5)
+
+                # Bước 3: Nhấc lên độ cao an toàn
+                self.robot.move_to_xyz(pick_x, pick_y, Z_SAFE_FLANGE, r=0.0)
+                if hasattr(self.robot, "wait_pose_reached"):
+                    self.robot.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=2.5)
+                else:
+                    time.sleep(1.2)
+
+                # Bước 4: Di chuyển ray về vị trí khay thả (nếu có ray)
+                if is_rail:
+                    cur_now_l = float(getattr(self.robot, "rail_current_pos", 0.0))
+                    if abs(tray_rail_l - cur_now_l) > 1.0:
+                        print(f"[VisionEngine] 🚄 Di chuyển ray về khay thả L = {tray_rail_l:.1f} mm...")
+                        self.robot.rail_move_to(tray_rail_l, speed_mm_s=50.0)
+                        time.sleep(0.4)
+                    else:
+                        print(f"[VisionEngine] 🎯 Khay thả đã nằm ngay tại L = {cur_now_l:.1f} mm!")
+
+                # Bước 5: Bay sang điểm thả trong khay
+                print(f"[VisionEngine] 📥 Đưa phôi vào khay tại ({drop_x:.1f}, {drop_y:.1f}, Z={drop_z:.1f})")
+                self.robot.move_safe_jump(drop_x, drop_y, drop_z, r=0.0, safe_z=Z_SAFE_FLANGE)
+                if hasattr(self.robot, "wait_pose_reached"):
+                    self.robot.wait_pose_reached(drop_x, drop_y, drop_z, tol=6.0, timeout=3.5)
+                else:
+                    time.sleep(2.5)
+
+                # Bước 6: Tắt giác hút (nhả phôi)
+                self.robot.set_suction(False)
                 time.sleep(0.4)
 
-                # 3. Nhấc lên độ cao an toàn
-                self.robot.move_to_xyz(actual_pick_x, actual_pick_y, Z_SAFE_FLANGE, r=0.0)
-                time.sleep(0.6)
-
-                # 4. Nếu có ray, di chuyển ray về vị trí khay thả (mặc định L=0.0)
-                if is_rail:
-                    tray_rail_l = float(target_tray.get("rail_l", 0.0))
-                    print(f"[VisionEngine] 🚄 Di chuyển ray về khay thả L = {tray_rail_l:.1f} mm...")
-                    self.robot.rail_move_to(tray_rail_l, speed_mm_s=40.0)
-                    time.sleep(0.3)
-
-                # 5. Bay sang điểm thả
-                self.robot.move_safe_jump(drop_x, drop_y, drop_z, r=0.0, safe_z=Z_SAFE_FLANGE)
-                time.sleep(1.2)
-
-                # 6. Tắt giác hút
-                self.robot.set_suction(False)
-                time.sleep(0.3)
-
-                # 7. Nhấc lên an toàn hoàn tất chu trình
+                # Bước 7: Nhấc lên an toàn hoàn tất chu trình
                 self.robot.move_to_xyz(drop_x, drop_y, Z_SAFE_FLANGE, r=0.0)
-                time.sleep(0.6)
+                if hasattr(self.robot, "wait_pose_reached"):
+                    self.robot.wait_pose_reached(drop_x, drop_y, Z_SAFE_FLANGE, tol=6.0, timeout=2.5)
+                else:
+                    time.sleep(1.2)
 
                 print(f"[VisionEngine] ✅ Hoàn tất gắp thả {cube_name}!")
             except Exception as e:
@@ -594,7 +617,7 @@ class WebVisionEngine:
                     on_complete()
 
         threading.Thread(target=_worker, daemon=True).start()
-        return {"success": True, "message": f"Đã gửi lệnh gắp {cube_name}"}
+        return {"success": True, "status": "ok", "message": f"Đã gửi lệnh gắp {cube_name}"}
 
     def toggle_auto_sort(self, enable=None):
         if enable is None:

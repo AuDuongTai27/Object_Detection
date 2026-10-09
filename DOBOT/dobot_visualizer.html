@@ -2528,19 +2528,23 @@
                         </select>
                     </div>
 
-                    <!-- Ô nhập tọa độ X, Y, Z (mm) -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                    <!-- Ô nhập tọa độ X, Y, Z, L (mm) -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
                         <div>
-                            <label style="display: block; font-size: 11px; font-weight: 700; color: #f87171; margin-bottom: 3px;">Tọa độ X (mm):</label>
-                            <input type="number" id="inp-drop-x" step="0.1" value="49.2" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #f87171; margin-bottom: 3px;">Tọa độ X:</label>
+                            <input type="number" id="inp-drop-x" step="0.1" value="49.2" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 6px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
                         </div>
                         <div>
-                            <label style="display: block; font-size: 11px; font-weight: 700; color: #4ade80; margin-bottom: 3px;">Tọa độ Y (mm):</label>
-                            <input type="number" id="inp-drop-y" step="0.1" value="-230.1" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #4ade80; margin-bottom: 3px;">Tọa độ Y:</label>
+                            <input type="number" id="inp-drop-y" step="0.1" value="-230.1" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 6px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
                         </div>
                         <div>
-                            <label style="display: block; font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 3px;">Tọa độ Z (mm):</label>
-                            <input type="number" id="inp-drop-z" step="0.1" value="-44.0" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 3px;">Tọa độ Z:</label>
+                            <input type="number" id="inp-drop-z" step="0.1" value="-44.0" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; padding: 6px 6px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 11px; font-weight: 700; color: #fbbf24; margin-bottom: 3px;">Ray L (mm):</label>
+                            <input type="number" id="inp-drop-l" min="0" max="1000" step="1" value="0.0" style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #fbbf24; border-radius: 6px; color: #fbbf24; padding: 6px 6px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;" title="Vị trí con trượt ray tại điểm thả (0.0 -> 1000.0 mm)">
                         </div>
                     </div>
 
@@ -2560,6 +2564,28 @@
                         </div>
                         <div style="font-size: 10px; color: #94a3b8; margin-top: 4px; line-height: 1.35;">
                             💡 Mức tiếp xúc phôi là ~<b>-109.2 mm</b> (TCP). Đã hạ 0.5 cm (-5 mm) ➔ <b>-114.2 mm</b> (Z = <b>-54.7 mm</b>) để giác hút ấn dính chặt.
+                        </div>
+                    </div>
+
+                    <!-- CẤU HÌNH VỊ TRÍ RAY KHI CALIB / BÀN GẮP (CALIB RAIL L) -->
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(251, 191, 36, 0.35); border-radius: 8px; padding: 9px 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label for="inp-calib-rail-l" style="font-size: 11.5px; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 5px;">
+                                <span>🚄</span> <span>Vị trí Ray khi Calib / Gắp phôi (L Calib):</span>
+                            </label>
+                            <span id="lbl-calib-rail-status" style="font-size: 11px; color: #38bdf8; font-family: monospace;">Trạm gắp: <b id="lbl-calib-rail-val">360.0 mm</b></span>
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <input type="number" id="inp-calib-rail-l" min="0" max="1000" step="1" value="360.0" oninput="handleCalibRailLChange(this.value)" style="flex: 1; background: #0f172a; border: 1px solid #fbbf24; border-radius: 6px; color: #fbbf24; padding: 6px 8px; font-size: 12px; font-weight: 700; font-family: monospace; outline: none;" title="Vị trí con trượt ray tại thời điểm hiệu chuẩn camera. Khi gắp phôi từ camera, robot sẽ tự động trượt ray về vị trí này!">
+                            <button type="button" onclick="handleAutoFillCalibRailL()" style="background: rgba(251, 191, 36, 0.15); border: 1px solid #fbbf24; color: #fbbf24; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="Di chuyển ray tới vị trí bàn gắp phôi (nơi đã calib), bấm nút này để tự lấy L hiện tại của robot!">
+                                <span>📍</span> <span>Lấy L Hiện Tại</span>
+                            </button>
+                            <button type="button" onclick="handleTestMoveToCalibRailL()" style="background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8; border-radius: 6px; padding: 6px 9px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;" title="Chạy ray về vị trí L calib này để kiểm tra!">
+                                <span>🚀</span> <span>Về Điểm Này</span>
+                            </button>
+                        </div>
+                        <div style="font-size: 10px; color: #94a3b8; margin-top: 4px; line-height: 1.35;">
+                            💡 Khi click gắp phôi trên Camera, Dobot sẽ tự động chạy ray về <b>L Calib</b> này để gắp, sau đó mới trượt sang khay thả.
                         </div>
                     </div>
 
@@ -3771,9 +3797,19 @@
             const rCur = Math.sqrt(xWorld * xWorld + yArmCur * yArmCur);
             const j1CurDeg = THREE.MathUtils.radToDeg(Math.atan2(yArmCur, xWorld));
 
-            // 1. KIỂM TRA ƯU TIÊN: Nếu điểm ĐÃ NẰM TRONG TẦM VỚI AN TOÀN của Dobot tại vị trí ray hiện tại,
-            // thì giữ nguyên vị trí ray, gắp luôn tại chỗ, KHÔNG cần di chuyển ray!
-            if (rCur >= 140.0 && rCur <= 330.0 && Math.abs(j1CurDeg) <= 85.0) {
+            // 2. Vị trí ray tối ưu (thẳng mặt mục tiêu zWorld dọc trục ray)
+            const zCarriageDirect = Math.max(-500.0, Math.min(500.0, zWorld));
+            const optimalLDirect = zCarriageDirect + 500.0;
+            const yArmDirect = -(zWorld - zCarriageDirect);
+            const rDirect = Math.sqrt(xWorld * xWorld + yArmDirect * yArmDirect);
+            const j1DirectDeg = THREE.MathUtils.radToDeg(Math.atan2(yArmDirect, xWorld));
+
+            // 1. KIỂM TRA ƯU TIÊN GẮP TẠI CHỖ:
+            // Chỉ gắp tại chỗ khi xe trượt đang ở ngay sát vị trí đón phôi tối ưu (lệch <= 40mm)
+            // VÀ cánh tay ở tư thế tự nhiên thoải mái (bán kính 140..320mm, góc J1 <= 25 độ).
+            // Nếu xe trượt đang ở xa (như ở khay thả L=150mm hay L=500mm), bắt buộc phải chạy ray về đón phôi!
+            const diffL = Math.abs(curL - optimalLDirect);
+            if (diffL <= 40.0 && rCur >= 140.0 && rCur <= 320.0 && Math.abs(j1CurDeg) <= 25.0) {
                 return {
                     l: curL,
                     optimal_l: curL,
@@ -3786,17 +3822,11 @@
                 };
             }
 
-            // 2. Nếu nằm ngoài tầm tại vị trí hiện tại: Giải vị trí ray tối ưu
-            // Thử vươn thẳng trực tiếp (bàn trượt căn thẳng hàng với mục tiêu dọc trục ray)
-            const zCarriageDirect = Math.max(-500.0, Math.min(500.0, zWorld));
-            const yArmDirect = -(zWorld - zCarriageDirect);
-            const rDirect = Math.sqrt(xWorld * xWorld + yArmDirect * yArmDirect);
-            const j1DirectDeg = THREE.MathUtils.radToDeg(Math.atan2(yArmDirect, xWorld));
-
+            // 3. Nếu đang ở xa hoặc góc vặn lớn: Giải vị trí ray tối ưu để đón phôi
             if (xWorld >= 150.0 && rDirect >= 140.0 && rDirect <= 330.0 && Math.abs(j1DirectDeg) <= 85.0) {
                 return {
-                    l: zCarriageDirect + 500.0,
-                    optimal_l: zCarriageDirect + 500.0,
+                    l: optimalLDirect,
+                    optimal_l: optimalLDirect,
                     zCarriage: zCarriageDirect,
                     xArm: xWorld,
                     yArm: yArmDirect,
@@ -7983,10 +8013,10 @@
                     body: JSON.stringify({ dobot_x: x, dobot_y: y, class_name: className })
                 });
                 const data = await res.json();
-                if (data.status === 'ok') {
-                    showToast(`✅ Dobot bắt đầu chu trình gắp thả!`);
+                if (data.status === 'ok' || data.success) {
+                    showToast(`✅ Dobot bắt đầu chu trình gắp thả: ${data.message || 'Thành công'}`);
                 } else {
-                    showToast(`❌ Lỗi gắp: ${data.message}`);
+                    showToast(`❌ Lỗi gắp: ${data.message || data.error || 'Thất bại'}`);
                 }
             } catch (err) {
                 showToast(`❌ Lỗi mạng: ${err.message}`);
@@ -8013,10 +8043,10 @@
                     body: JSON.stringify({ x: normX, y: normY })
                 });
                 const data = await res.json();
-                if (data.status === 'ok') {
-                    showToast(`🚀 Đã nhận diện khối & bắt đầu gắp: ${data.message}`);
+                if (data.status === 'ok' || data.success) {
+                    showToast(`🚀 Đã nhận diện khối & bắt đầu gắp: ${data.message || 'Thành công'}`);
                 } else {
-                    showToast(`⚠️ ${data.message}`);
+                    showToast(`⚠️ ${data.message || data.error || 'Không gắp được'}`);
                 }
             } catch (err) {
                 showToast(`❌ Lỗi: ${err.message}`);
@@ -8114,7 +8144,71 @@
                 handlePickZChange(pickZ);
             }
 
+            const inpCalibRailL = document.getElementById('inp-calib-rail-l');
+            const calibRailL = (dropTargetsConfig.calib_rail_l !== undefined) ? dropTargetsConfig.calib_rail_l : 360.0;
+            if (inpCalibRailL) {
+                inpCalibRailL.value = calibRailL;
+                handleCalibRailLChange(calibRailL);
+            }
+
             renderDropTargetsSummary();
+        }
+
+        function handleCalibRailLChange(val) {
+            const lNum = parseFloat(val);
+            const lblVal = document.getElementById('lbl-calib-rail-val');
+            if (!isNaN(lNum) && lblVal) {
+                lblVal.innerText = lNum.toFixed(1) + ' mm';
+            }
+        }
+
+        async function handleAutoFillCalibRailL() {
+            try {
+                showToast("🔍 Đang đọc vị trí con trượt ray hiện tại từ robot...");
+                const res = await fetch('/api/cmd');
+                const data = await res.json();
+                let l = 360.0;
+                if (data.status === 'ok' && data.rail && data.rail.pos !== undefined) {
+                    l = Math.round(Number(data.rail.pos) * 10) / 10;
+                } else if (typeof currentRailL !== 'undefined') {
+                    l = Math.round(Number(currentRailL) * 10) / 10;
+                }
+                const inpCalibRailL = document.getElementById('inp-calib-rail-l');
+                if (inpCalibRailL) {
+                    inpCalibRailL.value = l;
+                    handleCalibRailLChange(l);
+                }
+                showToast(`📍 Đã lấy vị trí Ray Calib: L=${l} mm! Nhớ nhấn "Lưu Vị Trí Khay".`);
+            } catch(e) {
+                showToast(`❌ Lỗi: ${e.message}`);
+            }
+        }
+
+        async function handleTestMoveToCalibRailL() {
+            const inpCalibRailL = document.getElementById('inp-calib-rail-l');
+            const l = parseFloat(inpCalibRailL ? inpCalibRailL.value : '360.0') || 360.0;
+            if (!confirm(`Bạn có chắc muốn chạy ray về vị trí Calib / Bàn gắp: L=${l} mm?\nRobot sẽ tự động di chuyển ray đến vị trí này.`)) return;
+            try {
+                showToast(`🚄 Đang di chuyển ray về vị trí Calib L=${l} mm...`);
+                const res = await fetch('/api/cmd', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'rail_move_to',
+                        target_mm: l,
+                        target_l: l,
+                        speed: 50.0
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'ok' || data.success) {
+                    showToast(`✅ Ray đang di chuyển về L=${l} mm!`);
+                } else {
+                    showToast(`⚠️ ${data.message || data.error || 'Lỗi gửi lệnh'}`);
+                }
+            } catch(e) {
+                showToast(`❌ Lỗi: ${e.message}`);
+            }
         }
 
         function handlePickZChange(val) {
@@ -8165,9 +8259,11 @@
                 const inpX = document.getElementById('inp-drop-x');
                 const inpY = document.getElementById('inp-drop-y');
                 const inpZ = document.getElementById('inp-drop-z');
+                const inpL = document.getElementById('inp-drop-l');
                 if (inpX) inpX.value = (target.x !== undefined) ? target.x : 49.2;
                 if (inpY) inpY.value = (target.y !== undefined) ? target.y : -230.1;
                 if (inpZ) inpZ.value = (target.z !== undefined) ? target.z : -44.0;
+                if (inpL) inpL.value = (target.l !== undefined ? target.l : (target.rail_l !== undefined ? target.rail_l : 0.0));
             }
         }
 
@@ -8200,7 +8296,7 @@
 
         async function handleAutoFillDropCoordinates() {
             try {
-                showToast("🔍 Đang đọc tọa độ hiện tại từ robot Dobot...");
+                showToast("🔍 Đang đọc tọa độ hiện tại từ robot Dobot & Ray trượt...");
                 const res = await fetch('/api/cmd');
                 const data = await res.json();
                 if (data.status === 'ok' && data.pose && (data.pose.x !== undefined)) {
@@ -8208,14 +8304,23 @@
                     const y = Math.round(Number(data.pose.y) * 10) / 10;
                     const z = Math.round(Number(data.pose.z) * 10) / 10;
 
+                    let l = 0.0;
+                    if (data.rail && data.rail.pos !== undefined) {
+                        l = Math.round(Number(data.rail.pos) * 10) / 10;
+                    } else if (typeof currentRailL !== 'undefined') {
+                        l = Math.round(Number(currentRailL) * 10) / 10;
+                    }
+
                     const inpX = document.getElementById('inp-drop-x');
                     const inpY = document.getElementById('inp-drop-y');
                     const inpZ = document.getElementById('inp-drop-z');
+                    const inpL = document.getElementById('inp-drop-l');
                     if (inpX) inpX.value = x;
                     if (inpY) inpY.value = y;
                     if (inpZ) inpZ.value = z;
+                    if (inpL) inpL.value = l;
 
-                    showToast(`📍 Đã lấy tọa độ Dobot: X=${x}, Y=${y}, Z=${z}! Nhớ nhấn "Lưu Vị Trí Khay".`);
+                    showToast(`📍 Đã lấy tọa độ Dobot: X=${x}, Y=${y}, Z=${z}, Ray L=${l} mm! Nhớ nhấn "Lưu Vị Trí Khay".`);
                 } else {
                     showToast("⚠️ Chưa đọc được tọa độ! Hãy kiểm tra kết nối Dobot ở góc trên bên phải.");
                 }
@@ -8228,26 +8333,30 @@
             const inpX = document.getElementById('inp-drop-x');
             const inpY = document.getElementById('inp-drop-y');
             const inpZ = document.getElementById('inp-drop-z');
+            const inpL = document.getElementById('inp-drop-l');
             const selTray = document.getElementById('sel-drop-tray');
 
             const x = parseFloat(inpX ? inpX.value : '');
             const y = parseFloat(inpY ? inpY.value : '');
             const z = parseFloat(inpZ ? inpZ.value : '');
+            const l = parseFloat(inpL ? inpL.value : '0') || 0.0;
 
             if (isNaN(x) || isNaN(y) || isNaN(z)) {
-                showToast("⚠️ Vui lòng nhập số hợp lệ cho cả 3 trục X, Y, Z!");
+                showToast("⚠️ Vui lòng nhập số hợp lệ cho các trục X, Y, Z, L!");
                 return;
             }
 
             const selKey = selTray ? selTray.value : 'default';
             if (selKey === 'default') {
-                dropTargetsConfig.default = { x, y, z, name: "Khay Mặc Định" };
+                dropTargetsConfig.default = { x, y, z, l, rail_l: l, name: "Khay Mặc Định" };
                 // Nếu đang dùng mode 'all', đồng bộ luôn cả 4 màu
                 if (dropTargetsConfig.mode === 'all' && dropTargetsConfig.by_color) {
                     for (const k of Object.keys(dropTargetsConfig.by_color)) {
                         dropTargetsConfig.by_color[k].x = x;
                         dropTargetsConfig.by_color[k].y = y;
                         dropTargetsConfig.by_color[k].z = z;
+                        dropTargetsConfig.by_color[k].l = l;
+                        dropTargetsConfig.by_color[k].rail_l = l;
                     }
                 }
             } else {
@@ -8259,7 +8368,7 @@
                 };
                 if (!dropTargetsConfig.by_color) dropTargetsConfig.by_color = {};
                 dropTargetsConfig.by_color[selKey] = {
-                    x, y, z,
+                    x, y, z, l, rail_l: l,
                     name: names[selKey] || selKey
                 };
             }
@@ -8272,8 +8381,16 @@
                 }
             }
 
+            const inpCalibRailL = document.getElementById('inp-calib-rail-l');
+            if (inpCalibRailL) {
+                const cl = parseFloat(inpCalibRailL.value);
+                if (!isNaN(cl)) {
+                    dropTargetsConfig.calib_rail_l = cl;
+                }
+            }
+
             try {
-                showToast("💾 Đang lưu vị trí khay thả & độ cao Z gắp...");
+                showToast("💾 Đang lưu vị trí khay thả, L Calib & độ cao Z gắp...");
                 const res = await fetch('/api/vision/drop_targets', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -8295,22 +8412,24 @@
             const inpX = document.getElementById('inp-drop-x');
             const inpY = document.getElementById('inp-drop-y');
             const inpZ = document.getElementById('inp-drop-z');
+            const inpL = document.getElementById('inp-drop-l');
 
             const x = parseFloat(inpX ? inpX.value : '');
             const y = parseFloat(inpY ? inpY.value : '');
             const z = parseFloat(inpZ ? inpZ.value : '');
+            const l = parseFloat(inpL ? inpL.value : '0') || 0.0;
 
             if (isNaN(x) || isNaN(y) || isNaN(z)) {
                 showToast("⚠️ Vui lòng nhập tọa độ hợp lệ trước khi bay thử!");
                 return;
             }
 
-            if (!confirm(`Bạn có chắc chắn muốn Dobot bay thử đến tọa độ khay: (X=${x}, Y=${y}, Z=${z}) mm?\nRobot sẽ tự động nhấc lên cao an toàn trước khi di chuyển.`)) {
+            if (!confirm(`Bạn có chắc chắn muốn Dobot bay thử đến tọa độ khay: (X=${x}, Y=${y}, Z=${z}, Ray L=${l}) mm?\nRobot sẽ tự động di chuyển ray và nhấc lên cao an toàn trước khi di chuyển.`)) {
                 return;
             }
 
             try {
-                showToast(`🚀 Đang điều khiển Dobot bay an toàn tới (${x}, ${y}, ${z})...`);
+                showToast(`🚀 Đang điều khiển Dobot bay an toàn tới (X=${x}, Y=${y}, Z=${z}, L=${l})...`);
                 const res = await fetch('/api/cmd', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -8319,6 +8438,8 @@
                         x: x,
                         y: y,
                         z: z,
+                        l: l,
+                        rail_l: l,
                         r: 0,
                         safe_z: 35.0
                     })
@@ -8338,7 +8459,7 @@
             const sumEl = document.getElementById('drop-targets-summary');
             if (!sumEl) return;
             const mode = dropTargetsConfig.mode || 'all';
-            const def = dropTargetsConfig.default || { x: 49.2, y: -230.1, z: -44.0 };
+            const def = dropTargetsConfig.default || { x: 49.2, y: -230.1, z: -44.0, l: 0.0 };
             const byColor = dropTargetsConfig.by_color || {};
 
             const items = [
@@ -8350,13 +8471,14 @@
 
             sumEl.innerHTML = items.map(it => {
                 const t = (mode === 'all') ? def : it.data;
+                const trayL = (t.l !== undefined ? t.l : (t.rail_l !== undefined ? t.rail_l : 0.0));
                 return `
                     <div onclick="selectTrayAndEdit('${it.key}')" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 5px 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;" title="Nhấp để xem hoặc sửa tọa độ khay ${it.name}">
                         <div style="display: flex; align-items: center; gap: 5px;">
                             <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${it.col};"></span>
                             <span style="color: #cbd5e1; font-weight: 600;">${it.name}:</span>
                         </div>
-                        <span style="color: #38bdf8; font-family: monospace; font-weight: 700;">(${t.x}, ${t.y})</span>
+                        <span style="color: #38bdf8; font-family: monospace; font-weight: 700;">(${t.x}, ${t.y}, L=${trayL})</span>
                     </div>
                 `;
             }).join('');
