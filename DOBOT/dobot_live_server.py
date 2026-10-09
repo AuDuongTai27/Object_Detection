@@ -78,10 +78,10 @@ ALARM_DICT = {
 
 # --- CẤU HÌNH HỆ THỐNG RAY TRƯỢT DOBOT (SLIDING RAIL KIT 1000mm) ---
 RAIL_INDEX = 0             # Stepper 1 = index 0
-# Chuẩn Dobot Sliding Rail Kit (Driver vi bước 1/8, Pulley GT2 20T: 1600 xung / 40mm = 40 xung = 1 mm)
-PULSES_PER_MM = 40.0
+# Chuẩn Dobot Sliding Rail Kit (Driver vi bước 1/16, Pulley GT2 20T: 3200 xung / 40mm = 80 xung = 1 mm)
+PULSES_PER_MM = 80.0
 RAIL_MAX_MM = 1000.0       # Hành trình ray tối đa 1000 mm
-DEFAULT_SPEED_MM_S = 100.0  # Vận tốc ray tiêu chuẩn 100 mm/s (chạy nhanh, mượt mà)
+DEFAULT_SPEED_MM_S = 40.0  # Vận tốc ray tiêu chuẩn 40 mm/s (chạy mượt mà, đúng tốc độ)
 SWITCH_PIN = 14            # Cảm biến công tắc hành trình GP2 (EIO 14, Chân 3)
 
 RAIL_STATE_FILE = BASE_DIR / ".rail_state.json"
@@ -586,7 +586,7 @@ class DobotController:
             self.stop_requested = False
             self.rail_is_moving = True
             pulses = int(abs(clamped_dist) * self.pulses_per_mm)
-            safe_speed = max(5.0, min(150.0, float(speed_mm_s)))
+            safe_speed = max(5.0, min(60.0, float(speed_mm_s)))
             speed_pulses = int(safe_speed * self.pulses_per_mm)
             dir_speed = -speed_pulses if clamped_dist >= 0 else speed_pulses
 
@@ -627,6 +627,9 @@ class DobotController:
                     interrupted = True
                     break
                 time.sleep(0.04)
+
+            # Đợi thêm 0.3s cho xung phần cứng Dobot xả hết và ray dừng hoàn toàn
+            time.sleep(0.3)
 
             if not interrupted:
                 self.rail_current_pos = max(0.0, min(RAIL_MAX_MM, start_p + clamped_dist))
