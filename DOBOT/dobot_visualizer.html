@@ -1431,7 +1431,7 @@
                 <div id="alarm-banner" style="display: none; background: rgba(224, 49, 49, 0.25); border: 1px solid #ff6b6b; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 11px; color: #ff8787;">
                     <div style="font-weight: bold; display: flex; align-items: center; justify-content: space-between;">
                         <span>🚨 ROBOT BÁO ĐỘNG ĐỎ (LỖI)</span>
-                        <button onclick="sendAction('clear_alarms')" style="background: #e03131; color: white; border: none; border-radius: 4px; padding: 2px 7px; font-size: 10px; cursor: pointer; font-weight: bold;">Khôi phục</button>
+                        <button onclick="sendAction('recover_pose')" style="background: #e03131; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer; font-weight: bold;" title="Dừng ray, tắt hút và tự thu gọn cánh tay để xóa lỗi">🛡️ Tự Thu Gọn & Xóa Lỗi</button>
                     </div>
                     <div id="alarm-desc" style="margin-top: 3px; font-size: 10.5px; color: #ffc9c9;"></div>
                 </div>
@@ -2105,8 +2105,8 @@
 
 
         <div class="panel-footer">
-            <button class="btn-footer btn-clear-alarm" onclick="sendAction('clear_alarms')" title="Xóa cờ lỗi & khôi phục robot khi bị đèn đỏ">
-                🔔 Xóa Lỗi
+            <button class="btn-footer btn-clear-alarm" onclick="sendAction('recover_pose')" title="Dừng ray, tắt hút, xóa cờ lỗi & tự thu gọn cánh tay khi bị đèn đỏ">
+                🔔 Thu Gọn & Xóa Lỗi
             </button>
             <button class="btn-footer btn-home" onclick="triggerHoming()" title="Đưa 4 khớp robot về vị trí cữ 0° chuẩn (Homing)">
                 🏠 Về Gốc

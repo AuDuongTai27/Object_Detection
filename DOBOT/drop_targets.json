@@ -1,5 +1,5 @@
 {
-    "pick_z": -120.9,
+    "pick_z": -123,
     "mode": "color",
     "calib_rail_l": 360,
     "default": {
@@ -12,9 +12,9 @@
     },
     "by_color": {
         "cube_red": {
-            "x": 225.5,
-            "y": 169,
-            "z": -37.9,
+            "x": 242.2,
+            "y": 137.9,
+            "z": -107.1,
             "l": 200,
             "rail_l": 200,
             "name": "Khay \u0110\u1ecf"
@@ -28,19 +28,19 @@
             "name": "Khay Xanh L\u1ee5c"
         },
         "cube_blue": {
-            "x": 225.5,
-            "y": 169,
-            "z": -37.9,
-            "l": 200,
-            "rail_l": 200,
+            "x": 253.5,
+            "y": -113.3,
+            "z": -89.8,
+            "l": 600,
+            "rail_l": 600,
             "name": "Khay Xanh D\u01b0\u01a1ng"
         },
         "cube_yellow": {
-            "x": 225.5,
-            "y": 169,
-            "z": -37.9,
-            "l": 200,
-            "rail_l": 200,
+            "x": 235.9,
+            "y": 126.3,
+            "z": -109.5,
+            "l": 360,
+            "rail_l": 360,
             "name": "Khay V\u00e0ng"
         }
     }

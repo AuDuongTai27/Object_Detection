@@ -464,6 +464,36 @@ class DobotExecutor:
                 return True
         return False
 
+    def has_alarm(self) -> bool:
+        """Kiểm tra robot hiện tại có đang bị lỗi đèn đỏ không."""
+        if self.use_http:
+            try:
+                req = urllib.request.Request("http://127.0.0.1:8080/api/cmd", method="GET")
+                with urllib.request.urlopen(req, timeout=0.8) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode())
+                        return bool(data.get("has_alarm", False) or len(data.get("alarms", [])) > 0)
+            except Exception:
+                pass
+        return False
+
+    def recover_to_safe_pose(self) -> bool:
+        """Kích hoạt cơ chế dừng ray, tắt hút và tự thu gọn về vị trí an toàn."""
+        print("[Safety] 🛡️ KÍCH HOẠT CƠ CHẾ AN TOÀN: Dừng ray, tắt hút, tự thu gọn cánh tay...")
+        if self.use_http:
+            self.send_cmd({"action": "recover_pose"})
+            time.sleep(1.5)
+            return True
+        elif self.ser:
+            self._send_raw_serial(62, 1, bytes([1, 0]))  # Tắt hút
+            self._send_raw_serial(21, 1)  # Clear alarms
+            time.sleep(0.3)
+            params = bytes([1]) + struct.pack("<4f", 200.0, 0.0, 45.0, 0.0)
+            self._send_raw_serial(84, 3, params)
+            time.sleep(1.5)
+            return True
+        return False
+
     def pick_and_place_async(self, pick_x, pick_y, cube_name, on_complete=None):
         """Chạy chu trình gắp thả trong luồng nền để không làm đứng khung hình camera."""
         if self.is_busy:
@@ -478,6 +508,17 @@ class DobotExecutor:
     def _pick_and_place_worker(self, pick_x, pick_y, cube_name, on_complete):
         self.is_busy = True
         try:
+            # 0. Kiểm tra an toàn tầm với cánh tay (R=140..330mm, X>=50mm)
+            pick_r = math.hypot(pick_x, pick_y)
+            if pick_r < 140.0 or pick_r > 330.0 or pick_x < 50.0:
+                print(f"[Safety] ⚠️ Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}, R={pick_r:.1f} mm) ngoài tầm vươn của Dobot! Hủy lệnh.")
+                return
+
+            if self.has_alarm():
+                print("[Safety] ⚠️ Dobot đang bị đèn đỏ trước chu trình. Tự thu gọn xóa lỗi...")
+                self.recover_to_safe_pose()
+                time.sleep(0.5)
+
             if DROP_TARGETS_MODE == "all":
                 target = self.drop_target
             else:
@@ -510,6 +551,12 @@ class DobotExecutor:
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
             time.sleep(1.6)
 
+            # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI HẠ
+            if self.has_alarm():
+                print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo sau khi hạ gắp! HỦY DI CHUYỂN RAY, tự thu gọn an toàn...")
+                self.recover_to_safe_pose()
+                return
+
             # 4. Bật bơm hút
             self.send_cmd({"action": "suction", "value": True})
             time.sleep(0.5)
@@ -518,7 +565,13 @@ class DobotExecutor:
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             time.sleep(1.5)
 
-            # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ
+            # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI NHẤC
+            if self.has_alarm():
+                print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo khi nhấc phôi! HỦY DI CHUYỂN RAY, tự thu gọn an toàn...")
+                self.recover_to_safe_pose()
+                return
+
+            # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ (CHỈ CHẠY NẾU GẮP THÀNH CÔNG VÀ KHÔNG BỊ ĐÈN ĐỎ)
             if self.is_rail_mode:
                 tray_rail_l = float(target.get("rail_l", target.get("l", 0.0)))
                 self.move_rail_and_wait(tray_rail_l)
@@ -540,6 +593,9 @@ class DobotExecutor:
             time.sleep(1.2)
 
             print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
+        except Exception as e:
+            print(f"[VisionEngine] ❌ Lỗi chu trình gắp: {e}")
+            self.recover_to_safe_pose()
         finally:
             self.is_busy = False
             if on_complete:

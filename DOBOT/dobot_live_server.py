@@ -503,12 +503,43 @@ class DobotController:
                 return True
         return False
 
-    def wait_pose_reached(self, target_x: float, target_y: float, target_z: float, tol: float = 6.0, timeout: float = 4.0) -> bool:
-        """Chờ tay robot di chuyển tới tọa độ đích với độ lệch tol (mm)."""
+    def has_alarm(self) -> bool:
+        """Kiểm tra robot hiện tại có đang bị lỗi đèn đỏ không."""
+        alarms = self.get_alarms()
+        return bool(alarms and len(alarms) > 0)
+
+    def recover_to_safe_pose(self) -> bool:
+        """
+        Cơ chế tự phục hồi an toàn khi gặp lỗi đèn đỏ / ngoài tầm với:
+        1. Tắt giác hút ngay lập tức
+        2. Dừng khẩn cấp động cơ ray trượt, hủy mọi lệnh di chuyển ray
+        3. Xóa cờ lỗi phần cứng và làm sạch hàng đợi lệnh bị treo
+        4. Tự động thu gọn cánh tay về tư thế an toàn chuẩn (X=200, Y=0, Z=45, R=0) bằng MOVJ
+        5. Đảm bảo đèn Dobot chuyển từ đỏ trở lại xanh sẵn sàng
+        """
+        print("[Safety] 🛡️ KÍCH HOẠT CƠ CHẾ AN TOÀN: Dừng ray, tắt hút và tự thu gọn cánh tay...")
+        self.set_suction(False)
+        self.rail_stop()
+        self.clear_alarms()
+        time.sleep(0.3)
+        ok = self.move_to_xyz(200.0, 0.0, 45.0, 0.0, mode=1)
+        time.sleep(1.2)
+        if self.has_alarm():
+            self.clear_alarms()
+            time.sleep(0.3)
+            ok = self.move_to_xyz(200.0, 0.0, 45.0, 0.0, mode=1)
+        print("[Safety] ✅ Robot đã thu gọn an toàn và khôi phục trạng thái sẵn sàng (đèn xanh)!")
+        return ok
+
+    def wait_pose_reached(self, target_x: float, target_y: float, target_z: float, tol: float = 8.0, timeout: float = 4.0) -> bool:
+        """Chờ tay robot di chuyển tới tọa độ đích với độ lệch tol (mm). Trả về False nếu gặp lỗi đèn đỏ hoặc timeout."""
         if not self.connected:
             return True
         t0 = time.time()
         while time.time() - t0 < timeout:
+            if self.has_alarm():
+                print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo khi di chuyển tới ({target_x:.1f}, {target_y:.1f}, {target_z:.1f})!")
+                return False
             p = self.get_pose()
             if p:
                 if (abs(p.get("x", 0.0) - float(target_x)) <= tol and
@@ -895,6 +926,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
             if action == "clear_alarms":
                 robot.clear_alarms()
                 self.write_message(json.dumps({"type": "feedback", "msg": "✅ Đã xóa cờ lỗi & khôi phục hàng đợi lệnh Dobot!"}))
+            elif action in ("recover_pose", "safe_retract"):
+                ok = robot.recover_to_safe_pose()
+                self.write_message(json.dumps({"type": "feedback", "msg": "🛡️ Đã thu gọn an toàn & khôi phục trạng thái sẵn sàng!"}))
             elif action == "emergency_stop":
                 robot.emergency_stop()
                 self.write_message(json.dumps({"type": "feedback", "msg": "🛑 Đã Dừng Khẩn Cấp & Xóa Hàng Đợi"}))
@@ -989,6 +1023,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 limits = cmd.get("limits", {})
                 robot.update_safety_limits(limits)
                 self.write_message(json.dumps({"type": "feedback", "msg": "💾 Đã cập nhật & lưu thông số vùng an toàn!"}))
+            elif action in ("recover_pose", "safe_retract"):
+                threading.Thread(target=robot.recover_to_safe_pose, daemon=True).start()
+                self.write_message(json.dumps({"type": "feedback", "msg": "🛡️ Đang kích hoạt cơ chế thu gọn an toàn & xóa lỗi đèn đỏ..."}))
         except Exception as e:
             print("[-] Lỗi xử lý lệnh từ client:", e)
 
@@ -1011,10 +1048,14 @@ class ApiCmdHandler(tornado.web.RequestHandler):
         pose = robot.get_pose() or robot.last_pose or {}
         if isinstance(pose, dict):
             pose["l"] = robot.rail_current_pos
+        alarms = robot.cached_alarms
+        has_alarm = bool(alarms and len(alarms) > 0)
         self.write({
             "status": "ok",
             "pose": pose,
             "connected": robot.connected,
+            "alarms": alarms,
+            "has_alarm": has_alarm,
             "is_rail_mode": robot.is_rail_mode,
             "rail_pos": robot.rail_current_pos,
             "rail": {
@@ -1072,6 +1113,9 @@ class ApiCmdHandler(tornado.web.RequestHandler):
             elif action == "clear_alarms":
                 robot.clear_alarms()
                 self.write({"status": "ok"})
+            elif action in ("recover_pose", "safe_retract"):
+                ok = robot.recover_to_safe_pose()
+                self.write({"status": "ok" if ok else "fail", "msg": "Đã thu gọn cánh tay và khôi phục an toàn"})
             elif action == "home":
                 ok = robot.home()
                 self.write({"status": "ok" if ok else "fail"})

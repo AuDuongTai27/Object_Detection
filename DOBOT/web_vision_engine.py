@@ -527,9 +527,22 @@ class WebVisionEngine:
         if self.is_picking:
             return {"success": False, "status": "error", "error": "Robot đang bận thực hiện chu trình trước!", "message": "Robot đang bận thực hiện chu trình trước!"}
 
+        # 0. Kiểm tra an toàn bán kính vươn cánh tay Dobot (R=140..330mm, X>=50mm)
+        pick_r = math.hypot(pick_x, pick_y)
+        if pick_r < 140.0 or pick_r > 330.0 or pick_x < 50.0:
+            msg = f"⚠️ Tọa độ gắp ({pick_x:.1f}, {pick_y:.1f}, R={pick_r:.1f} mm) ngoài tầm vươn an toàn của Dobot! Hủy lệnh để tránh lỗi đèn đỏ."
+            print(f"[VisionEngine] 🛡️ {msg}")
+            return {"success": False, "status": "error", "error": msg, "message": msg}
+
         def _worker():
             self.is_picking = True
             try:
+                # Kiểm tra nếu Dobot đang bị đèn đỏ trước khi bắt đầu
+                if hasattr(self.robot, "has_alarm") and self.robot.has_alarm():
+                    print("[VisionEngine] ⚠️ Dobot đang có lỗi đèn đỏ trước chu trình. Tự thu gọn xóa lỗi...")
+                    self.robot.recover_to_safe_pose()
+                    time.sleep(0.5)
+
                 if DROP_TARGETS_MODE == "all":
                     target_tray = DEFAULT_DROP_TARGET
                 else:
@@ -563,10 +576,22 @@ class WebVisionEngine:
                 # Bước 1: Bay an toàn tới phôi và hạ xuống gắp
                 print(f"[VisionEngine] 🦾 Hạ tay gắp phôi {cube_name} tại ({pick_x:.1f}, {pick_y:.1f}, Z={Z_PICK_FLANGE:.1f})")
                 self.robot.move_safe_jump(pick_x, pick_y, Z_PICK_FLANGE, r=0.0, safe_z=Z_SAFE_FLANGE)
+                reached = True
                 if hasattr(self.robot, "wait_pose_reached"):
-                    self.robot.wait_pose_reached(pick_x, pick_y, Z_PICK_FLANGE, tol=6.0, timeout=3.5)
+                    reached = self.robot.wait_pose_reached(pick_x, pick_y, Z_PICK_FLANGE, tol=6.0, timeout=3.5)
                 else:
                     time.sleep(2.5)
+                    if hasattr(self.robot, "has_alarm"):
+                        reached = not self.robot.has_alarm()
+
+                # KIỂM TRA AN TOÀN SAU BƯỚC HẠ GẮP:
+                has_err = (hasattr(self.robot, "has_alarm") and self.robot.has_alarm()) or not reached
+                if has_err:
+                    print(f"[VisionEngine] 🛑 PHÁT HIỆN LỖI ĐÈN ĐỎ / KHÔNG TỚI ĐÍCH GẮP ({pick_x:.1f}, {pick_y:.1f})!")
+                    print("[VisionEngine] 🛡️ KÍCH HOẠT CƠ CHẾ AN TOÀN: HỦY DI CHUYỂN RAY, THU GỌN CÁNH TAY...")
+                    if hasattr(self.robot, "recover_to_safe_pose"):
+                        self.robot.recover_to_safe_pose()
+                    return
 
                 # Bước 2: Bật giác hút
                 self.robot.set_suction(True)
@@ -574,12 +599,22 @@ class WebVisionEngine:
 
                 # Bước 3: Nhấc lên độ cao an toàn
                 self.robot.move_to_xyz(pick_x, pick_y, Z_SAFE_FLANGE, r=0.0)
+                lifted = True
                 if hasattr(self.robot, "wait_pose_reached"):
-                    self.robot.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=2.5)
+                    lifted = self.robot.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=2.5)
                 else:
                     time.sleep(1.2)
+                    if hasattr(self.robot, "has_alarm"):
+                        lifted = not self.robot.has_alarm()
 
-                # Bước 4: Di chuyển ray về vị trí khay thả (nếu có ray)
+                # KIỂM TRA AN TOÀN SAU BƯỚC NHẤC LÊN:
+                if (hasattr(self.robot, "has_alarm") and self.robot.has_alarm()) or not lifted:
+                    print(f"[VisionEngine] 🛑 Dobot phát hiện lỗi đèn đỏ khi nhấc phôi! Hủy di chuyển ray sang khay và thu gọn an toàn...")
+                    if hasattr(self.robot, "recover_to_safe_pose"):
+                        self.robot.recover_to_safe_pose()
+                    return
+
+                # Bước 4: Di chuyển ray về vị trí khay thả (nếu có ray) - CHỈ CHẠY KHI GẮP THÀNH CÔNG VÀ KHÔNG LỖI
                 if is_rail:
                     cur_now_l = float(getattr(self.robot, "rail_current_pos", 0.0))
                     if abs(tray_rail_l - cur_now_l) > 1.0:
@@ -611,6 +646,8 @@ class WebVisionEngine:
                 print(f"[VisionEngine] ✅ Hoàn tất gắp thả {cube_name}!")
             except Exception as e:
                 print(f"[VisionEngine] ❌ Lỗi chu trình gắp: {e}")
+                if hasattr(self.robot, "recover_to_safe_pose"):
+                    self.robot.recover_to_safe_pose()
             finally:
                 self.is_picking = False
                 if on_complete:
@@ -635,6 +672,13 @@ class WebVisionEngine:
         print("[VisionEngine] BẮT ĐẦU CHẾ ĐỘ TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)...")
         while self.auto_sort_active:
             if not self.is_picking and self.robot and self.robot.connected:
+                if hasattr(self.robot, "has_alarm") and self.robot.has_alarm():
+                    print("[VisionEngine] [AutoSort] 🛑 Phát hiện Dobot bị đèn đỏ, đang tự thu gọn khôi phục an toàn...")
+                    if hasattr(self.robot, "recover_to_safe_pose"):
+                        self.robot.recover_to_safe_pose()
+                    time.sleep(2.0)
+                    continue
+
                 target_cube = None
                 with self.lock:
                     for c in self.detected_cubes:
