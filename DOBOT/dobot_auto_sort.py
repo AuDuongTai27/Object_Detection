@@ -606,7 +606,7 @@ class DobotExecutor:
 # 3. CHƯƠNG TRÌNH NHẬN DIỆN VÀ PHÂN LOẠI CHÍNH
 # ==============================================================================
 def find_yolo_model(requested_model=None):
-    """Tìm mô hình YOLO, ưu tiên best_v8_more_augmentation.pt theo khuyến nghị."""
+    """Tìm mô hình YOLO, ưu tiên các mô hình .onnx siêu nhẹ theo khuyến nghị."""
     if requested_model:
         p = Path(requested_model)
         if p.exists():
@@ -614,26 +614,33 @@ def find_yolo_model(requested_model=None):
         p = MODEL_DIR / requested_model
         if p.exists():
             return p
+        p_onnx = MODEL_DIR / Path(requested_model).with_suffix(".onnx").name
+        if p_onnx.exists():
+            return p_onnx
 
-    # Danh sách ưu tiên nạp mô hình đã kiểm định
+    # Danh sách ưu tiên nạp mô hình ONNX siêu nhẹ
     priority_list = [
+        MODEL_DIR / "best_trained.onnx",
+        MODEL_DIR / "best_v8_more_augmentation.onnx",
+        MODEL_DIR / "best_11.onnx",
+        MODEL_DIR / "best_v11.onnx",
+        MODEL_DIR / "yolov8n.onnx",
+        PROJECT_ROOT / "yolov8n.onnx",
+        # Dự phòng các file .pt cũ nếu chưa có onnx
         MODEL_DIR / "best_11.pt",
         MODEL_DIR / "best_v11.pt",
         MODEL_DIR / "best_v8_more_augmentation.pt",
-        BASE_DIR / "models" / "best_11.pt",
-        BASE_DIR / "models" / "best_v8_more_augmentation.pt",
-        Path("models/best_11.pt"),
-        Path("models/best_v11.pt"),
-        Path("models/best_v8_more_augmentation.pt"),
-        Path("best_11.pt"),
-        Path("best_v8_more_augmentation.pt"),
+        MODEL_DIR / "best_trained.pt",
     ]
     for p in priority_list:
         if p.exists():
             return p
 
     # Tìm kiếm dự phòng
-    fallback_pts = list(MODEL_DIR.glob("*.pt")) + list(Path("models").glob("*.pt"))
+    fallback_onnx = list(MODEL_DIR.glob("*.onnx"))
+    if fallback_onnx:
+        return fallback_onnx[0]
+    fallback_pts = list(MODEL_DIR.glob("*.pt"))
     if fallback_pts:
         return fallback_pts[0]
     return None
@@ -693,8 +700,13 @@ def main():
             from ultralytics import YOLO
             model_path = find_yolo_model(args.model)
             if model_path and model_path.exists():
-                print(f"[*] Đang nạp mô hình YOLO: {model_path.name} (Khuyên dùng v8 / v11)")
-                yolo_model = YOLO(str(model_path))
+                is_onnx = model_path.suffix.lower() == ".onnx"
+                tag = "⚡ ONNX Siêu Nhẹ" if is_onnx else "PyTorch"
+                print(f"[*] Đang nạp mô hình AI: {model_path.name} [{tag}]")
+                if is_onnx:
+                    yolo_model = YOLO(str(model_path), task="detect")
+                else:
+                    yolo_model = YOLO(str(model_path))
                 loaded_model_name = model_path.name
         except Exception as e:
             print(f"[!] Không thể khởi động YOLO ({e}), chuyển sang OpenCV HSV.")

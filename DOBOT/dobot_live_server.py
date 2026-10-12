@@ -1870,23 +1870,44 @@ class ApiVisionModelsHandler(tornado.web.RequestHandler):
         self.set_header("Access-Control-Allow-Headers", "Content-Type")
 
     def get(self):
-        candidates = ["yolov8n.pt", "yolo11n.pt"]
+        candidates = []
+        # Ưu tiên các mô hình ONNX siêu nhẹ trước
+        if (PROJECT_ROOT / "yolov8n.onnx").exists() and "yolov8n.onnx" not in candidates:
+            candidates.append("yolov8n.onnx")
         if MODELS_DIR.exists():
-            for f in sorted(MODELS_DIR.glob("*.pt")):
+            for f in sorted(MODELS_DIR.glob("*.onnx")):
                 if f.name not in candidates:
                     candidates.append(f.name)
+            # Sau đó mới đến các file .pt dự phòng nếu chưa có onnx tương ứng
+            for f in sorted(MODELS_DIR.glob("*.pt")):
+                if f.with_suffix(".onnx").name not in candidates and f.name not in candidates:
+                    candidates.append(f.name)
+
         model_objs = []
         for name in candidates:
             p = MODELS_DIR / name
-            size_mb = round(p.stat().st_size / (1024 * 1024), 1) if p.exists() else 6.2
-            label = "YOLOv8 Nano (Khuyến nghị)" if name == "yolov8n.pt" else ("YOLO11 Nano" if name == "yolo11n.pt" else f"Mô hình ({name})")
+            if not p.exists() and (PROJECT_ROOT / name).exists():
+                p = PROJECT_ROOT / name
+            size_mb = round(p.stat().st_size / (1024 * 1024), 1) if p.exists() else 0.0
+            is_onnx = name.lower().endswith(".onnx")
+            tag = "⚡ ONNX Siêu Nhẹ" if is_onnx else "PyTorch"
+            if "best_trained" in name:
+                label = f"Mô hình vừa Train ({name}) [{tag}]"
+            elif "more_augmentation" in name:
+                label = f"Mô hình Augmented ({name}) [{tag}]"
+            elif name.startswith("yolov8n"):
+                label = f"YOLOv8 Nano ({name}) [{tag}]"
+            else:
+                label = f"{name} [{tag}]"
+
             model_objs.append({
                 "name": name,
                 "label": label,
                 "size_mb": size_mb,
+                "is_onnx": is_onnx,
                 "exists": p.exists()
             })
-        active = vision_engine.active_model_name if HAS_WEB_STUDIO and vision_engine else "yolov8n.pt"
+        active = vision_engine.active_model_name if HAS_WEB_STUDIO and vision_engine else (candidates[0] if candidates else "")
         self.write({
             "status": "ok",
             "models": model_objs,
@@ -1899,6 +1920,8 @@ class ApiVisionModelsHandler(tornado.web.RequestHandler):
             data = json.loads(self.request.body)
             model_name = data.get("model", "")
             target_path = MODELS_DIR / model_name
+            if not target_path.exists() and (PROJECT_ROOT / model_name).exists():
+                target_path = PROJECT_ROOT / model_name
             if target_path.exists() and HAS_WEB_STUDIO and vision_engine:
                 ok = vision_engine.load_best_yolo_model(target_path)
                 self.write({"status": "ok", "success": ok, "active_model": vision_engine.active_model_name, "message": f"Đã nạp mô hình {vision_engine.active_model_name}"})

@@ -270,7 +270,7 @@ def main():
         send_status({"type": "error", "message": f"Lỗi trong lúc train: {str(e)}"})
         sys.exit(1)
 
-    # Sao chép best.pt tới output_model
+    # Sao chép best.pt tới output_model và tự động chuyển đổi sang ONNX
     trained_best = project_root / "runs" / "detect" / "web_studio_train" / "weights" / "best.pt"
     if args.output_model:
         dest_model = Path(args.output_model).resolve()
@@ -278,17 +278,42 @@ def main():
         if trained_best.exists():
             shutil.copy2(str(trained_best), str(dest_model))
             print(f"[*] Đã sao chép mô hình tốt nhất vào: {dest_model}", flush=True)
+
+            # Tự động xuất mô hình sang ONNX
+            onnx_dest = dest_model.with_suffix(".onnx")
+            try:
+                print(f"[*] 🚀 Đang tự động chuyển đổi mô hình '{dest_model.name}' sang ONNX...", flush=True)
+                send_status({"type": "status", "message": "Đang tự động chuyển đổi mô hình sang ONNX..."})
+                m_exp = YOLO(str(dest_model))
+                exp_res = m_exp.export(format="onnx", imgsz=args.imgsz, dynamic=False, simplify=True)
+                if exp_res and Path(exp_res).exists() and Path(exp_res) != onnx_dest:
+                    shutil.copy2(str(exp_res), str(onnx_dest))
+                print(f"[*] ✅ Đã chuyển đổi ONNX thành công: {onnx_dest}", flush=True)
+            except Exception as e_onnx:
+                print(f"[!] Cảnh báo khi xuất ONNX: {e_onnx}", flush=True)
+
+            target_model = onnx_dest if onnx_dest.exists() else dest_model
             send_status({
                 "type": "completed",
-                "best_model": str(dest_model),
-                "message": "🎉 Huấn luyện thành công! Mô hình đã sẵn sàng nhận diện và gắp thả."
+                "best_model": str(target_model),
+                "message": f"🎉 Huấn luyện & chuyển đổi ONNX thành công! Mô hình '{target_model.name}' đã sẵn sàng nhận diện và gắp thả."
             })
             sys.exit(0)
 
+    # Trường hợp không chỉ định output_model
+    if trained_best.exists():
+        try:
+            m_exp = YOLO(str(trained_best))
+            m_exp.export(format="onnx", imgsz=args.imgsz, dynamic=False, simplify=True)
+        except Exception:
+            pass
+
+    trained_onnx = trained_best.with_suffix(".onnx")
+    target_res = trained_onnx if trained_onnx.exists() else trained_best
     send_status({
         "type": "completed",
-        "best_model": str(trained_best) if trained_best.exists() else "",
-        "message": "🎉 Huấn luyện hoàn tất!"
+        "best_model": str(target_res) if target_res.exists() else "",
+        "message": "🎉 Huấn luyện & chuyển đổi ONNX hoàn tất!"
     })
     sys.exit(0)
 

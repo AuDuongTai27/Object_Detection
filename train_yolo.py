@@ -59,10 +59,23 @@ def main():
         plots=True,
     )
 
+    # Tự động xuất sang ONNX siêu nhẹ
+    best_pt = Path("runs/detect/custom_cubes/weights/best.pt")
+    best_onnx = Path("runs/detect/custom_cubes/weights/best.onnx")
+    if best_pt.exists():
+        try:
+            print("[*] ⚡ Đang tự động xuất mô hình sang ONNX siêu nhẹ...")
+            best_model = YOLO(str(best_pt))
+            best_model.export(format="onnx", imgsz=640, dynamic=False, simplify=True)
+            print(f"[+] ✅ Đã xuất ONNX thành công: {best_onnx}")
+        except Exception as e_exp:
+            print(f"[!] Cảnh báo xuất ONNX: {e_exp}")
+
     print("\n" + "=" * 60)
     print(" [HOÀN TẤT HUẤN LUYỆN]")
     print(" Mô hình tốt nhất đã được lưu tại:")
     print("  -> runs/detect/custom_cubes/weights/best.pt")
+    print("  -> runs/detect/custom_cubes/weights/best.onnx (ONNX)")
     print(" Bạn có thể chạy nhận diện camera bằng:")
     print("  -> python detect_camera_yolo.py")
     print("=" * 60)

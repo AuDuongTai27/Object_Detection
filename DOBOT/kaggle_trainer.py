@@ -728,21 +728,35 @@ print("[Kaggle Cloud GPU] Session finished successfully!")
             size_mb = dest_best.stat().st_size / (1024 * 1024)
             self.log(f"✅ Đã ghi đè & lưu mô hình thành công: {dest_best.name} ({size_mb:.1f} MB)")
 
+            # Tự động xuất mô hình sang ONNX
+            dest_onnx = dest_best.with_suffix(".onnx")
+            try:
+                self.log(f"⚡ Đang tự động chuyển đổi '{dest_best.name}' sang ONNX siêu nhẹ...")
+                from ultralytics import YOLO
+                m_exp = YOLO(str(dest_best))
+                exp_res = m_exp.export(format="onnx", imgsz=640, dynamic=False, simplify=True)
+                if exp_res and Path(exp_res).exists() and Path(exp_res) != dest_onnx:
+                    shutil.copy2(str(exp_res), str(dest_onnx))
+                self.log(f"✅ Đã chuyển đổi ONNX thành công: {dest_onnx.name}")
+            except Exception as e_onnx:
+                self.log(f"⚠️ Cảnh báo chuyển đổi ONNX: {e_onnx}")
+
+            target_to_load = dest_onnx if dest_onnx.exists() else dest_best
             with self.lock:
                 self.state["status"] = "completed"
                 self.state["progress"] = 100
-                self.state["best_model"] = str(dest_best)
-                self.state["output_model_name"] = output_model_name
-                self.state["message"] = f"🎉 Huấn luyện Cloud GPU thành công 100%! Mô hình '{output_model_name}' đã sẵn sàng."
-                self.log(f"🎉 [Hoàn thành] Mô hình '{dest_best.name}' đã sẵn sàng nhận diện và gắp thả!")
+                self.state["best_model"] = str(target_to_load)
+                self.state["output_model_name"] = target_to_load.name
+                self.state["message"] = f"🎉 Huấn luyện Cloud GPU & chuyển ONNX thành công! Mô hình '{target_to_load.name}' đã sẵn sàng."
+                self.log(f"🎉 [Hoàn thành] Mô hình '{target_to_load.name}' đã sẵn sàng nhận diện và gắp thả!")
 
             # 7. Tự động nạp mô hình vào Vision Engine (Tab 4)
             try:
                 server_mod = sys.modules.get("dobot_live_server") or sys.modules.get("__main__")
                 if server_mod and hasattr(server_mod, "vision_engine") and server_mod.vision_engine:
-                    ok = server_mod.vision_engine.load_best_yolo_model(str(dest_best))
+                    ok = server_mod.vision_engine.load_best_yolo_model(str(target_to_load))
                     if ok:
-                        self.log(f"🤖 Đã tự động kích hoạt mô hình '{dest_best.name}' vào hệ thống AI Vision (Tab 4)!")
+                        self.log(f"🤖 Đã tự động kích hoạt mô hình '{target_to_load.name}' vào hệ thống AI Vision (Tab 4)!")
             except Exception as e_engine:
                 self.log(f"Thông báo Vision Engine: {e_engine}")
 

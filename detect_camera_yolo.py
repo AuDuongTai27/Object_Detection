@@ -53,31 +53,41 @@ def open_camera(cam_index=1):
 
 
 def find_model_file(requested_model=None):
-    """Tìm file mô hình YOLO theo thứ tự ưu tiên trong models/ hoặc thư mục gốc."""
+    """Tìm file mô hình YOLO theo thứ tự ưu tiên trong models/ hoặc thư mục gốc (ưu tiên ONNX)."""
     if requested_model and Path(requested_model).exists():
         return Path(requested_model)
+    if requested_model:
+        p_onnx = Path("models") / Path(requested_model).with_suffix(".onnx").name
+        if p_onnx.exists():
+            return p_onnx
 
     priority_list = [
-        # 1. Các model chính thức đã được kiểm định (Khuyên dùng)
+        # 1. Các model ONNX siêu nhẹ (Khuyên dùng)
+        Path("models/best_trained.onnx"),
+        Path("models/best_v8_more_augmentation.onnx"),
+        Path("models/best_11.onnx"),
+        Path("models/best_v11.onnx"),
+        Path("models/yolov8n.onnx"),
+        Path("yolov8n.onnx"),
+        # 2. Các model PyTorch dự phòng
         Path("models/best_11.pt"),
         Path("models/best_v11.pt"),
-        Path("best_11.pt"),
-        Path("best_v11.pt"),
         Path("models/best_v8_more_augmentation.pt"),
-        Path("best_v8_more_augmentation.pt"),
-        # 2. Các model lưu trữ đối chứng (Archive)
-        Path("models/archive/best_v8_background.pt"),
+        Path("models/best_trained.pt"),
+        # 3. Archive
+        Path("models/archive/best_v8.onnx"),
+        Path("models/archive/best_v5.onnx"),
         Path("models/archive/best_v8.pt"),
         Path("models/archive/best_v5.pt"),
-        Path("best_v8_background.pt"),
-        Path("best_v8.pt"),
-        Path("best_v5.pt"),
     ]
     for p in priority_list:
         if p.exists():
             return p
 
     # Quét dự phòng trong models/ và thư mục gốc
+    all_onnx = list(Path("models").glob("*.onnx"))
+    if all_onnx:
+        return all_onnx[0]
     all_pts = list(Path("models").glob("*.pt")) + [p for p in Path(".").glob("*.pt") if "yolov" not in p.name]
     if all_pts:
         return all_pts[0]
@@ -127,9 +137,13 @@ def main():
         print("[!] Không tìm thấy bất kỳ file mô hình .pt nào (best_v8.pt, best_v5.pt, best.pt).")
         return
 
+    is_onnx = model_path.suffix.lower() == ".onnx"
     print("\n" + "=" * 62)
-    print(f" [*] ĐANG NẠP MÔ HÌNH: {model_path.resolve()}")
-    model = YOLO(str(model_path))
+    print(f" [*] ĐANG NẠP MÔ HÌNH ({'⚡ ONNX SIÊU NHẸ' if is_onnx else 'PyTorch'}): {model_path.resolve()}")
+    if is_onnx:
+        model = YOLO(str(model_path), task="detect")
+    else:
+        model = YOLO(str(model_path))
     print(f" [*] Danh sách nhãn phát hiện: {model.names}")
     print("=" * 62)
 

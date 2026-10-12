@@ -229,9 +229,16 @@ class TrainingWorker(QThread):
                 target_weight = Path("models/best_11_trained.pt")
                 import shutil
                 shutil.copy(str(best_weight), str(target_weight))
+                try:
+                    self.log_received.emit("⚡ Đang tự động xuất mô hình sang ONNX siêu nhẹ...")
+                    m_exp = YOLO(str(target_weight))
+                    m_exp.export(format="onnx", imgsz=640, dynamic=False, simplify=True)
+                    self.log_received.emit("✓ Đã xuất thành công: models/best_11_trained.onnx")
+                except Exception as e_exp:
+                    self.log_received.emit(f"⚠️ Cảnh báo xuất ONNX: {e_exp}")
                 self.log_received.emit(f"✓ Đã lưu mô hình mới tại: {target_weight}")
                 self.progress_updated.emit(100, "Hoàn tất huấn luyện!")
-                self.training_finished.emit(True, "Huấn luyện AI thành công! Mô hình đã sẵn sàng gắp thả.")
+                self.training_finished.emit(True, "Huấn luyện AI thành công! Mô hình ONNX đã sẵn sàng gắp thả.")
             else:
                 self.training_finished.emit(False, "Không tìm thấy file trọng số đầu ra.")
 
@@ -289,11 +296,20 @@ class FabLabStudio(QMainWindow):
         # Nạp mặc định model tối ưu nhất
         try:
             from ultralytics import YOLO
-            for m_path in [Path("models/best_v8_more_augmentation.pt"), Path("models/best_11.pt")]:
+            for m_path in [
+                Path("models/best_trained.onnx"),
+                Path("models/best_v8_more_augmentation.onnx"),
+                Path("models/best_11.onnx"),
+                Path("models/best_v8_more_augmentation.pt"),
+                Path("models/best_11.pt"),
+            ]:
                 if m_path.exists():
-                    self.yolo_model = YOLO(str(m_path))
+                    if m_path.suffix.lower() == ".onnx":
+                        self.yolo_model = YOLO(str(m_path), task="detect")
+                    else:
+                        self.yolo_model = YOLO(str(m_path))
                     self.loaded_model_name = m_path.name
-                    print(f"[+] Studio đã nạp: {m_path.name}")
+                    print(f"[+] Studio đã nạp mô hình ({'⚡ ONNX' if m_path.suffix.lower() == '.onnx' else 'PyTorch'}): {m_path.name}")
                     break
         except Exception as e:
             print(f"[!] Chưa nạp được YOLO: {e}")

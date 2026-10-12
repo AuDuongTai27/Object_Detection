@@ -234,21 +234,33 @@ class WebVisionEngine:
             from ultralytics import YOLO
             candidates = [
                 custom_path,
+                MODELS_DIR / "best_trained.onnx",
+                MODELS_DIR / "best_v8_more_augmentation.onnx",
+                MODELS_DIR / "best_11.onnx",
+                MODELS_DIR / "best_v11.onnx",
+                MODELS_DIR / "test.onnx",
+                MODELS_DIR / "yolov8n.onnx",
+                PROJECT_ROOT / "yolov8n.onnx",
+                # Dự phòng nếu máy chưa chuyển xong ONNX
                 MODELS_DIR / "best_trained.pt",
-                MODELS_DIR / "best_11.pt",
                 MODELS_DIR / "best_v8_more_augmentation.pt",
+                MODELS_DIR / "best_11.pt",
                 MODELS_DIR / "best_v11.pt",
             ]
             for c in candidates:
                 if c and Path(c).exists():
-                    self.yolo_model = YOLO(str(c))
-                    self.active_model_name = Path(c).name
-                    print(f"[VisionEngine] Đã nạp mô hình YOLO: {c}")
+                    p = Path(c)
+                    if p.suffix.lower() == ".onnx":
+                        self.yolo_model = YOLO(str(p), task="detect")
+                    else:
+                        self.yolo_model = YOLO(str(p))
+                    self.active_model_name = p.name
+                    print(f"[VisionEngine] ⚡ Đã nạp mô hình ({'ONNX siêu nhẹ' if p.suffix.lower() == '.onnx' else 'PyTorch'}): {p.name}")
                     return True
-            print("[VisionEngine] Chưa tìm thấy mô hình YOLO trong models/")
+            print("[VisionEngine] Chưa tìm thấy mô hình trong models/")
             return False
         except Exception as e:
-            print(f"[VisionEngine] Lỗi khởi tạo mô hình YOLO: {e}")
+            print(f"[VisionEngine] Lỗi khởi tạo mô hình AI: {e}")
             return False
 
     def start_camera(self, cam_id=0):

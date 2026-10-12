@@ -1,14 +1,18 @@
-# Giao diện đồ họa máy tính (GUI Desktop App)
-PyQt6>=6.6.0
+# Suy luận AI thời gian thực nhẹ, mượt & không lag với ONNX Runtime (Tab 4 & Auto Sort)
+onnxruntime>=1.16.0
+onnx>=1.14.0
 
-# Xử lý hình ảnh và Camera thời gian thực
+# Xử lý hình ảnh & Camera thời gian thực
 ultralytics>=8.3.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Huấn luyện mô hình YOLO (Tab 3 & Worker)
 torch>=2.0.0
 torchvision>=0.15.0
 
-# Xử lý hình ảnh và Camera thời gian thực
-opencv-python>=4.8.0
-numpy>=1.24.0
+# Giao diện đồ họa máy tính (GUI Desktop App)
+PyQt6>=6.6.0
 
 # Giao tiếp điều khiển Cánh tay Robot Dobot Magician qua Serial/COM & WebSocket
 pyserial>=3.5

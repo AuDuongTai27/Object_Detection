@@ -368,18 +368,20 @@ class WebYOLOTrainer:
                 elif ret_code == 0:
                     self.state["status"] = "completed"
                     self.state["progress"] = 100
-                    self.state["best_model"] = str(dest_best)
-                    self.state["output_model_name"] = output_model_name
-                    self.state["message"] = f"🎉 Huấn luyện thành công! Mô hình '{output_model_name}' đã sẵn sàng gắp thả."
-                    self.log(f"🎉 [Hoàn thành] Đã lưu mô hình: {dest_best.name}")
+                    dest_onnx = dest_best.with_suffix(".onnx")
+                    chosen_best = dest_onnx if dest_onnx.exists() else dest_best
+                    self.state["best_model"] = str(chosen_best)
+                    self.state["output_model_name"] = chosen_best.name
+                    self.state["message"] = f"🎉 Huấn luyện & chuyển đổi ONNX thành công! Mô hình '{chosen_best.name}' đã sẵn sàng gắp thả."
+                    self.log(f"🎉 [Hoàn thành] Đã lưu mô hình: {chosen_best.name}")
 
                     # Tự động nạp mô hình mới vào Tab 4 (AI Vision)
                     try:
                         server_mod = sys.modules.get("dobot_live_server") or sys.modules.get("__main__")
                         if server_mod and hasattr(server_mod, "vision_engine") and server_mod.vision_engine:
-                            ok = server_mod.vision_engine.load_best_yolo_model(str(dest_best))
+                            ok = server_mod.vision_engine.load_best_yolo_model(str(chosen_best))
                             if ok:
-                                self.log(f"🤖 Đã tự động kích hoạt mô hình '{dest_best.name}' vào Tab 4 (AI Vision)!")
+                                self.log(f"🤖 Đã tự động kích hoạt mô hình ONNX '{chosen_best.name}' vào Tab 4 (AI Vision)!")
                     except Exception as e_engine:
                         self.log(f"Thông báo Vision Engine: {e_engine}")
                 else:
