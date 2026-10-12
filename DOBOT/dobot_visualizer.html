@@ -2313,31 +2313,25 @@
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <button id="btn-start-train" class="btn-capture-big btn-capture-snap" style="padding: 11px;" onclick="handleStartTraining()">
-                        <span>🚀</span> <span>OPTION 1: HUẤN LUYỆN 1-CLICK (CỤC BỘ)</span>
+                    <button id="btn-start-cloud-train" class="btn-capture-big" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; padding: 13px; border: 1px solid #38bdf8; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: bold; font-size: 13px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); cursor: pointer;" onclick="handleStartCloudTraining()">
+                        <span>⚡</span> <span>HUẤN LUYỆN CLOUD GPU 1-CLICK (KAGGLE TESLA T4)</span>
                     </button>
-                    <button id="btn-start-cloud-train" class="btn-capture-big" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; padding: 11px; border: 1px solid #38bdf8; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="handleStartCloudTraining()">
-                        <span>⚡</span> <span>OPTION 2: HUẤN LUYỆN CLOUD GPU (KAGGLE 1-CLICK)</span>
-                    </button>
-                    <button id="btn-export-colab" class="btn-capture-big btn-capture-record" style="color: #38bdf8; border-color: #38bdf8; padding: 11px;" onclick="handleExportColab()">
-                        <span>📦</span> <span>OPTION 3: XUẤT GÓI GOOGLE COLAB (.ZIP)</span>
-                    </button>
-                    <button id="btn-stop-train" class="btn-capture-big" style="background: #e03131; color: #fff; display: none;" onclick="handleStopTraining()">
+                    <button id="btn-stop-train" class="btn-capture-big" style="background: #e03131; color: #fff; display: none; padding: 11px;" onclick="handleStopTraining()">
                         <span>🛑</span> <span>DỪNG HUẤN LUYỆN</span>
                     </button>
                 </div>
 
                 <!-- Kaggle Account Status Bar -->
-                <div id="kaggle-status-bar" style="display: flex; justify-content: space-between; align-items: center; background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; padding: 6px 10px; font-size: 11px; margin-top: 8px;">
+                <div id="kaggle-status-bar" style="display: flex; justify-content: space-between; align-items: center; background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; padding: 7px 10px; font-size: 11px; margin-top: 8px;">
                     <span id="kaggle-status-text" style="color: #94a3b8;">☁️ Kaggle Cloud: Đang kiểm tra...</span>
-                    <button id="btn-open-kaggle-modal" style="background: #2563eb; color: #fff; border: none; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer;" onclick="openKaggleModal()">⚙️ Cài đặt Token</button>
+                    <button id="btn-open-kaggle-modal" style="background: #2563eb; color: #fff; border: none; border-radius: 4px; padding: 4px 9px; font-size: 11px; font-weight: bold; cursor: pointer;" onclick="openKaggleModal()">⚙️ Cài đặt Token</button>
                 </div>
 
-                <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
-                    💡 <b>Mẹo chọn chế độ huấn luyện:</b><br>
-                    • <b>Option 1 (Cục bộ):</b> Dành cho máy có sẵn GPU NVIDIA tại chỗ (train nhanh 1-2 phút).<br>
-                    • <b>Option 2 (Cloud GPU Kaggle ⭐):</b> 1-Click tự đẩy lên đám mây train bằng GPU Tesla T4 miễn phí rồi tự kéo về (không cần GPU trên máy).<br>
-                    • <b>Option 3 (Google Colab):</b> Tải file .zip để tự mở huấn luyện thủ công trên Google Colab.
+                <div style="background: rgba(2, 132, 199, 0.08); border: 1px dashed rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 10px; margin-top: 10px; font-size: 11px; color: #94a3b8; line-height: 1.55;">
+                    ⚡ <b>Cơ chế Huấn luyện Cloud GPU 1-Click:</b><br>
+                    • Tự động đẩy tập dữ liệu lên Kaggle và kích hoạt GPU NVIDIA Tesla T4 miễn phí 100%.<br>
+                    • Máy tính của bạn không cần PyTorch, không ngốn RAM, không lo đơ hay lag chip CPU.<br>
+                    • Sau khi train xong, hệ thống tự động tải về, chuyển sang định dạng <b>.onnx</b> siêu nhẹ và nạp ngay vào Tab 4!
                 </div>
             </div>
 
@@ -7591,8 +7585,8 @@
             }
         }
 
-        // --- 3. HUẤN LUYỆN AI 1-CLICK (LOCAL & KAGGLE CLOUD GPU) ---
-        let activeTrainType = 'local'; // 'local' hoặc 'cloud'
+        // --- 3. HUẤN LUYỆN AI 1-CLICK (KAGGLE CLOUD GPU) ---
+        let activeTrainType = 'cloud'; // Huấn luyện Cloud GPU qua Kaggle API
 
         // Kiểm tra và hiển thị trạng thái Kaggle API
         async function checkKaggleCreds() {
@@ -7817,10 +7811,8 @@
         function updateTrainDashboard(data) {
             if (!data) return;
             const badge = document.getElementById('train-status-badge');
-            const btnStart = document.getElementById('btn-start-train');
             const btnCloud = document.getElementById('btn-start-cloud-train');
             const btnStop = document.getElementById('btn-stop-train');
-            const btnColab = document.getElementById('btn-export-colab');
             const statusMsg = document.getElementById('txt-train-status-msg');
             const pctText = document.getElementById('txt-train-progress-pct');
             const fillBar = document.getElementById('bar-train-fill');
@@ -7860,9 +7852,7 @@
             }
 
             const isRunning = (status === 'training' || status === 'preparing' || status === 'uploading' || status === 'queued' || status === 'running' || status === 'downloading');
-            if (btnStart) btnStart.style.display = isRunning ? 'none' : 'flex';
             if (btnCloud) btnCloud.style.display = isRunning ? 'none' : 'flex';
-            if (btnColab) btnColab.style.display = isRunning ? 'none' : 'flex';
             if (btnStop) btnStop.style.display = isRunning ? 'flex' : 'none';
 
             if (statusMsg) statusMsg.innerText = data.message || 'Sẵn sàng';

@@ -7,9 +7,8 @@ ultralytics>=8.3.0
 opencv-python>=4.8.0
 numpy>=1.24.0
 
-# Huấn luyện mô hình YOLO (Tab 3 & Worker)
-torch>=2.0.0
-torchvision>=0.15.0
+# Huấn luyện Cloud GPU 1-Click (Tab 3: Kaggle API)
+kaggle>=1.5.0
 
 # Giao diện đồ họa máy tính (GUI Desktop App)
 PyQt6>=6.6.0
