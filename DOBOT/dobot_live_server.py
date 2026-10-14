@@ -901,10 +901,16 @@ class StaticFileHandler(tornado.web.RequestHandler):
         if os.path.exists(file_path):
             if filename.endswith(".js"):
                 self.set_header("Content-Type", "application/javascript")
+            elif filename.endswith(".css"):
+                self.set_header("Content-Type", "text/css")
             elif filename.endswith(".ico"):
                 self.set_header("Content-Type", "image/x-icon")
             elif filename.endswith(".png"):
                 self.set_header("Content-Type", "image/png")
+            elif filename.endswith(".svg"):
+                self.set_header("Content-Type", "image/svg+xml")
+            elif filename.endswith(".json"):
+                self.set_header("Content-Type", "application/json")
             with open(file_path, "rb") as f:
                 self.write(f.read())
         else:
@@ -2024,7 +2030,9 @@ def main():
         (r"/api/robot/connect", ApiRobotConnectHandler),
         (r"/api/robot/disconnect", ApiRobotDisconnectHandler),
         (r"/api/robot/ports", ApiRobotPortsHandler),
-        (r"/(.*\.(?:js|ico|png))", StaticFileHandler),
+        (r"/(.*\.(?:js|css|ico|png|svg|json))", StaticFileHandler),
+        (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": str(BASE_DIR / "js")}),
+        (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": str(BASE_DIR / "css")}),
         # Web Studio Streaming & APIs
         (r"/ws/video", VideoWsHandler),
         (r"/api/tool/launch", ApiToolLaunchHandler),
