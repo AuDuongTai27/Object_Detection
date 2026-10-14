@@ -445,7 +445,7 @@ class DobotExecutor:
             try:
                 data = json.dumps(action_dict).encode("utf-8")
                 req = urllib.request.Request(self.server_url, data=data, headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                with urllib.request.urlopen(req, timeout=15.0) as resp:
                     return resp.status == 200
             except Exception as e:
                 print(f"[!] Lỗi gửi HTTP API: {e}")
