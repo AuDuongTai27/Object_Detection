@@ -451,6 +451,80 @@
             });
         }
 
+        function getBlocklySimSpeedFactor() {
+            const sel = document.getElementById('sel-blockly-sim-speed');
+            if (!sel) return 1.0;
+            const factor = parseFloat(sel.value);
+            return (isNaN(factor) || factor <= 0) ? 1.0 : factor;
+        }
+
+        function calcRealisticCartesianDuration(startX, startY, startZ, startR, targetX, targetY, targetZ, targetR, mode) {
+            const dx = targetX - startX;
+            const dy = targetY - startY;
+            const dz = targetZ - startZ;
+            const dHoriz = Math.hypot(dx, dy);
+            const d3D = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const dR = Math.abs((targetR || 0) - (startR || 0));
+
+            let baseDurationMs;
+            if (mode === 'safe') {
+                // Safe Jump có 3 giai đoạn vật lý thực tế của Dobot Magician:
+                // 1. Nhấc thẳng đứng lên zSafe (~65-75 mm/s)
+                // 2. Bay ngang tới (targetX, targetY) (~100-120 mm/s) kèm xoay cổ tay (~70 °/s)
+                // 3. Hạ thẳng đứng xuống targetZ (~65-75 mm/s)
+                let zSafe = Math.max(startZ, targetZ) + 35;
+                if (zSafe > 140) zSafe = 140;
+                if (zSafe < 30) zSafe = 30;
+
+                const dLift = Math.abs(zSafe - startZ);
+                const dLower = Math.abs(targetZ - zSafe);
+
+                const tLift = Math.max(550, (dLift / 70) * 1000 + 250);
+                const tHoriz = Math.max(750, (dHoriz / 110) * 1000 + 350);
+                const tLower = Math.max(550, (dLower / 70) * 1000 + 250);
+                const tRot = (dR / 75) * 1000;
+
+                baseDurationMs = tLift + Math.max(tHoriz, tRot) + tLower;
+                // Giới hạn trong khoảng 2000ms - 4200ms cho hành trình an toàn thực tế
+                baseDurationMs = Math.max(2000, Math.min(4200, baseDurationMs));
+            } else {
+                // Di chuyển thẳng (PTP Direct / Linear)
+                // Vận tốc tuyến tính thực tế của Dobot Magician: ~95-115 mm/s
+                // Thêm 500ms bù trừ gia tốc khởi hành và hãm đà quán tính
+                const tLinear = (d3D / 105) * 1000;
+                const tRot = (dR / 70) * 1000;
+                baseDurationMs = Math.max(tLinear, tRot) + 500;
+                // Tối thiểu 1050ms (cho bước nhỏ dX/dY/dZ), tối đa 3600ms
+                baseDurationMs = Math.max(1050, Math.min(3600, baseDurationMs));
+            }
+
+            const speedFactor = getBlocklySimSpeedFactor();
+            return Math.round(baseDurationMs / speedFactor);
+        }
+
+        function calcRealisticJointDuration(targetJ1, targetJ2, targetJ3, targetJ4) {
+            const startJ1 = (lastRawJoints && !isNaN(lastRawJoints.j1)) ? lastRawJoints.j1 : 0;
+            const startJ2 = (lastRawJoints && !isNaN(lastRawJoints.j2)) ? lastRawJoints.j2 : 0;
+            const startJ3 = (lastRawJoints && !isNaN(lastRawJoints.j3)) ? lastRawJoints.j3 : 0;
+            const startJ4 = (lastRawJoints && !isNaN(lastRawJoints.j4)) ? lastRawJoints.j4 : 0;
+
+            const dJ1 = Math.abs(targetJ1 - startJ1);
+            const dJ2 = Math.abs(targetJ2 - startJ2);
+            const dJ3 = Math.abs(targetJ3 - startJ3);
+            const dJ4 = Math.abs(targetJ4 - startJ4);
+            const maxDeltaDeg = Math.max(dJ1, dJ2, dJ3, dJ4);
+
+            // Động cơ bước / servo Dobot Magician quay ở tốc độ thực tế ~55 - 65 °/s
+            // Thêm 500ms cho thời gian gia tốc và giảm tốc
+            const tRot = (maxDeltaDeg / 60) * 1000;
+            let baseDurationMs = tRot + 500;
+            // Tối thiểu 1000ms cho các điều chỉnh góc nhỏ, tối đa 3600ms
+            baseDurationMs = Math.max(1000, Math.min(3600, baseDurationMs));
+
+            const speedFactor = getBlocklySimSpeedFactor();
+            return Math.round(baseDurationMs / speedFactor);
+        }
+
         const dobotApi = {
             async checkExecution(blockId) {
                 if (!isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
@@ -478,8 +552,16 @@
                     throw new Error(`Tọa độ (X=${x}, Y=${y}, Z_đầu_hút=${z}) ngoài vùng an toàn!`);
                 }
                 if (isSim) {
-                    const ok = await animateRobotCartesian(x, y, z, r, mode, mode === 'safe' ? 550 : 400, () => isBlocklyRunning, () => isBlocklyPaused);
+                    const startX = (currentX !== undefined && !isNaN(currentX)) ? currentX : ((lastKnownRobotPose && lastKnownRobotPose.x) || 250);
+                    const startY = (currentY !== undefined && !isNaN(currentY)) ? currentY : ((lastKnownRobotPose && lastKnownRobotPose.y) || 0);
+                    const startZ = (currentZ !== undefined && !isNaN(currentZ)) ? currentZ : ((lastKnownRobotPose && lastKnownRobotPose.zTcp !== undefined) ? lastKnownRobotPose.zTcp : 50);
+                    const startR = (currentR !== undefined && !isNaN(currentR)) ? currentR : ((lastKnownRobotPose && lastKnownRobotPose.r) || 0);
+
+                    const durationMs = calcRealisticCartesianDuration(startX, startY, startZ, startR, x, y, z, r, mode);
+                    const ok = await animateRobotCartesian(x, y, z, r, mode, durationMs, () => isBlocklyRunning, () => isBlocklyPaused);
                     if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
+                    // Khoảng dừng nghỉ êm ái thực tế giữa các bước (settling time)
+                    await sleepMs(160);
                 } else {
                     if (mode === 'safe') {
                         sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
@@ -497,8 +579,11 @@
                 showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🦾'} Quay khớp J1=${j1}°, J2=${j2}°, J3=${j3}°, J4=${j4}°...`, "#818cf8");
 
                 if (isSim) {
-                    const ok = await animateRobotJoints(j1, j2, j3, j4, 450, () => isBlocklyRunning, () => isBlocklyPaused);
+                    const durationMs = calcRealisticJointDuration(j1, j2, j3, j4);
+                    const ok = await animateRobotJoints(j1, j2, j3, j4, durationMs, () => isBlocklyRunning, () => isBlocklyPaused);
                     if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
+                    // Khoảng dừng nghỉ êm ái thực tế giữa các bước (settling time)
+                    await sleepMs(160);
                 } else {
                     sendAction('move_joint', { j1: j1, j2: j2, j3: j3, j4: j4, mode: 4 });
                     await waitForBlocklyJointsToReach(j1, j2, j3, j4, 8000);
@@ -523,7 +608,7 @@
                 await this.checkExecution(blockId);
                 showBlocklyStatus(`💨 Giác hút: ${enable ? 'BẬT (Hút)' : 'TẮT (Nhả)'}...`, "#4ade80");
                 setSuctionState(enable);
-                await sleepMs(350);
+                await sleepMs(400);
                 await this.checkExecution(blockId);
             },
 
@@ -544,8 +629,14 @@
                 const isSim = isSimulationMode();
                 showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🏠'} Về vị trí Home an toàn...`, "#fb923c");
                 if (isSim) {
-                    const ok = await animateRobotCartesian(250, 0, 50, 0, 'safe', 550, () => isBlocklyRunning, () => isBlocklyPaused);
+                    const startX = (currentX !== undefined && !isNaN(currentX)) ? currentX : ((lastKnownRobotPose && lastKnownRobotPose.x) || 250);
+                    const startY = (currentY !== undefined && !isNaN(currentY)) ? currentY : ((lastKnownRobotPose && lastKnownRobotPose.y) || 0);
+                    const startZ = (currentZ !== undefined && !isNaN(currentZ)) ? currentZ : ((lastKnownRobotPose && lastKnownRobotPose.zTcp !== undefined) ? lastKnownRobotPose.zTcp : 50);
+                    const startR = (currentR !== undefined && !isNaN(currentR)) ? currentR : ((lastKnownRobotPose && lastKnownRobotPose.r) || 0);
+                    const durationMs = Math.max(2200, calcRealisticCartesianDuration(startX, startY, startZ, startR, 250, 0, 50, 0, 'safe'));
+                    const ok = await animateRobotCartesian(250, 0, 50, 0, 'safe', durationMs, () => isBlocklyRunning, () => isBlocklyPaused);
                     if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
+                    await sleepMs(200);
                 } else {
                     sendAction('home');
                     await sleepMs(4000);

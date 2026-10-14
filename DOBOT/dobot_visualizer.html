@@ -603,14 +603,24 @@
                     <span id="blockly-status-text">Sẵn sàng kéo thả hoặc chọn kịch bản mẫu</span>
                 </div>
 
-                <!-- Chọn Kịch bản Mẫu nhanh -->
-                <div style="display: flex; gap: 4px; margin-bottom: 8px; align-items: center;">
-                    <label style="font-size: 11.5px; color: #38bdf8; font-weight: 700; white-space: nowrap;">⚡ Mẫu sẵn:</label>
-                    <select id="sel-blockly-preset" style="flex: 1; background: #1e2430; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 4px 6px; font-size: 11px; outline: none;" onchange="loadBlocklyPreset(this.value)">
-                        <option value="pick_and_place">📦 Gắp & Thả Phôi 3 Lần (For Loop)</option>
-                        <option value="square_patrol">🔄 Tuần Tra 4 Góc Bàn (Patrol)</option>
-                        <option value="joint_wave">👋 Lắc Khớp J1-J4 (Joint Wave)</option>
-                    </select>
+                <!-- Chọn Kịch bản Mẫu nhanh & Tốc độ Mô phỏng Thực tế -->
+                <div style="display: flex; gap: 6px; margin-bottom: 8px; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; gap: 4px; align-items: center; flex: 1.3; min-width: 0;">
+                        <label style="font-size: 11px; color: #38bdf8; font-weight: 700; white-space: nowrap;">⚡ Mẫu:</label>
+                        <select id="sel-blockly-preset" style="width: 100%; background: #1e2430; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 4px 6px; font-size: 11px; outline: none;" onchange="loadBlocklyPreset(this.value)">
+                            <option value="pick_and_place">📦 Gắp & Thả Phôi 3 Lần</option>
+                            <option value="square_patrol">🔄 Tuần Tra 4 Góc Bàn</option>
+                            <option value="joint_wave">👋 Lắc Khớp J1-J4</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 4px; align-items: center; flex: 1; min-width: 0;">
+                        <label style="font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap;" title="Tốc độ di chuyển mô phỏng 3D">⏱️ Tốc độ sim:</label>
+                        <select id="sel-blockly-sim-speed" style="width: 100%; background: #1e2430; color: #38bdf8; border: 1px solid #444; border-radius: 6px; padding: 4px 5px; font-size: 10.5px; font-weight: 600; outline: none;" title="Điều chỉnh tốc độ mô phỏng cho giống thực tế">
+                            <option value="0.75">0.75x (Chậm)</option>
+                            <option value="1.0" selected>1.0x (Chuẩn thực tế)</option>
+                            <option value="1.5">1.5x (Nhanh)</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Khung chứa Workspace Blockly -->

@@ -1866,18 +1866,19 @@
 
 
 
-        async function animateRobotCartesian(targetX, targetY, targetZ_TCP, targetR, mode='direct', totalDurationMs=500, checkActive=null, isPaused=null) {
+        async function animateRobotCartesian(targetX, targetY, targetZ_TCP, targetR, mode='direct', totalDurationMs=1500, checkActive=null, isPaused=null) {
             const startX = (currentX !== undefined && !isNaN(currentX)) ? currentX : ((lastKnownRobotPose && lastKnownRobotPose.x) || 250);
             const startY = (currentY !== undefined && !isNaN(currentY)) ? currentY : ((lastKnownRobotPose && lastKnownRobotPose.y) || 0);
             const startZ = (currentZ !== undefined && !isNaN(currentZ)) ? currentZ : ((lastKnownRobotPose && lastKnownRobotPose.zTcp !== undefined) ? lastKnownRobotPose.zTcp : 50);
             const startR = (currentR !== undefined && !isNaN(currentR)) ? currentR : ((lastKnownRobotPose && lastKnownRobotPose.r) || 0);
 
             function easeInOut(t) {
+                // S-curve Hermite smoothstep cho gia tốc mượt mà tự nhiên
                 return t * t * (3 - 2 * t);
             }
 
-            const stepMs = 25; // ~40 FPS
-            const steps = Math.max(6, Math.round(totalDurationMs / stepMs));
+            const stepMs = 20; // 50 FPS mượt mà
+            const steps = Math.max(8, Math.round(totalDurationMs / stepMs));
 
             // Safe jump safe height
             let zSafe = Math.max(startZ, targetZ_TCP) + 35;
@@ -1944,7 +1945,7 @@
             return true;
         }
 
-        async function animateRobotJoints(targetJ1, targetJ2, targetJ3, targetJ4, totalDurationMs=450, checkActive=null, isPaused=null) {
+        async function animateRobotJoints(targetJ1, targetJ2, targetJ3, targetJ4, totalDurationMs=1200, checkActive=null, isPaused=null) {
             const startJ1 = (lastRawJoints && !isNaN(lastRawJoints.j1)) ? lastRawJoints.j1 : 0;
             const startJ2 = (lastRawJoints && !isNaN(lastRawJoints.j2)) ? lastRawJoints.j2 : 0;
             const startJ3 = (lastRawJoints && !isNaN(lastRawJoints.j3)) ? lastRawJoints.j3 : 0;
@@ -1954,8 +1955,8 @@
                 return t * t * (3 - 2 * t);
             }
 
-            const stepMs = 25;
-            const steps = Math.max(6, Math.round(totalDurationMs / stepMs));
+            const stepMs = 20; // 50 FPS
+            const steps = Math.max(8, Math.round(totalDurationMs / stepMs));
 
             for (let step = 1; step <= steps; step++) {
                 if (checkActive && !checkActive()) return false;
