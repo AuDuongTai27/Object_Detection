@@ -8,7 +8,22 @@ import tornado.web
 from backend.context import BASE_DIR, robot
 
 GEMINI_KEY_FILE = BASE_DIR / "gemini_api_key.json"
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+
+# Danh sách ứng viên dự phòng nếu không list được models từ API Key
+FALLBACK_CANDIDATES = [
+    ("v1beta", "gemini-2.5-flash"),
+    ("v1beta", "gemini-2.0-flash"),
+    ("v1beta", "gemini-2.0-flash-exp"),
+    ("v1beta", "gemini-flash-latest"),
+    ("v1beta", "gemini-1.5-flash-latest"),
+    ("v1", "gemini-1.5-flash"),
+    ("v1", "gemini-1.5-flash-latest"),
+    ("v1beta", "gemini-1.5-flash"),
+    ("v1beta", "gemini-1.5-pro-latest"),
+    ("v1", "gemini-1.5-pro"),
+    ("v1beta", "gemini-pro"),
+    ("v1", "gemini-pro")
+]
 
 SYSTEM_PROMPT = """Bạn là DOBOT AI COPILOT - Trợ lý AI chuyên biệt cho cánh tay robot Dobot Magician tại FabLab EIU.
 NHIỆM VỤ DUY NHẤT CỦA BẠN: Lập trình điều khiển cánh tay robot Dobot Magician thông qua các khối lệnh Blockly (Visual Blocks).
@@ -63,6 +78,21 @@ QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
 }
 """
 
+def extract_json_from_text(text):
+    text = (text or "").strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end+1]
+    return json.loads(text)
+
 def load_stored_api_key():
     if GEMINI_KEY_FILE.exists():
         try:
@@ -76,14 +106,82 @@ def load_stored_api_key():
         return env_key
     return ""
 
-def save_stored_api_key(key):
+def load_stored_model():
+    if GEMINI_KEY_FILE.exists():
+        try:
+            with open(GEMINI_KEY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("model", "")
+        except Exception:
+            pass
+    return ""
+
+def save_stored_api_key(key, model=""):
     try:
+        content = {"api_key": key.strip()}
+        if model:
+            content["model"] = model
         with open(GEMINI_KEY_FILE, "w", encoding="utf-8") as f:
-            json.dump({"api_key": key.strip()}, f, indent=2)
+            json.dump(content, f, indent=2)
         return True
     except Exception as e:
         print(f"[-] Lỗi lưu Gemini API Key: {e}")
         return False
+
+def discover_gemini_models(api_key):
+    """
+    Tự động truy vấn danh sách model được cấp quyền bởi API Key từ Google AI Studio.
+    Thử cả v1beta và v1 để lấy chính xác các model đang hoạt động.
+    """
+    discovered = []
+    auth_errors = []
+
+    for ver in ["v1beta", "v1"]:
+        url = f"https://generativelanguage.googleapis.com/{ver}/models?key={api_key}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "DobotStudio/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                for m in data.get("models", []):
+                    methods = m.get("supportedGenerationMethods", [])
+                    if "generateContent" in methods:
+                        m_name = m.get("name", "").replace("models/", "")
+                        discovered.append((ver, m_name))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="ignore")
+            # Bắt lỗi API key sai ngay lập tức
+            if e.code in (400, 403) and ("API_KEY_INVALID" in err_body or "API key not valid" in err_body):
+                raise ValueError("Google Gemini API Key không hợp lệ! Vui lòng kiểm tra lại key đã sao chép từ Google AI Studio.")
+            auth_errors.append(f"{ver}: HTTP {e.code} {err_body[:120]}")
+        except Exception as e:
+            auth_errors.append(f"{ver}: {str(e)}")
+
+    if discovered:
+        # Xếp hạng ưu tiên: flash > version cao > stable
+        def rank_model(item):
+            ver, name = item
+            score = 0
+            n = name.lower()
+            if "flash" in n:
+                score += 100
+            if "2.5" in n:
+                score += 50
+            elif "2.0" in n:
+                score += 40
+            elif "1.5" in n:
+                score += 30
+            if "exp" not in n:
+                score += 10
+            if ver == "v1beta":
+                score += 5
+            return score
+
+        discovered.sort(key=rank_model, reverse=True)
+        return discovered
+
+    # Nếu không list được models (ví dụ hạn chế quyền), dùng danh sách dự phòng
+    print(f"[*] Dùng danh sách fallback candidates do không list được models ({auth_errors})")
+    return FALLBACK_CANDIDATES
 
 def call_gemini_api(api_key, prompt, context_info=None):
     if not api_key:
@@ -93,25 +191,41 @@ def call_gemini_api(api_key, prompt, context_info=None):
     if context_info:
         full_user_content += f"\n\nThông tin trạng thái hiện tại của robot:\n{json.dumps(context_info, ensure_ascii=False)}"
 
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": full_user_content}]
-            }
-        ],
-        "systemInstruction": {
-            "parts": [{"text": SYSTEM_PROMPT}]
-        },
-        "generationConfig": {
-            "temperature": 0.2,
-            "responseMimeType": "application/json"
-        }
-    }
+    # 1. Tìm các model khả dụng
+    cached_model = load_stored_model()
+    candidates = []
+    if cached_model:
+        # Đưa model đã lưu lên đầu danh sách thử
+        for ver in ["v1beta", "v1"]:
+            candidates.append((ver, cached_model))
+
+    discovered = discover_gemini_models(api_key)
+    for item in discovered:
+        if item not in candidates:
+            candidates.append(item)
 
     last_err = None
-    for model_name in GEMINI_MODELS:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+    for ver, model_name in candidates:
+        url = f"https://generativelanguage.googleapis.com/{ver}/models/{model_name}:generateContent?key={api_key}"
+        
+        # Thử payload chuẩn (v1beta hỗ trợ systemInstruction + responseMimeType)
+        if ver == "v1beta":
+            payload = {
+                "contents": [{"role": "user", "parts": [{"text": full_user_content}]}],
+                "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "responseMimeType": "application/json"
+                }
+            }
+        else:
+            # v1: inline system prompt vào contents
+            combined_prompt = f"{SYSTEM_PROMPT}\n\nCHÚ Ý: Bắt buộc chỉ trả về DUY NHẤT chuỗi JSON hợp lệ, không giải thích ngoài JSON.\n\n{full_user_content}"
+            payload = {
+                "contents": [{"role": "user", "parts": [{"text": combined_prompt}]}],
+                "generationConfig": {"temperature": 0.2}
+            }
+
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -119,22 +233,25 @@ def call_gemini_api(api_key, prompt, context_info=None):
             method="POST"
         )
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 res_data = json.loads(resp.read().decode("utf-8"))
-                candidates = res_data.get("candidates", [])
-                if candidates:
-                    parts = candidates[0].get("content", {}).get("parts", [])
+                candidates_list = res_data.get("candidates", [])
+                if candidates_list:
+                    parts = candidates_list[0].get("content", {}).get("parts", [])
                     if parts:
                         text = parts[0].get("text", "")
-                        return json.loads(text)
+                        parsed = extract_json_from_text(text)
+                        # Lưu lại model hoạt động tốt nhất
+                        save_stored_api_key(api_key, model=model_name)
+                        return model_name, parsed
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="ignore")
-            last_err = f"Model {model_name} HTTP {e.code}: {err_body[:200]}"
-            print(f"[!] Gemini {model_name} lỗi: {last_err}")
+            last_err = f"Model {model_name} ({ver}) HTTP {e.code}: {err_body[:200]}"
+            print(f"[!] Gemini {model_name} ({ver}) lỗi: {last_err}")
             continue
         except Exception as e:
-            last_err = f"Model {model_name} lỗi: {e}"
-            print(f"[!] Gemini {model_name} exception: {last_err}")
+            last_err = f"Model {model_name} ({ver}) exception: {e}"
+            print(f"[!] Gemini {model_name} ({ver}) exception: {last_err}")
             continue
 
     raise RuntimeError(f"Không thể gọi Gemini API: {last_err}")
@@ -167,12 +284,12 @@ class ApiBlocklyAiCredsHandler(tornado.web.RequestHandler):
 
             # Thử ping Gemini với API Key này
             test_prompt = "Chào robot"
-            test_res = call_gemini_api(key, test_prompt)
-            save_stored_api_key(key)
+            model_used, test_res = call_gemini_api(key, test_prompt)
             masked = key[:6] + "..." + key[-4:] if len(key) > 10 else "***"
             self.write({
                 "status": "ok",
-                "message": "Đã lưu và xác thực Google Gemini API Key thành công!",
+                "message": f"Đã lưu và xác thực Google Gemini API Key thành công! (Model: {model_used})",
+                "model": model_used,
                 "masked_key": masked
             })
         except Exception as e:
@@ -216,7 +333,9 @@ class ApiBlocklyAiGenerateHandler(tornado.web.RequestHandler):
                     "rail_current_pos": robot.rail_current_pos
                 }
 
-            result = call_gemini_api(api_key, prompt, context_info)
+            model_used, result = call_gemini_api(api_key, prompt, context_info)
+            if isinstance(result, dict):
+                result["model_used"] = model_used
             self.write(result)
         except Exception as e:
             self.set_status(500)

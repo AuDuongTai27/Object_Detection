@@ -1122,8 +1122,81 @@
             }
         }
 
+        function extractJsonFromAiText(text) {
+            if (!text) return null;
+            let clean = String(text).trim();
+            if (clean.startsWith('```json')) clean = clean.slice(7);
+            else if (clean.startsWith('```')) clean = clean.slice(3);
+            if (clean.endsWith('```')) clean = clean.slice(0, -3);
+            clean = clean.trim();
+            const start = clean.indexOf('{');
+            const end = clean.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && end > start) {
+                clean = clean.substring(start, end + 1);
+            }
+            return JSON.parse(clean);
+        }
+
+        async function discoverGeminiClientModels(apiKey) {
+            const discovered = [];
+            const versions = ['v1beta', 'v1'];
+            for (const ver of versions) {
+                try {
+                    const res = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${apiKey}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        for (const m of (data.models || [])) {
+                            if ((m.supportedGenerationMethods || []).includes('generateContent')) {
+                                discovered.push({ ver, model: m.name.replace('models/', '') });
+                            }
+                        }
+                    } else if (res.status === 400 || res.status === 403) {
+                        const errTxt = await res.text();
+                        if (errTxt.includes('API_KEY_INVALID') || errTxt.includes('API key not valid')) {
+                            throw new Error("Google Gemini API Key không hợp lệ! Vui lòng kiểm tra lại key.");
+                        }
+                    }
+                } catch (e) {
+                    if (e.message.includes('không hợp lệ')) throw e;
+                    console.warn(`[Gemini Discovery] ${ver} query error:`, e);
+                }
+            }
+
+            if (discovered.length > 0) {
+                discovered.sort((a, b) => {
+                    const score = (item) => {
+                        let s = 0;
+                        const n = item.model.toLowerCase();
+                        if (n.includes('flash')) s += 100;
+                        if (n.includes('2.5')) s += 50;
+                        else if (n.includes('2.0')) s += 40;
+                        else if (n.includes('1.5')) s += 30;
+                        if (!n.includes('exp')) s += 10;
+                        if (item.ver === 'v1beta') s += 5;
+                        return s;
+                    };
+                    return score(b) - score(a);
+                });
+                return discovered;
+            }
+
+            // Fallback candidates
+            return [
+                { ver: 'v1beta', model: 'gemini-2.5-flash' },
+                { ver: 'v1beta', model: 'gemini-2.0-flash' },
+                { ver: 'v1beta', model: 'gemini-2.0-flash-exp' },
+                { ver: 'v1beta', model: 'gemini-flash-latest' },
+                { ver: 'v1beta', model: 'gemini-1.5-flash-latest' },
+                { ver: 'v1', model: 'gemini-1.5-flash' },
+                { ver: 'v1', model: 'gemini-1.5-flash-latest' },
+                { ver: 'v1beta', model: 'gemini-1.5-flash' },
+                { ver: 'v1beta', model: 'gemini-1.5-pro-latest' },
+                { ver: 'v1', model: 'gemini-1.5-pro' },
+                { ver: 'v1beta', model: 'gemini-pro' }
+            ];
+        }
+
         async function callGeminiDirectFromClient(apiKey, prompt, context) {
-            const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
             const systemPrompt = `Bạn là DOBOT AI COPILOT - Trợ lý AI chuyên biệt cho cánh tay robot Dobot Magician tại FabLab EIU.
 NHIỆM VỤ DUY NHẤT: Lập trình điều khiển cánh tay robot Dobot Magician bằng các khối lệnh Blockly (Visual Blocks).
 
@@ -1169,16 +1242,27 @@ QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
 }`;
 
             const userContent = `Yêu cầu: ${prompt}\nThông tin trạng thái: ${JSON.stringify(context || {})}`;
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: userContent }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
-            };
+            const candidates = await discoverGeminiClientModels(apiKey);
 
             let lastError = null;
-            for (const model of models) {
+            for (const { ver, model } of candidates) {
                 try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${apiKey}`;
+                    let payload;
+                    if (ver === 'v1beta') {
+                        payload = {
+                            contents: [{ role: "user", parts: [{ text: userContent }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] },
+                            generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+                        };
+                    } else {
+                        const combined = `${systemPrompt}\n\nCHÚ Ý: Chỉ trả về duy nhất chuỗi JSON hợp lệ, không giải thích ngoài JSON.\n\n${userContent}`;
+                        payload = {
+                            contents: [{ role: "user", parts: [{ text: combined }] }],
+                            generationConfig: { temperature: 0.2 }
+                        };
+                    }
+
                     const res = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1186,13 +1270,14 @@ QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
                     });
                     if (!res.ok) {
                         const errTxt = await res.text();
-                        lastError = `HTTP ${res.status}: ${errTxt.slice(0, 150)}`;
+                        lastError = `Model ${model} (${ver}) HTTP ${res.status}: ${errTxt.slice(0, 150)}`;
                         continue;
                     }
                     const data = await res.json();
                     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (text) {
-                        return JSON.parse(text);
+                        const parsed = extractJsonFromAiText(text);
+                        return { model_used: model, ...parsed };
                     }
                 } catch (e) {
                     lastError = e.message;
