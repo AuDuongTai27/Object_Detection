@@ -52,6 +52,9 @@ from backend.handlers.vision_handlers import (
     ApiVisionAutoSortHandler, ApiVisionModelsHandler,
     ApiDropTargetsHandler, ApiCalibInfoHandler
 )
+from backend.handlers.blockly_ai_handler import (
+    ApiBlocklyAiCredsHandler, ApiBlocklyAiGenerateHandler
+)
 
 def find_available_port(preferred_port=8080):
     import socket
@@ -110,6 +113,8 @@ def main():
         (r"/api/vision/models", ApiVisionModelsHandler),
         (r"/api/vision/drop_targets", ApiDropTargetsHandler),
         (r"/api/calib/info", ApiCalibInfoHandler),
+        (r"/api/blockly/ai/creds", ApiBlocklyAiCredsHandler),
+        (r"/api/blockly/ai/generate", ApiBlocklyAiGenerateHandler),
         (r"/api/workspace/safety", ApiWorkspaceSafetyHandler),
         (r"/dobot_description/(.*)", tornado.web.StaticFileHandler, {"path": str(BASE_DIR / "dobot_description")}),
     ])

@@ -623,6 +623,86 @@
                     </div>
                 </div>
 
+                <!-- AI COPILOT KÉO THẢ THÔNG MINH (GEMINI LLM) -->
+                <div class="ai-copilot-container" id="ai-copilot-panel">
+                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleAiCopilotCollapse()">
+                        <div style="display: flex; align-items: center; gap: 7px;">
+                            <span class="ai-pulsing-orb"></span>
+                            <span style="font-weight: 700; font-size: 11.5px; color: #f1f5f9; letter-spacing: 0.3px;">
+                                ✨ DOBOT AI COPILOT <span style="font-size: 10px; color: #c084fc; font-weight: 600;">(Gemini Free)</span>
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <button class="btn-step" id="btn-open-gemini-modal" style="padding: 2px 7px; font-size: 10px; background: rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.4); color: #e9d5ff;" onclick="event.stopPropagation(); openGeminiModal()" title="Cài đặt Google Gemini API Key">
+                                🔑 <span id="ai-key-badge">API Key</span>
+                            </button>
+                            <span id="ai-copilot-toggle-arrow" style="font-size: 10px; color: #94a3b8;">▼</span>
+                        </div>
+                    </div>
+
+                    <div id="ai-copilot-content" style="margin-top: 8px;">
+                        <!-- Input Prompt Area -->
+                        <div style="position: relative;">
+                            <textarea id="inp-ai-prompt" rows="2" placeholder="💬 Nhập yêu cầu bằng tiếng Việt (Ví dụ: 'Gắp phôi tại X=220, Y=0 nhấc lên bỏ vào khay bên phải (180, 140, 20), sau đó về Home')..." style="width: 100%; box-sizing: border-box; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(168,85,247,0.35); border-radius: 7px; color: #fff; font-size: 11px; padding: 7px 8px; outline: none; resize: vertical; line-height: 1.4; font-family: inherit;"></textarea>
+                        </div>
+
+                        <!-- Prompt Suggestion Chips -->
+                        <div style="display: flex; gap: 4px; overflow-x: auto; padding: 4px 0 6px; scrollbar-width: none;">
+                            <span class="ai-chip" onclick="setAiPromptAndFocus('Gắp phôi tại X=220, Y=0, Z=-20 nhấc lên chuyển sang khay X=180, Y=140, Z=20 rồi về Home')">📦 Gắp & Thả phôi</span>
+                            <span class="ai-chip" onclick="setAiPromptAndFocus('Tuần tra 4 góc bàn làm việc ở độ cao an toàn Z=40 bằng Safe Jump')">🔄 Tuần tra 4 góc</span>
+                            <span class="ai-chip" onclick="setAiPromptAndFocus('Lắc khớp J1 từ -30 đến 30 độ 3 lần để vẫy chào khán giả')">👋 Vẫy chào khán giả</span>
+                            <span class="ai-chip" onclick="setAiPromptAndFocus('Di chuyển vẽ một hình vuông 60x60mm ở độ cao Z=30')">📐 Vẽ hình vuông</span>
+                            <span class="ai-chip" onclick="setAiPromptAndFocus('Kiểm tra giác hút: bật giác hút, chờ 1 giây, nhấc Z lên 50mm rồi thả')">🧲 Test giác hút</span>
+                        </div>
+
+                        <!-- Action Bar -->
+                        <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between;">
+                            <label style="font-size: 10.5px; color: #94a3b8; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none;">
+                                <input type="checkbox" id="chk-ai-clear-first" checked style="accent-color: #a855f7;"> Xóa khối cũ trước khi lắp
+                            </label>
+                            <button id="btn-trigger-ai" class="btn-ai-generate" onclick="handleAiGenerateBlocks()">
+                                <span id="ai-btn-spinner" style="display: none;">⏳</span>
+                                <span id="ai-btn-text">✨ LẮP RÁP KHỐI AI</span>
+                            </button>
+                        </div>
+
+                        <!-- AI Response / Thought Matrix Container -->
+                        <div id="ai-result-matrix" style="display: none; margin-top: 8px;">
+                            <!-- Thinking Accordion -->
+                            <div id="ai-thought-container" class="ai-thought-box" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; cursor: pointer;" onclick="toggleAiThoughtExpand()">
+                                    <span style="font-weight: 700; color: #c084fc; font-size: 10.5px; display: flex; align-items: center; gap: 4px;">
+                                        🧠 TƯ DUY & QUY HOẠCH AN TOÀN
+                                    </span>
+                                    <span id="ai-thought-arrow" style="font-size: 9px; color: #94a3b8;">▲</span>
+                                </div>
+                                <div id="ai-thought-text" style="font-size: 10px; color: #cbd5e1; font-family: monospace; white-space: pre-wrap; max-height: 90px; overflow-y: auto;"></div>
+                            </div>
+
+                            <!-- Friendly Refusal Bubble if triggered -->
+                            <div id="ai-refusal-box" class="ai-refusal-bubble" style="display: none;">
+                                <div style="font-weight: 700; color: #f87171; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;">
+                                    <span>🤖</span> <span>LỜI NHẮN TỪ DOBOT AI COPILOT:</span>
+                                </div>
+                                <div id="ai-refusal-text"></div>
+                            </div>
+
+                            <!-- Steps Generation Matrix -->
+                            <div id="ai-steps-container" style="display: none; margin-top: 6px; max-height: 180px; overflow-y: auto; padding-right: 4px;">
+                                <div style="font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span>🧩 LỘ TRÌNH KHỐI LỆNH ĐÃ LẮP:</span>
+                                    <span id="ai-steps-count" style="font-size: 10px; color: #94a3b8;"></span>
+                                </div>
+                                <div id="ai-steps-list"></div>
+                            </div>
+
+                            <!-- Action button to execute immediately -->
+                            <button id="btn-ai-simulate-now" style="display: none; width: 100%; margin-top: 8px; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: 1px solid #34d399; border-radius: 6px; padding: 7px; font-size: 11.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); text-align: center;" onclick="runBlocklyCode()">
+                                ▶️ CHẠY MÔ PHỎNG NGAY KỊCH BẢN NÀY
+                            </button>
+                        </div>
+                    </div>
+
                 <!-- Khung chứa Workspace Blockly -->
                 <div id="blockly-wrapper" style="position: relative; width: 100%; height: clamp(280px, 46vh, 420px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden; background: #151922; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);">
                     <div id="blocklyDiv" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;"></div>
@@ -1707,6 +1787,7 @@
         fetchDropTargets();
         fetchSafetyLimits();
         checkKaggleCreds();
+        if (typeof checkGeminiCreds === 'function') checkGeminiCreds();
         setInterval(checkToolStatus, 1500);
         animate();
     </script>
@@ -1753,6 +1834,49 @@
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button onclick="closeKaggleModal()" style="background: #334155; color: #cbd5e1; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 12px;">Hủy</button>
                 <button onclick="handleSaveKaggleCreds()" id="btn-save-kaggle" style="background: linear-gradient(135deg, #0284c7, #2563eb); color: #fff; border: 1px solid #38bdf8; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 12px; font-weight: 600;">Lưu & Xác Thực</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Cấu hình Google Gemini AI API Token -->
+    <div id="modal-gemini-setup" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px); z-index: 999999; justify-content: center; align-items: center;">
+        <div style="background: #1e293b; border: 1px solid #a855f7; border-radius: 12px; width: 460px; max-width: 90vw; padding: 22px; color: #fff; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="margin: 0; font-size: 16px; color: #c084fc; display: flex; align-items: center; gap: 8px;">
+                    <span>✨</span> <span>Cài Đặt Google Gemini API Key (Miễn Phí)</span>
+                </h3>
+                <button onclick="closeGeminiModal()" style="background: none; border: none; color: #94a3b8; font-size: 22px; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
+            
+            <p style="font-size: 12px; color: #cbd5e1; line-height: 1.5; margin: 0 0 14px 0;">
+                Kích hoạt <b>DOBOT AI COPILOT</b> thông minh: tự động tính toán tọa độ, sinh khối kéo thả Blockly và giải thích lý do từng bước.
+            </p>
+
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid rgba(168, 85, 247, 0.25); font-size: 11px; color: #cbd5e1; margin-bottom: 16px; line-height: 1.6;">
+                📖 <b>Cách lấy Google Gemini API Key miễn phí 100%:</b><br>
+                1. Đăng nhập tài khoản Google vào <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #38bdf8; text-decoration: underline;">aistudio.google.com/app/apikey</a><br>
+                2. Bấm nút <b>Create API key</b> (Hoàn toàn miễn phí, không cần thẻ tín dụng)<br>
+                3. Sao chép chuỗi khóa (bắt đầu bằng <code>AIzaSy...</code>) và dán vào ô bên dưới.
+            </div>
+
+            <!-- Cách 1: Nạp file gemini_api_key.json -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+                <label style="font-size: 11px; font-weight: 600; color: #c084fc; display: block; margin-bottom: 4px;">Cách 1: Chọn file gemini_api_key.json (nếu có):</label>
+                <input type="file" id="file-gemini-json" accept=".json" onchange="handleGeminiFileSelect(event)" style="font-size: 11px; color: #94a3b8; width: 100%;">
+            </div>
+
+            <div style="text-align: center; color: #64748b; font-size: 10px; margin: 6px 0;">— HOẶC DÁN KEY TRỰC TIẾP —</div>
+
+            <!-- Cách 2: Nhập API key -->
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 11px; color: #cbd5e1; font-weight: 600;">Gemini API Key (AIzaSy...):</label>
+                <input type="password" id="inp-gemini-key" placeholder="Dán khóa API Key vào đây..." style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 12px;">
+                <div id="gemini-key-status" style="font-size: 10.5px; margin-top: 4px; color: #94a3b8;"></div>
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button onclick="closeGeminiModal()" style="background: #334155; color: #cbd5e1; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 12px;">Hủy</button>
+                <button onclick="handleSaveGeminiCreds()" id="btn-save-gemini" style="background: linear-gradient(135deg, #7c3aed, #2563eb); color: #fff; border: 1px solid #a855f7; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: 12px; font-weight: 600;">Lưu & Xác Thực</button>
             </div>
         </div>
     </div>

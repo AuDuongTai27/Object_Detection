@@ -955,6 +955,478 @@
             }
         }
 
+        // =========================================================================
+        // DOBOT AI COPILOT: GOOGLE GEMINI POWERED BLOCKLY FORGE & EXPLAINER
+        // =========================================================================
+        let isAiCopilotCollapsed = false;
+        let isAiThoughtExpanded = true;
+        let currentAiApiKey = localStorage.getItem('gemini_api_key') || '';
+
+        function toggleAiCopilotCollapse() {
+            const content = document.getElementById('ai-copilot-content');
+            const arrow = document.getElementById('ai-copilot-toggle-arrow');
+            if (!content) return;
+            isAiCopilotCollapsed = !isAiCopilotCollapsed;
+            content.style.display = isAiCopilotCollapsed ? 'none' : 'block';
+            if (arrow) arrow.innerText = isAiCopilotCollapsed ? '▶' : '▼';
+        }
+
+        function toggleAiThoughtExpand() {
+            const txt = document.getElementById('ai-thought-text');
+            const arrow = document.getElementById('ai-thought-arrow');
+            if (!txt) return;
+            isAiThoughtExpanded = !isAiThoughtExpanded;
+            txt.style.display = isAiThoughtExpanded ? 'block' : 'none';
+            if (arrow) arrow.innerText = isAiThoughtExpanded ? '▲' : '▼';
+        }
+
+        function setAiPromptAndFocus(promptText) {
+            const inp = document.getElementById('inp-ai-prompt');
+            if (inp) {
+                inp.value = promptText;
+                inp.focus();
+            }
+        }
+
+        function openGeminiModal() {
+            const modal = document.getElementById('modal-gemini-setup');
+            if (modal) {
+                modal.style.display = 'flex';
+                const inp = document.getElementById('inp-gemini-key');
+                if (inp && currentAiApiKey) {
+                    inp.value = currentAiApiKey;
+                }
+            }
+        }
+
+        function closeGeminiModal() {
+            const modal = document.getElementById('modal-gemini-setup');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function handleGeminiFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const key = data.api_key || data.apiKey || data.key;
+                    if (key) {
+                        const inp = document.getElementById('inp-gemini-key');
+                        if (inp) inp.value = key;
+                        showToast("✅ Đã nạp API Key từ file JSON!");
+                    } else {
+                        showToast("⚠️ Không tìm thấy trường 'api_key' trong file JSON!");
+                    }
+                } catch (err) {
+                    showToast("❌ Lỗi đọc file JSON: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function checkGeminiCreds() {
+            try {
+                const res = await fetch('/api/blockly/ai/creds');
+                const data = await res.json();
+                const badge = document.getElementById('ai-key-badge');
+                if (data.status === 'ok' && data.has_key) {
+                    if (badge) {
+                        badge.innerText = "✓ " + (data.masked_key || "Đã lưu");
+                        badge.style.color = "#34d399";
+                    }
+                    return true;
+                }
+            } catch (e) {
+                // Backend not available (Netlify mode)
+            }
+
+            // Fallback checking localStorage
+            const localKey = localStorage.getItem('gemini_api_key');
+            const badge = document.getElementById('ai-key-badge');
+            if (localKey && localKey.length > 8) {
+                currentAiApiKey = localKey;
+                if (badge) {
+                    badge.innerText = "✓ " + localKey.slice(0, 4) + "..." + localKey.slice(-4);
+                    badge.style.color = "#34d399";
+                }
+                return true;
+            } else {
+                if (badge) {
+                    badge.innerText = "🔑 Cài Key";
+                    badge.style.color = "#e9d5ff";
+                }
+                return false;
+            }
+        }
+
+        async function handleSaveGeminiCreds() {
+            const inp = document.getElementById('inp-gemini-key');
+            const btn = document.getElementById('btn-save-gemini');
+            const statusDiv = document.getElementById('gemini-key-status');
+            if (!inp) return;
+            const key = inp.value.trim();
+            if (!key) {
+                showToast("⚠️ Vui lòng dán Google Gemini API Key!");
+                return;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "⏳ Đang kiểm tra...";
+            }
+            if (statusDiv) {
+                statusDiv.innerText = "Đang kết nối thử nghiệm với Google Gemini...";
+                statusDiv.style.color = "#38bdf8";
+            }
+
+            try {
+                let success = false;
+                try {
+                    const res = await fetch('/api/blockly/ai/creds', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ api_key: key })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.status === 'ok') {
+                        success = true;
+                    } else {
+                        throw new Error(data.message || "Xác thực thất bại");
+                    }
+                } catch (netErr) {
+                    // Try direct ping in client
+                    await callGeminiDirectFromClient(key, "Xin chào Dobot", {});
+                    success = true;
+                }
+
+                if (success) {
+                    currentAiApiKey = key;
+                    localStorage.setItem('gemini_api_key', key);
+                    showToast("🎉 Lưu và xác thực Google Gemini API Key thành công!");
+                    closeGeminiModal();
+                    checkGeminiCreds();
+                }
+            } catch (err) {
+                if (statusDiv) {
+                    statusDiv.innerText = "❌ Lỗi xác thực: " + err.message;
+                    statusDiv.style.color = "#f87171";
+                }
+                showToast("❌ " + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = "Lưu & Xác Thực";
+                }
+            }
+        }
+
+        async function callGeminiDirectFromClient(apiKey, prompt, context) {
+            const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+            const systemPrompt = `Bạn là DOBOT AI COPILOT - Trợ lý AI chuyên biệt cho cánh tay robot Dobot Magician tại FabLab EIU.
+NHIỆM VỤ DUY NHẤT: Lập trình điều khiển cánh tay robot Dobot Magician bằng các khối lệnh Blockly (Visual Blocks).
+
+DANH SÁCH KHỐI LỆNH HỖ TRỢ:
+1. dobot_move_xyz:
+   - Fields: X (140 đến 330), Y (-330 đến 330), Z (-65 đến 165), R (-180 đến 180), MODE ("safe" hoặc "direct").
+   - "safe": Nhấc an toàn (Safe Jump - nhấc lên độ cao an toàn, bay ngang, hạ xuống). ƯU TIÊN CHO GẮP THẢ VÀ TIẾP CẬN.
+   - "direct": Bay thẳng trực tiếp.
+2. dobot_move_joint:
+   - Fields: J1 (-90 đến 90), J2 (0 đến 85), J3 (-10 đến 85), J4 (-90 đến 90).
+3. dobot_move_relative:
+   - Fields: DX (-100 đến 100), DY (-100 đến 100), DZ (-100 đến 100), DR (-180 đến 180).
+4. dobot_suction:
+   - Fields: STATE ("ON" hoặc "OFF").
+5. dobot_wait:
+   - Fields: TIME (giây, ví dụ 0.5, 1.0).
+6. dobot_home:
+   - Fields: {}.
+
+QUY TẮC AN TOÀN:
+- Bán kính ngang: 140mm <= sqrt(X^2 + Y^2) <= 330mm.
+- Cao độ đầu hút Z: -65mm <= Z <= 165mm.
+- Khi gắp phôi: Luôn dùng MODE "safe", BẬT hút, chờ 0.5s, di chuyển "safe", TẮT hút, chờ 0.3s, về Home.
+
+QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
+- Nếu người dùng hỏi những câu hỏi ngoài lề (thời tiết, thơ văn, lập trình web, lịch sử, toán ngoài lề, tán gẫu không liên quan tới robot Dobot):
+  + Đặt "status": "refusal"
+  + Đặt "steps": []
+  + Đặt "reply_text": Trả lời bằng tiếng Việt cực kỳ hóm hỉnh, xưng "Em là Dobot AI Assistant tại FabLab EIU 🦾" và nhắc khéo người dùng hãy giao nhiệm vụ điều khiển robot Dobot.
+
+ĐỊNH DẠNG JSON ĐẦU RA BẮT BUỘC:
+{
+  "status": "success" hoặc "refusal",
+  "reply_text": "...",
+  "thought": "Phân tích logic và an toàn...",
+  "steps": [
+    {
+      "block_type": "dobot_move_xyz",
+      "fields": { "X": 220, "Y": 0, "Z": -20, "R": 0, "MODE": "safe" },
+      "explanation": "..."
+    }
+  ]
+}`;
+
+            const userContent = `Yêu cầu: ${prompt}\nThông tin trạng thái: ${JSON.stringify(context || {})}`;
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: userContent }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+            };
+
+            let lastError = null;
+            for (const model of models) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) {
+                        const errTxt = await res.text();
+                        lastError = `HTTP ${res.status}: ${errTxt.slice(0, 150)}`;
+                        continue;
+                    }
+                    const data = await res.json();
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) {
+                        return JSON.parse(text);
+                    }
+                } catch (e) {
+                    lastError = e.message;
+                }
+            }
+            throw new Error(lastError || "Không thể kết nối Google Gemini API");
+        }
+
+        function createAiStepCardElement(stepNum, stepData) {
+            const card = document.createElement('div');
+            card.className = 'ai-step-card';
+            card.id = `ai-step-card-${stepNum}`;
+
+            let icon = '🦾';
+            let title = stepData.block_type;
+            let fieldDetails = '';
+
+            if (stepData.block_type === 'dobot_move_xyz') {
+                icon = stepData.fields?.MODE === 'safe' ? '📦' : '🚀';
+                title = stepData.fields?.MODE === 'safe' ? 'Nhấc An Toàn (Safe Jump)' : 'Bay Thẳng (Direct PTP)';
+                fieldDetails = `X=${stepData.fields?.X}, Y=${stepData.fields?.Y}, Z=${stepData.fields?.Z}, R=${stepData.fields?.R}°`;
+            } else if (stepData.block_type === 'dobot_move_joint') {
+                icon = '🔄';
+                title = 'Quay Khớp (Joint Move)';
+                fieldDetails = `J1=${stepData.fields?.J1}°, J2=${stepData.fields?.J2}°, J3=${stepData.fields?.J3}°, J4=${stepData.fields?.J4}°`;
+            } else if (stepData.block_type === 'dobot_move_relative') {
+                icon = '📐';
+                title = 'Di Chuyển Tương Đối (Relative)';
+                fieldDetails = `dX=${stepData.fields?.DX}, dY=${stepData.fields?.DY}, dZ=${stepData.fields?.DZ}`;
+            } else if (stepData.block_type === 'dobot_suction') {
+                icon = '💨';
+                title = stepData.fields?.STATE === 'ON' ? 'Giác Hút: BẬT' : 'Giác Hút: TẮT';
+                fieldDetails = stepData.fields?.STATE === 'ON' ? 'Kích hoạt van hút phôi' : 'Xả van thả phôi';
+            } else if (stepData.block_type === 'dobot_wait') {
+                icon = '⏱️';
+                title = `Dừng Chờ ${stepData.fields?.TIME || 0.5}s`;
+                fieldDetails = 'Ổn định áp suất hoặc tạm dừng chu trình';
+            } else if (stepData.block_type === 'dobot_home') {
+                icon = '🏠';
+                title = 'Về Vị Trí Home An Toàn';
+                fieldDetails = 'X=250, Y=0, Z=50, R=0';
+            }
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <div style="display: flex; align-items: center;">
+                        <span class="ai-step-badge">Bước ${stepNum}</span>
+                        <span style="font-weight: 700; color: #38bdf8;">${icon} ${title}</span>
+                    </div>
+                    <span style="font-size: 10px; color: #94a3b8; font-family: monospace;">${fieldDetails}</span>
+                </div>
+                <div style="font-size: 10.5px; color: #cbd5e1; line-height: 1.4; padding-left: 2px;">
+                    💡 <i>${stepData.explanation || 'Thực thi hành động theo kế hoạch.'}</i>
+                </div>
+            `;
+            return card;
+        }
+
+        async function handleAiGenerateBlocks() {
+            const inp = document.getElementById('inp-ai-prompt');
+            const btn = document.getElementById('btn-trigger-ai');
+            const spinnerText = document.getElementById('ai-btn-spinner');
+            const btnText = document.getElementById('ai-btn-text');
+            const resMatrix = document.getElementById('ai-result-matrix');
+            const thoughtBox = document.getElementById('ai-thought-container');
+            const thoughtTxt = document.getElementById('ai-thought-text');
+            const refusalBox = document.getElementById('ai-refusal-box');
+            const refusalTxt = document.getElementById('ai-refusal-text');
+            const stepsBox = document.getElementById('ai-steps-container');
+            const stepsList = document.getElementById('ai-steps-list');
+            const stepsCount = document.getElementById('ai-steps-count');
+            const btnSim = document.getElementById('btn-ai-simulate-now');
+            const chkClear = document.getElementById('chk-ai-clear-first');
+
+            if (!inp) return;
+            const prompt = inp.value.trim();
+            if (!prompt) {
+                showToast("⚠️ Vui lòng nhập câu lệnh yêu cầu cho AI Copilot!");
+                inp.focus();
+                return;
+            }
+
+            if (isBlocklyRunning) stopBlocklyCode();
+
+            // Set loading state
+            btn.disabled = true;
+            if (spinnerText) spinnerText.style.display = 'inline-block';
+            if (btnText) btnText.innerText = "🧠 ĐANG TƯ DUY & LẮP RÁP...";
+            showBlocklyStatus("🧠 AI Copilot đang phân tích quỹ đạo và vùng an toàn...", "#c084fc");
+
+            if (resMatrix) resMatrix.style.display = 'block';
+            if (refusalBox) refusalBox.style.display = 'none';
+            if (stepsBox) stepsBox.style.display = 'none';
+            if (btnSim) btnSim.style.display = 'none';
+
+            const contextInfo = {
+                current_pose: lastKnownRobotPose || { x: currentX, y: currentY, z: currentZ, r: currentR },
+                safety_limits: cachedSafetyLimits,
+                rail_mode: isRailModeActive,
+                rail_l: currentRailL
+            };
+
+            try {
+                let aiResult = null;
+                // Try backend endpoint first
+                try {
+                    const res = await fetch('/api/blockly/ai/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt: prompt,
+                            api_key: currentAiApiKey,
+                            context: contextInfo
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.status) {
+                        aiResult = data;
+                    } else if (data.need_key) {
+                        openGeminiModal();
+                        throw new Error(data.message);
+                    } else {
+                        throw new Error(data.message || "Lỗi phản hồi từ server");
+                    }
+                } catch (netErr) {
+                    // Fallback to client-side direct Gemini call
+                    const keyToUse = currentAiApiKey || localStorage.getItem('gemini_api_key');
+                    if (!keyToUse) {
+                        openGeminiModal();
+                        throw new Error("Chưa có Google Gemini API Key! Hãy dán key vào bảng cài đặt.");
+                    }
+                    aiResult = await callGeminiDirectFromClient(keyToUse, prompt, contextInfo);
+                }
+
+                if (!aiResult) throw new Error("Không nhận được dữ liệu từ AI.");
+
+                // CASE 1: GUARDRAIL REFUSAL (TỪ CHỐI THÂN THIỆN)
+                if (aiResult.status === 'refusal') {
+                    if (thoughtBox) thoughtBox.style.display = 'none';
+                    if (stepsBox) stepsBox.style.display = 'none';
+                    if (btnSim) btnSim.style.display = 'none';
+                    if (refusalBox) {
+                        refusalBox.style.display = 'block';
+                        if (refusalTxt) refusalTxt.innerHTML = aiResult.reply_text || "Em chỉ hỗ trợ lập trình điều khiển cánh tay robot Dobot thôi ạ!";
+                    }
+                    showBlocklyStatus("🤖 Lời nhắn từ Dobot AI Copilot", "#f87171");
+                    showToast("🤖 " + (aiResult.reply_text ? aiResult.reply_text.slice(0, 60) : "Chỉ hỗ trợ robot Dobot") + "...");
+                    return;
+                }
+
+                // CASE 2: SUCCESSFUL PLAN
+                if (thoughtBox) {
+                    thoughtBox.style.display = 'block';
+                    if (thoughtTxt) thoughtTxt.innerText = aiResult.thought || "Đã phân tích tọa độ và lập kế hoạch an toàn.";
+                }
+
+                if (!Array.isArray(aiResult.steps) || aiResult.steps.length === 0) {
+                    showToast("⚠️ AI không sinh ra bước nào.");
+                    return;
+                }
+
+                if (stepsBox) stepsBox.style.display = 'block';
+                if (stepsList) stepsList.innerHTML = '';
+                if (stepsCount) stepsCount.innerText = `${aiResult.steps.length} bước`;
+
+                // Optionally clear workspace first
+                if (chkClear && chkClear.checked && blocklyWorkspace) {
+                    blocklyWorkspace.clear();
+                }
+
+                // STEP-BY-STEP FORGE WITH DRAMATIC VISUAL ANIMATION
+                let prevBlock = null;
+                for (let i = 0; i < aiResult.steps.length; i++) {
+                    const step = aiResult.steps[i];
+
+                    // 1. Render and scroll step card
+                    const stepCard = createAiStepCardElement(i + 1, step);
+                    if (stepsList) stepsList.appendChild(stepCard);
+                    stepCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    stepCard.classList.add('active-building');
+
+                    // 2. Instantiate and connect block in Blockly workspace
+                    if (blocklyWorkspace && typeof Blockly !== 'undefined') {
+                        try {
+                            const block = blocklyWorkspace.newBlock(step.block_type);
+                            if (step.fields) {
+                                for (const [k, v] of Object.entries(step.fields)) {
+                                    const field = block.getField(k);
+                                    if (field) {
+                                        block.setFieldValue(String(v), k);
+                                    }
+                                }
+                            }
+                            block.initSvg();
+                            block.render();
+
+                            if (prevBlock && prevBlock.nextConnection && block.previousConnection) {
+                                prevBlock.nextConnection.connect(block.previousConnection);
+                            } else if (!prevBlock) {
+                                block.moveBy(40, 30);
+                            }
+                            prevBlock = block;
+
+                            blocklyWorkspace.highlightBlock(block.id);
+                            updateBlocklyCodePreview();
+                        } catch (bErr) {
+                            console.error("Lỗi tạo block:", bErr);
+                        }
+                    }
+
+                    showBlocklyStatus(`✨ Đang lắp ráp bước ${i + 1}/${aiResult.steps.length}: ${step.block_type}...`, "#38bdf8");
+                    await sleepMs(380);
+                    stepCard.classList.remove('active-building');
+                }
+
+                if (blocklyWorkspace) {
+                    blocklyWorkspace.highlightBlock(null);
+                }
+
+                if (btnSim) btnSim.style.display = 'block';
+                showBlocklyStatus(`🎉 Hoàn tất lắp ráp ${aiResult.steps.length} khối lệnh AI! Sẵn sàng chạy mô phỏng.`, "#4ade80");
+                showToast("🎉 Đã lắp ráp kịch bản AI thành công!");
+
+            } catch (err) {
+                console.error("Lỗi AI Copilot:", err);
+                showToast("❌ " + err.message);
+                showBlocklyStatus("❌ " + err.message, "#f87171");
+            } finally {
+                btn.disabled = false;
+                if (spinnerText) spinnerText.style.display = 'none';
+                if (btnText) btnText.innerText = "✨ LẮP RÁP KHỐI AI";
+            }
+        }
+
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();

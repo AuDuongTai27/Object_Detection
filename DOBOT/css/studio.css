@@ -1585,4 +1585,128 @@
             color: #38bdf8;
             font-weight: 700;
         }
-    
+
+        /* =========================================================================
+           DOBOT AI COPILOT (GEMINI BLOCKLY ASSISTANT)
+           ========================================================================= */
+        .ai-copilot-container {
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 27, 75, 0.92));
+            border: 1px solid rgba(168, 85, 247, 0.35);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 8px 24px -4px rgba(168, 85, 247, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .ai-copilot-container::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, #38bdf8, #a855f7, #ec4899, #38bdf8);
+            background-size: 200% 100%;
+            animation: aiGradientShift 4s linear infinite;
+        }
+        @keyframes aiGradientShift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+        .ai-pulsing-orb {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #a855f7;
+            box-shadow: 0 0 10px #a855f7, 0 0 20px #a855f7;
+            display: inline-block;
+            animation: aiOrbPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes aiOrbPulse {
+            0%, 100% { transform: scale(0.9); opacity: 0.8; box-shadow: 0 0 8px #a855f7; }
+            50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 16px #38bdf8, 0 0 24px #ec4899; }
+        }
+        .ai-chip {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10.5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .ai-chip:hover {
+            background: rgba(168, 85, 247, 0.25);
+            border-color: #a855f7;
+            color: #fff;
+            transform: translateY(-1px);
+        }
+        .btn-ai-generate {
+            background: linear-gradient(135deg, #7c3aed, #2563eb);
+            color: #fff;
+            border: 1px solid #a855f7;
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 11.5px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+        }
+        .btn-ai-generate:hover:not(:disabled) {
+            background: linear-gradient(135deg, #9333ea, #3b82f6);
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.6);
+            transform: translateY(-1px);
+        }
+        .btn-ai-generate:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .ai-thought-box {
+            background: rgba(15, 23, 42, 0.75);
+            border-left: 3px solid #a855f7;
+            border-radius: 0 6px 6px 0;
+            padding: 8px 10px;
+            font-size: 11px;
+            color: #cbd5e1;
+            line-height: 1.5;
+            margin-top: 8px;
+        }
+        .ai-step-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 7px 9px;
+            margin-bottom: 6px;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+        .ai-step-card.active-building {
+            border-color: #38bdf8;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+            background: rgba(56, 189, 248, 0.1);
+        }
+        .ai-step-badge {
+            background: #4f46e5;
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 9.5px;
+            font-weight: 700;
+            margin-right: 5px;
+        }
+        .ai-refusal-bubble {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11.5px;
+            color: #fca5a5;
+            line-height: 1.55;
+            margin-top: 8px;
+        }
