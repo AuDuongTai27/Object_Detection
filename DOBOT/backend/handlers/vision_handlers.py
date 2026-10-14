@@ -5,7 +5,7 @@ import json
 import tornado.web
 import tornado.websocket
 from backend.context import (
-    robot, BASE_DIR, HAS_WEB_STUDIO, tool_manager
+    robot, BASE_DIR, HAS_WEB_STUDIO, tool_manager, vision_engine
 )
 try:
     from web_vision_engine import WebVisionEngine

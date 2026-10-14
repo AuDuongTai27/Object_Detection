@@ -4,7 +4,7 @@ import os
 import json
 import tornado.web
 from backend.context import (
-    HAS_WEB_STUDIO, get_dataset_stats, save_captured_frame,
+    HAS_WEB_STUDIO, vision_engine, get_dataset_stats, save_captured_frame,
     delete_captured_image, add_new_class, get_recent_captures,
     DATASET_RAW_DIR
 )

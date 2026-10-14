@@ -33,6 +33,7 @@ except Exception as e:
 
 # Khởi tạo đối tượng Singleton dùng chung
 robot = DobotController()
+vision_engine = WebVisionEngine(robot_controller=robot) if HAS_WEB_STUDIO else None
 tool_manager = ToolProcessManager()
 connected_clients = set()
 

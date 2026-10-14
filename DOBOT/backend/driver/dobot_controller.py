@@ -836,8 +836,3 @@ class DobotController:
         print(f"[+] Đã chuyển chế độ: {'Ray trượt 1000mm' if self.is_rail_mode else 'Để bàn độc lập'}")
         return self.is_rail_mode
 
-
-
-robot = DobotController()
-vision_engine = WebVisionEngine(robot_controller=robot) if HAS_WEB_STUDIO else None
-connected_clients = set()
