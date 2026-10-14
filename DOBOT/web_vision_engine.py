@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import json
+import math
 import threading
 from pathlib import Path
 import cv2
@@ -590,16 +591,16 @@ class WebVisionEngine:
                 self.robot.move_safe_jump(pick_x, pick_y, Z_PICK_FLANGE, r=0.0, safe_z=Z_SAFE_FLANGE)
                 reached = True
                 if hasattr(self.robot, "wait_pose_reached"):
-                    reached = self.robot.wait_pose_reached(pick_x, pick_y, Z_PICK_FLANGE, tol=6.0, timeout=3.5)
+                    reached = self.robot.wait_pose_reached(pick_x, pick_y, Z_PICK_FLANGE, tol=6.0, timeout=7.0)
                 else:
-                    time.sleep(2.5)
+                    time.sleep(2.0)
                     if hasattr(self.robot, "has_alarm"):
                         reached = not self.robot.has_alarm()
 
-                # KIỂM TRA AN TOÀN SAU BƯỚC HẠ GẮP:
-                has_err = (hasattr(self.robot, "has_alarm") and self.robot.has_alarm()) or not reached
+                # KIỂM TRA AN TOÀN SAU BƯỚC HẠ GẮP (Chỉ ngắt khi thực sự có đèn đỏ)
+                has_err = (hasattr(self.robot, "has_alarm") and self.robot.has_alarm())
                 if has_err:
-                    print(f"[VisionEngine] 🛑 PHÁT HIỆN LỖI ĐÈN ĐỎ / KHÔNG TỚI ĐÍCH GẮP ({pick_x:.1f}, {pick_y:.1f})!")
+                    print(f"[VisionEngine] 🛑 PHÁT HIỆN LỖI ĐÈN ĐỎ TẠI ĐÍCH GẮP ({pick_x:.1f}, {pick_y:.1f})!")
                     print("[VisionEngine] 🛡️ KÍCH HOẠT CƠ CHẾ AN TOÀN: HỦY DI CHUYỂN RAY, THU GỌN CÁNH TAY...")
                     if hasattr(self.robot, "recover_to_safe_pose"):
                         self.robot.recover_to_safe_pose()
@@ -607,20 +608,20 @@ class WebVisionEngine:
 
                 # Bước 2: Bật giác hút
                 self.robot.set_suction(True)
-                time.sleep(0.5)
+                time.sleep(0.3)
 
                 # Bước 3: Nhấc lên độ cao an toàn
                 self.robot.move_to_xyz(pick_x, pick_y, Z_SAFE_FLANGE, r=0.0)
                 lifted = True
                 if hasattr(self.robot, "wait_pose_reached"):
-                    lifted = self.robot.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=2.5)
+                    lifted = self.robot.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
                 else:
-                    time.sleep(1.2)
+                    time.sleep(1.0)
                     if hasattr(self.robot, "has_alarm"):
                         lifted = not self.robot.has_alarm()
 
                 # KIỂM TRA AN TOÀN SAU BƯỚC NHẤC LÊN:
-                if (hasattr(self.robot, "has_alarm") and self.robot.has_alarm()) or not lifted:
+                if hasattr(self.robot, "has_alarm") and self.robot.has_alarm():
                     print(f"[VisionEngine] 🛑 Dobot phát hiện lỗi đèn đỏ khi nhấc phôi! Hủy di chuyển ray sang khay và thu gọn an toàn...")
                     if hasattr(self.robot, "recover_to_safe_pose"):
                         self.robot.recover_to_safe_pose()
@@ -632,7 +633,7 @@ class WebVisionEngine:
                     if abs(tray_rail_l - cur_now_l) > 1.0:
                         print(f"[VisionEngine] 🚄 Di chuyển ray về khay thả L = {tray_rail_l:.1f} mm...")
                         self.robot.rail_move_to(tray_rail_l, speed_mm_s=100.0)
-                        time.sleep(0.4)
+                        time.sleep(0.3)
                     else:
                         print(f"[VisionEngine] 🎯 Khay thả đã nằm ngay tại L = {cur_now_l:.1f} mm!")
 
@@ -640,20 +641,20 @@ class WebVisionEngine:
                 print(f"[VisionEngine] 📥 Đưa phôi vào khay tại ({drop_x:.1f}, {drop_y:.1f}, Z={drop_z:.1f})")
                 self.robot.move_safe_jump(drop_x, drop_y, drop_z, r=0.0, safe_z=Z_SAFE_FLANGE)
                 if hasattr(self.robot, "wait_pose_reached"):
-                    self.robot.wait_pose_reached(drop_x, drop_y, drop_z, tol=6.0, timeout=3.5)
+                    self.robot.wait_pose_reached(drop_x, drop_y, drop_z, tol=6.0, timeout=7.0)
                 else:
-                    time.sleep(2.5)
+                    time.sleep(2.0)
 
                 # Bước 6: Tắt giác hút (nhả phôi)
                 self.robot.set_suction(False)
-                time.sleep(0.4)
+                time.sleep(0.2)
 
                 # Bước 7: Nhấc lên an toàn hoàn tất chu trình
                 self.robot.move_to_xyz(drop_x, drop_y, Z_SAFE_FLANGE, r=0.0)
                 if hasattr(self.robot, "wait_pose_reached"):
-                    self.robot.wait_pose_reached(drop_x, drop_y, Z_SAFE_FLANGE, tol=6.0, timeout=2.5)
+                    self.robot.wait_pose_reached(drop_x, drop_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
                 else:
-                    time.sleep(1.2)
+                    time.sleep(1.0)
 
                 print(f"[VisionEngine] ✅ Hoàn tất gắp thả {cube_name}!")
             except Exception as e:

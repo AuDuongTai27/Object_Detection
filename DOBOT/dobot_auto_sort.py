@@ -464,6 +464,47 @@ class DobotExecutor:
                 return True
         return False
 
+    def get_pose(self):
+        """Lấy tọa độ hiện tại (x, y, z, r, l) và cờ lỗi của robot từ Live Server."""
+        if self.use_http:
+            for endpoint in ["http://127.0.0.1:8080/api/state", "http://127.0.0.1:8080/api/cmd"]:
+                try:
+                    req = urllib.request.Request(endpoint, method="GET")
+                    with urllib.request.urlopen(req, timeout=0.8) as resp:
+                        if resp.status == 200:
+                            data = json.loads(resp.read().decode())
+                            pose = data.get("pose", {})
+                            has_alarm = bool(data.get("has_alarm", False) or len(data.get("alarms", [])) > 0)
+                            if "rail_pos" in data:
+                                self.rail_current_pos = float(data["rail_pos"])
+                            return pose, has_alarm
+                except Exception:
+                    pass
+        return None, False
+
+    def wait_pose_reached(self, target_x: float, target_y: float, target_z: float, tol: float = 6.0, timeout: float = 6.0) -> bool:
+        """Thăm dò thời gian thực: Khi robot tới tọa độ đích với độ lệch <= tol (mm) thì tiếp tục ngay lập tức, không lãng phí 0.1 giây nào."""
+        if not self.use_http:
+            time.sleep(1.0)
+            return True
+        t0 = time.time()
+        time.sleep(0.08)  # Chờ 80ms nhỏ cho firmware bắt đầu nhận lệnh
+        while time.time() - t0 < timeout:
+            pose, has_alarm = self.get_pose()
+            if has_alarm:
+                print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo khi di chuyển tới ({target_x:.1f}, {target_y:.1f}, {target_z:.1f})!")
+                return False
+            if pose and "x" in pose and "y" in pose and "z" in pose:
+                cur_x = float(pose["x"])
+                cur_y = float(pose["y"])
+                cur_z = float(pose["z"])
+                if (abs(cur_x - float(target_x)) <= tol and
+                    abs(cur_y - float(target_y)) <= tol and
+                    abs(cur_z - float(target_z)) <= tol):
+                    return True
+            time.sleep(0.04)  # Thăm dò 25 lần/giây, tới đích là thoát ngay tức thì
+        return not self.has_alarm()
+
     def has_alarm(self) -> bool:
         """Kiểm tra robot hiện tại có đang bị lỗi đèn đỏ không."""
         if self.use_http:
@@ -536,8 +577,12 @@ class DobotExecutor:
                     print(f"[*] 🚄 Di chuyển ray về vị trí bàn gắp L = {calib_rail_l:.1f} mm...")
                     # Nâng tay lên an toàn trước khi di chuyển ray
                     self.send_cmd({"action": "move_xyz", "x": 200.0, "y": 0.0, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-                    time.sleep(1.0)
-                    self.move_rail_and_wait(calib_rail_l)
+                    self.wait_pose_reached(200.0, 0.0, Z_SAFE_FLANGE, tol=8.0, timeout=4.0)
+                    rail_ok = self.move_rail_and_wait(calib_rail_l)
+                    if not rail_ok:
+                        print(f"[Rail] 🛑 Không thể di chuyển ray về bàn gắp L={calib_rail_l:.1f} mm! Hủy chu trình.")
+                        self.recover_to_safe_pose()
+                        return
                 else:
                     print(f"[*] 🎯 Robot đã sẵn sàng tại vị trí bàn gắp L = {self.rail_current_pos:.1f} mm!")
 
@@ -545,11 +590,11 @@ class DobotExecutor:
 
             # 2. Bay trên đỉnh phôi ở độ cao an toàn (Safe Arch)
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(1.8)
+            self.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             # 3. Hạ thẳng xuống gắp khối màu
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
-            time.sleep(1.6)
+            self.wait_pose_reached(pick_x, pick_y, self.pick_z, tol=6.0, timeout=7.0)
 
             # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI HẠ
             if self.has_alarm():
@@ -559,11 +604,11 @@ class DobotExecutor:
 
             # 4. Bật bơm hút
             self.send_cmd({"action": "suction", "value": True})
-            time.sleep(0.5)
+            time.sleep(0.3)
 
             # 5. Nhấc lên cao an toàn
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(1.5)
+            self.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI NHẤC
             if self.has_alarm():
@@ -574,23 +619,27 @@ class DobotExecutor:
             # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ (CHỈ CHẠY NẾU GẮP THÀNH CÔNG VÀ KHÔNG BỊ ĐÈN ĐỎ)
             if self.is_rail_mode:
                 tray_rail_l = float(target.get("rail_l", target.get("l", 0.0)))
-                self.move_rail_and_wait(tray_rail_l)
+                rail_ok = self.move_rail_and_wait(tray_rail_l)
+                if not rail_ok:
+                    print(f"[Rail] 🛑 Ray trượt chưa tới đích L={tray_rail_l:.1f} mm! Hủy thả để bảo vệ an toàn.")
+                    self.recover_to_safe_pose()
+                    return
 
             # 7. Bay sang khay phân loại
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(2.0)
+            self.wait_pose_reached(place_x, place_y, Z_SAFE_FLANGE, tol=6.0, timeout=6.0)
 
             # 8. Hạ vào khay
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": place_z, "r": 0.0, "mode": 1})
-            time.sleep(1.5)
+            self.wait_pose_reached(place_x, place_y, place_z, tol=6.0, timeout=6.0)
 
             # 9. Nhả phôi (Tắt bơm & xả khí)
             self.send_cmd({"action": "suction", "value": False})
-            time.sleep(0.4)
+            time.sleep(0.2)
 
             # 10. Nhấc lên an toàn và hoàn tất
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
-            time.sleep(1.2)
+            self.wait_pose_reached(place_x, place_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
         except Exception as e:
