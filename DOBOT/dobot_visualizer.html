@@ -1332,6 +1332,268 @@
             stroke-width: 4px !important;
             filter: drop-shadow(0 0 8px #38bdf8) !important;
         }
+
+        /* =========================================================================
+           TAB 6: MEDIAPIPE HAND TELEOPERATION STYLING
+           ========================================================================= */
+        #view-hand-teleop {
+            display: none;
+            width: 100%;
+            height: calc(100vh - 44px);
+            background: #0b0f17;
+            padding: 16px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #view-hand-teleop.active {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .hand-teleop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 10px;
+            padding: 12px 18px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+        }
+        .hand-title-area h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .hand-title-area p {
+            margin: 3px 0 0 0;
+            font-size: 11.5px;
+            color: #94a3b8;
+        }
+
+        .hand-header-badges {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .hand-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .hand-badge.tracking-off {
+            background: rgba(100, 116, 139, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+        .hand-badge.tracking-on {
+            background: rgba(14, 165, 233, 0.2);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.5);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+        }
+        .hand-badge.gesture-open {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.5);
+        }
+        .hand-badge.gesture-fist {
+            background: rgba(239, 68, 68, 0.25);
+            color: #f87171;
+            border: 1px solid rgba(248, 113, 113, 0.6);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+            animation: pulse-fist 1.2s infinite;
+        }
+        @keyframes pulse-fist {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+            100% { transform: scale(1); }
+        }
+
+        .hand-teleop-layout {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 14px;
+            flex: 1;
+            min-height: 520px;
+        }
+
+        .hand-cam-panel {
+            background: rgba(15, 23, 42, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .hand-cam-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .hand-select-cam {
+            background: #1e293b;
+            color: #f1f5f9;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            outline: none;
+            flex: 1;
+        }
+
+        .hand-video-box {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            overflow: hidden;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 420px;
+            box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.8);
+        }
+        #hand-teleop-canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .hand-video-hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+        .hand-hud-pill {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 10.5px;
+            font-family: monospace;
+            color: #e2e8f0;
+            backdrop-filter: blur(4px);
+        }
+
+        .hand-control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .hand-card {
+            background: rgba(15, 23, 42, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 14px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-teleop-master {
+            width: 100%;
+            padding: 13px;
+            border-radius: 8px;
+            border: none;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+            transition: all 0.25s ease;
+        }
+        .btn-teleop-master.off {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: #94a3b8;
+            border: 1px solid #475569;
+        }
+        .btn-teleop-master.off:hover {
+            background: linear-gradient(135deg, #334155, #475569);
+            color: #f8fafc;
+        }
+        .btn-teleop-master.on {
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #ffffff;
+            border: 1px solid #34d399;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+            animation: pulse-teleop 1.8s infinite;
+        }
+        @keyframes pulse-teleop {
+            0% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(16, 185, 129, 0.7); }
+            100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+        }
+
+        .hand-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .hand-metric-box {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            padding: 8px 10px;
+        }
+        .hand-metric-label {
+            font-size: 10px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+        .hand-metric-val {
+            font-size: 15px;
+            font-weight: 700;
+            font-family: monospace;
+            color: #38bdf8;
+            margin-top: 2px;
+        }
+
+        .hand-slider-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 8px;
+            font-size: 11.5px;
+            color: #cbd5e1;
+        }
+        .hand-slider-row input[type=range] {
+            flex: 1;
+            accent-color: #38bdf8;
+        }
+        .hand-slider-val {
+            min-width: 48px;
+            text-align: right;
+            font-family: monospace;
+            color: #38bdf8;
+            font-weight: 700;
+        }
     
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1346,6 +1608,10 @@
             document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"><\/script>');
         }
     </script>
+    <!-- MediaPipe Hands & Camera Utils for Tab 6 Hand Teleoperation -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
     <!-- =====================================================================
@@ -1373,6 +1639,9 @@
             </button>
             <button class="nav-studio-tab" id="btn-tab-calib" onclick="switchStudioTab('calib')">
                 <span>📐</span> <span>5. Hiệu Chuẩn (Calib)</span>
+            </button>
+            <button class="nav-studio-tab" id="btn-tab-hand" onclick="switchStudioTab('hand')">
+                <span>🖐️</span> <span>6. Điều Khiển Bằng Tay</span>
             </button>
         </nav>
 
@@ -2766,6 +3035,224 @@
 
                 <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 12px; font-size: 11px; color: #94a3b8; line-height: 1.45;">
                     💡 <b>Nguyên lý hoạt động:</b> Ma trận Homography thiết lập phép ánh xạ xạ ảnh 2D từ tọa độ điểm ảnh Camera $(u, v)$ sang mặt phẳng làm việc của Dobot Magician $(X, Y)$ với độ chính xác cao. Dữ liệu được nạp tự động từ file <code>DOBOT/homography_dobot.json</code>.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- =====================================================================
+         TAB 6: ĐIỀU KHIỂN CỬ CHỈ BÀN TAY (MEDIAPIPE HAND TELEOPERATION)
+    ====================================================================== -->
+    <main id="view-hand-teleop" class="studio-view">
+        <div class="hand-teleop-header">
+            <div class="hand-title-area">
+                <h2><span>🖐️</span> <span>6. Điều Khiển Bằng Cử Chỉ Tay (MediaPipe Hand AI)</span></h2>
+                <p>Điều khiển cánh tay Dobot Magician theo vị trí bàn tay thời gian thực. Bàn tay mở = Tắt giác hút | Nắm tay lại = Bật giác hút.</p>
+            </div>
+            <div class="hand-header-badges">
+                <span id="hand-tracking-badge" class="hand-badge tracking-off">○ CHƯA THẤY TAY</span>
+                <span id="hand-gesture-badge" class="hand-badge gesture-open">🖐️ TAY MỞ (HÚT: TẮT)</span>
+                <span id="hand-status-badge" class="sys-badge offline">🔴 TELEOP TẮT</span>
+            </div>
+        </div>
+
+        <div class="hand-teleop-layout">
+            <!-- CỘT TRÁI: CAMERA & SKELETON 21 ĐIỂM -->
+            <div class="hand-cam-panel">
+                <div class="hand-cam-toolbar">
+                    <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                        <span style="font-size: 13px;">📷</span>
+                        <select id="hand-cam-select" class="hand-select-cam">
+                            <option value="">-- Đang dò tìm camera máy tính... --</option>
+                        </select>
+                    </div>
+                    <button class="btn-action" id="btn-hand-cam-toggle" onclick="toggleHandCamera()" style="padding: 6px 14px; font-weight: 700; background: #0284c7; border-color: #38bdf8;">
+                        ▶️ Bật Camera
+                    </button>
+                    <button class="btn-action" onclick="toggleHandMirror()" style="padding: 6px 10px; background: #334155; border-color: #475569;" title="Lật gương camera (Mirror Video)">
+                        🔄 Lật Gương
+                    </button>
+                </div>
+
+                <div class="hand-video-box">
+                    <video id="hand-raw-video" playsinline style="display: none;"></video>
+                    <canvas id="hand-teleop-canvas" width="640" height="480"></canvas>
+                    
+                    <div class="hand-video-hud">
+                        <span id="hand-fps-badge" class="hand-hud-pill">FPS: 0</span>
+                        <span id="hand-pos-hud" class="hand-hud-pill">Tay: (0.50, 0.50, 0.00)</span>
+                    </div>
+
+                    <div id="hand-cam-placeholder" style="position: absolute; text-align: center; color: #64748b; font-size: 13px;">
+                        <div style="font-size: 38px; margin-bottom: 8px;">📷</div>
+                        <div>Camera đang tắt. Bấm nút <b>[▶️ Bật Camera]</b> ở trên để bắt đầu!</div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 4px;">Hỗ trợ Webcam máy tính & Camera USB cắm ngoài</div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center;">
+                    <span>💡 <b>Quy ước cử chỉ:</b> Giơ lòng bàn tay trước camera. <b>Nắm tay</b> để hút phôi, <b>mở tay</b> để nhả phôi.</span>
+                    <span id="hand-latency-pill" style="font-family: monospace; color: #38bdf8;">Độ trễ: ~0ms</span>
+                </div>
+            </div>
+
+            <!-- CỘT PHẢI: BẢNG ĐIỀU KHIỂN & ÁNH XẠ TOẠ ĐỘ DOBOT -->
+            <div class="hand-control-panel">
+                <!-- CÔNG TẮC PHÁT LỆNH DOBOT -->
+                <div class="hand-card" style="border-color: rgba(56, 189, 248, 0.25);">
+                    <div style="font-weight: 700; color: #f8fafc; font-size: 13px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>CÔNG TẮC ĐIỀU KHIỂN ROBOT (TELEOPERATION)</span>
+                        <span id="hand-robot-badge" class="sys-badge offline">DOBOT: CHƯA KẾT NỐI</span>
+                    </div>
+
+                    <button id="btn-teleop-master" class="btn-teleop-master off" onclick="toggleTeleopMaster()">
+                        <span style="font-size: 16px;">🚀</span>
+                        <span id="teleop-master-text">KÍCH HOẠT PHÁT LỆNH ĐẾN DOBOT (ĐANG TẮT)</span>
+                    </button>
+
+                    <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+                        🛡️ <i>Khi công tắc TẮT: Hệ thống chỉ nhận diện và hiển thị tọa độ mô phỏng an toàn. Khi BẬT: Cánh tay Dobot sẽ bám theo bàn tay bạn trong thời gian thực.</i>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <button class="btn-action" onclick="sendAction('suction', true)" style="flex: 1; padding: 6px; font-size: 11px; background: #dc2626; border-color: #ef4444; color: #fff; font-weight: 700;">
+                            🧲 Test Bật Hút
+                        </button>
+                        <button class="btn-action" onclick="sendAction('suction', false)" style="flex: 1; padding: 6px; font-size: 11px; background: #334155; border-color: #475569; color: #fff;">
+                            💨 Test Tắt Hút
+                        </button>
+                        <button class="btn-action" onclick="sendAction('recover_pose')" style="flex: 1.2; padding: 6px; font-size: 11px; background: #b91c1c; border-color: #f87171; color: #fff; font-weight: 700;">
+                            🛡️ Về An Toàn
+                        </button>
+                    </div>
+                </div>
+
+                <!-- THEO DÕI TỌA ĐỘ LIVE -->
+                <div class="hand-card">
+                    <div style="font-weight: 700; color: #f8fafc; font-size: 12.5px; margin-bottom: 6px;">
+                        📊 TỌA ĐỘ VỊ TRÍ ĐƯỢC ÁNH XẠ (REAL-TIME METRICS)
+                    </div>
+
+                    <div class="hand-metric-grid">
+                        <div class="hand-metric-box">
+                            <div class="hand-metric-label">Cử Chỉ Bàn Tay</div>
+                            <div class="hand-metric-val" id="teleop-metric-gesture" style="color: #34d399;">🖐️ MỞ (OPEN)</div>
+                        </div>
+                        <div class="hand-metric-box">
+                            <div class="hand-metric-label">Giác Hút Khí Nén</div>
+                            <div class="hand-metric-val" id="teleop-metric-suction" style="color: #94a3b8;">OFF (ĐANG TẮT)</div>
+                        </div>
+                        <div class="hand-metric-box">
+                            <div class="hand-metric-label">Dobot Mục Tiêu (XYZ)</div>
+                            <div class="hand-metric-val" id="teleop-metric-target" style="font-size: 13px;">X: 230 | Y: 0 | Z: 20</div>
+                        </div>
+                        <div class="hand-metric-box">
+                            <div class="hand-metric-label">Dobot Thực Tế (XYZ)</div>
+                            <div class="hand-metric-val" id="teleop-metric-actual" style="font-size: 13px; color: #a78bfa;">X: 250 | Y: 0 | Z: 50</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CÀI ĐẶT THAM SỐ VÙNG HOẠT ĐỘNG VÀ ĐỘ MƯỢT -->
+                <div class="hand-card">
+                    <div style="font-weight: 700; color: #f8fafc; font-size: 12.5px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>⚙️ TINH CHỈNH ĐỘ CHÍNH XÁC (TUNING & MAPPING)</span>
+                        <span id="hand-calib-status-badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); padding: 2px 8px; border-radius: 12px; font-size: 10px; font-family: monospace;">Mốc: Mặc định</span>
+                    </div>
+
+                    <!-- NÚT LẤY MỐC 0 CHUẨN (CALIBRATE NEUTRAL) -->
+                    <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+                        <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 6px;">
+                            🎯 <b>Hiệu chuẩn tâm mốc 0:</b> Giơ tay ở tư thế tự nhiên thoải mái rồi bấm nút dưới đây để khóa tâm điều khiển cá nhân hóa:
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-action" onclick="calibrateHandNeutral()" style="flex: 2; padding: 7px; background: linear-gradient(135deg, #0284c7, #2563eb); border-color: #38bdf8; color: #fff; font-weight: 700; font-size: 11.5px;">
+                                🎯 LẤY MỐC 0 TÂM TAY
+                            </button>
+                            <button class="btn-action" onclick="resetHandNeutral()" style="flex: 1; padding: 7px; background: #334155; border-color: #475569; color: #cbd5e1; font-size: 11px;">
+                                🔄 Đặt Lại
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- BỘ CHỌN ĐỘ NHẠY / TỶ LỆ ĐIỀU KHIỂN (GEAR RATIO) -->
+                    <div style="margin-bottom: 10px;">
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">ĐỘ NHẠY / TỶ LỆ TRUYỀN ĐỘNG:</div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+                            <button id="btn-sens-slow" class="btn-action" onclick="setHandSensitivity(0.5)" style="padding: 5px; font-size: 10.5px; background: #1e293b; border-color: #475569; color: #94a3b8;">
+                                🎯 0.5x (Tinh Chỉnh)
+                            </button>
+                            <button id="btn-sens-norm" class="btn-action" onclick="setHandSensitivity(1.0)" style="padding: 5px; font-size: 10.5px; background: #0284c7; border-color: #38bdf8; color: #fff; font-weight: 700;">
+                                ⚖️ 1.0x (Tiêu Chuẩn)
+                            </button>
+                            <button id="btn-sens-fast" class="btn-action" onclick="setHandSensitivity(1.5)" style="padding: 5px; font-size: 10.5px; background: #1e293b; border-color: #475569; color: #94a3b8;">
+                                ⚡ 1.5x (Nhanh)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="hand-slider-row">
+                        <label>Tần số phát lệnh:</label>
+                        <input type="range" id="slider-hand-hz" min="5" max="25" step="1" value="12" oninput="updateHandSettingsUI()">
+                        <span class="hand-slider-val" id="val-hand-hz">12 Hz</span>
+                    </div>
+
+                    <div class="hand-slider-row">
+                        <label>Bộ lọc triệt rung (1-Euro Filter):</label>
+                        <input type="range" id="slider-hand-ema" min="0.05" max="0.70" step="0.05" value="0.25" oninput="updateHandSettingsUI()">
+                        <span class="hand-slider-val" id="val-hand-ema">0.25</span>
+                    </div>
+
+                    <div class="hand-slider-row">
+                        <label>Vùng chết triệt rung (Deadband):</label>
+                        <input type="range" id="slider-hand-deadband" min="0.5" max="8.0" step="0.5" value="2.0" oninput="updateHandSettingsUI()">
+                        <span class="hand-slider-val" id="val-hand-deadband">2.0 mm</span>
+                    </div>
+
+                    <div class="hand-slider-row">
+                        <label>Ngưỡng co ngón tay (Nắm):</label>
+                        <input type="range" id="slider-hand-fist-thresh" min="0.40" max="0.85" step="0.05" value="0.65" oninput="updateHandSettingsUI()">
+                        <span class="hand-slider-val" id="val-hand-fist-thresh">65%</span>
+                    </div>
+
+                    <hr style="border: 0; border-top: 1px dashed rgba(255,255,255,0.08); margin: 10px 0;">
+
+                    <!-- CẤU HÌNH PHẠM VI TỌA ĐỘ TÙY CHỈNH (CUSTOM WORKSPACE LIMITS) -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 11px; font-weight: 700; color: #cbd5e1;">📏 PHẠM VI HOẠT ĐỘNG DOBOT (TÙY CHỈNH):</span>
+                        <button class="btn-action" onclick="syncZPickFromDropTargets()" style="padding: 2px 7px; font-size: 10px; background: #047857; border-color: #10b981; color: #fff;">
+                            📍 Lấy Z_pick Chuẩn
+                        </button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                            <div style="font-size: 10px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">TRỤC X (TIẾN/LÙI)</div>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="number" id="inp-lim-xmin" value="180" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 10.5px; padding: 2px 4px; font-family: monospace;" onchange="updateCustomLimits()">
+                                <span style="color: #64748b; font-size: 10px;">➔</span>
+                                <input type="number" id="inp-lim-xmax" value="300" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 10.5px; padding: 2px 4px; font-family: monospace;" onchange="updateCustomLimits()">
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                            <div style="font-size: 10px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">TRỤC Y (TRÁI/PHẢI)</div>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="number" id="inp-lim-ymin" value="-150" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 10.5px; padding: 2px 4px; font-family: monospace;" onchange="updateCustomLimits()">
+                                <span style="color: #64748b; font-size: 10px;">➔</span>
+                                <input type="number" id="inp-lim-ymax" value="150" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 10.5px; padding: 2px 4px; font-family: monospace;" onchange="updateCustomLimits()">
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                            <div style="font-size: 10px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">TRỤC Z (CAO/THẤP)</div>
+                            <div style="display: flex; gap: 4px; align-items: center;">
+                                <input type="number" id="inp-lim-zmin" value="-125" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 10.5px; padding: 2px 4px; font-family: monospace;" onchange="updateCustomLimits()">
+                                <span style="color: #64748b; font-size: 10px;">➔</span>
+                                <input type="number" id="inp-lim-zmax" value="80" style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 10.5px; padding: 2px 4px; font-family: monospace;" onchange="updateCustomLimits()">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4654,6 +5141,9 @@
                     if (msg.safety) {
                         updateSafetyTelemetry(msg.safety);
                     }
+                    if (typeof updateHandRobotStatusBadge === 'function') {
+                        updateHandRobotStatusBadge();
+                    }
                 } else if (msg.type === "train_status") {
                     if (typeof updateTrainDashboard === "function") {
                         updateTrainDashboard(msg.data);
@@ -5709,7 +6199,8 @@
                 'data': 'view-data-collection',
                 'train': 'view-ai-trainer',
                 'sort': 'view-auto-sort',
-                'calib': 'view-camera-calib'
+                'calib': 'view-camera-calib',
+                'hand': 'view-hand-teleop'
             };
 
             Object.entries(tabViews).forEach(([id, viewId]) => {
@@ -5733,6 +6224,8 @@
                 fetchCameraDevices();
                 checkToolStatus();
                 fetchCalibInfo();
+            } else if (tabId === 'hand') {
+                initHandTeleopTab();
             }
         }
 
@@ -8510,6 +9003,781 @@
                 }
             }
         });
+
+        // =====================================================================
+        // --- TAB 6: ĐIỀU KHIỂN CỬ CHỈ TAY MEDIAPIPE (HAND TELEOPERATION) ---
+        // =====================================================================
+        let handMediaPipeInstance = null;
+        let handCameraStream = null;
+        let handCameraRunning = false;
+        let isHandMirrored = true;
+        let isTeleopMasterActive = false;
+        let handAnimationId = null;
+
+        // Trạng thái Hiệu Chuẩn Mốc 0 & Độ Nhạy
+        let handLastSeenLandmarks = null;
+        let handLastSeenNorm = { x: 0.5, y: 0.5, scale: 0.18 };
+        let handCalib = {
+            calibrated: false,
+            centerNormX: 0.50,
+            centerNormY: 0.50,
+            centerScale: 0.18
+        };
+        let handSensitivity = 1.0;
+        let handCustomLimits = {
+            xMin: 180.0,
+            xMax: 300.0,
+            yMin: -150.0,
+            yMax: 150.0,
+            zMin: -125.0,
+            zMax: 80.0
+        };
+
+        // Thuật toán 1-Euro Filter (Bộ lọc triệt rung thích nghi đẳng cấp công nghiệp)
+        class OneEuroFilter {
+            constructor(minCutoff = 0.8, beta = 0.04, dCutoff = 1.0) {
+                this.minCutoff = minCutoff;
+                this.beta = beta;
+                this.dCutoff = dCutoff;
+                this.xPrev = null;
+                this.dxPrev = 0;
+                this.tPrev = null;
+            }
+            filter(val, timestamp) {
+                if (this.xPrev === null) {
+                    this.xPrev = val;
+                    this.tPrev = timestamp;
+                    return val;
+                }
+                const dt = Math.max(0.001, (timestamp - this.tPrev) / 1000);
+                this.tPrev = timestamp;
+                const dx = (val - this.xPrev) / dt;
+                const aD = this.alpha(dt, this.dCutoff);
+                const dxHat = aD * dx + (1 - aD) * this.dxPrev;
+                this.dxPrev = dxHat;
+                const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
+                const a = this.alpha(dt, cutoff);
+                const xHat = a * val + (1 - a) * this.xPrev;
+                this.xPrev = xHat;
+                return xHat;
+            }
+            alpha(dt, cutoff) {
+                const tau = 1.0 / (2 * Math.PI * cutoff);
+                return 1.0 / (1.0 + tau / dt);
+            }
+            reset() {
+                this.xPrev = null;
+                this.dxPrev = 0;
+                this.tPrev = null;
+            }
+        }
+
+        const euroX = new OneEuroFilter(0.8, 0.05);
+        const euroY = new OneEuroFilter(0.8, 0.05);
+        const euroZ = new OneEuroFilter(0.8, 0.05);
+
+        // Trạng thái mượt & Rate limit
+        let lastHandSendTime = 0;
+        let handSmoothX = 230.0;
+        let handSmoothY = 0.0;
+        let handSmoothZ = 20.0;
+        let handLastTargetX = 230.0;
+        let handLastTargetY = 0.0;
+        let handLastTargetZ = 20.0;
+        let handCurrentSuction = false;
+        let handFistDebounceCounter = 0;
+        let handOpenDebounceCounter = 0;
+
+        // FPS tracking
+        let handFpsFrameCount = 0;
+        let handFpsLastTime = performance.now();
+        let handCurrentFps = 0;
+
+        function updateHandSettingsUI() {
+            const hz = document.getElementById('slider-hand-hz')?.value || 12;
+            const ema = document.getElementById('slider-hand-ema')?.value || 0.25;
+            const deadband = document.getElementById('slider-hand-deadband')?.value || 2.0;
+            const fistThresh = document.getElementById('slider-hand-fist-thresh')?.value || 0.65;
+
+            const lblHz = document.getElementById('val-hand-hz');
+            const lblEma = document.getElementById('val-hand-ema');
+            const lblDeadband = document.getElementById('val-hand-deadband');
+            const lblFist = document.getElementById('val-hand-fist-thresh');
+
+            if (lblHz) lblHz.innerText = hz + ' Hz';
+            if (lblEma) lblEma.innerText = parseFloat(ema).toFixed(2);
+            if (lblDeadband) lblDeadband.innerText = parseFloat(deadband).toFixed(1) + ' mm';
+            if (lblFist) lblFist.innerText = Math.round(fistThresh * 100) + '%';
+
+            // Cập nhật tham số 1-Euro Filter từ slider
+            const minCut = Math.max(0.1, parseFloat(ema) * 2.5);
+            euroX.minCutoff = minCut;
+            euroY.minCutoff = minCut;
+            euroZ.minCutoff = minCut;
+        }
+
+        function updateCustomLimits() {
+            const xmin = parseFloat(document.getElementById('inp-lim-xmin')?.value) || 180;
+            const xmax = parseFloat(document.getElementById('inp-lim-xmax')?.value) || 300;
+            const ymin = parseFloat(document.getElementById('inp-lim-ymin')?.value) || -150;
+            const ymax = parseFloat(document.getElementById('inp-lim-ymax')?.value) || 150;
+            const zmin = parseFloat(document.getElementById('inp-lim-zmin')?.value) || -125;
+            const zmax = parseFloat(document.getElementById('inp-lim-zmax')?.value) || 80;
+
+            handCustomLimits.xMin = Math.min(xmin, xmax);
+            handCustomLimits.xMax = Math.max(xmin, xmax);
+            handCustomLimits.yMin = Math.min(ymin, ymax);
+            handCustomLimits.yMax = Math.max(ymin, ymax);
+            handCustomLimits.zMin = Math.min(zmin, zmax);
+            handCustomLimits.zMax = Math.max(zmin, zmax);
+        }
+
+        function syncZPickFromDropTargets() {
+            let pickZ = -122.2;
+            if (typeof dropTargetsConfig !== 'undefined' && dropTargetsConfig.pick_z !== undefined) {
+                pickZ = parseFloat(dropTargetsConfig.pick_z);
+            }
+            const inpZMin = document.getElementById('inp-lim-zmin');
+            if (inpZMin) {
+                inpZMin.value = pickZ.toFixed(1);
+                updateCustomLimits();
+            }
+            showToast(`📍 Đã đồng bộ Z_min = ${pickZ.toFixed(1)} mm từ cấu hình khay gắp thực tế!`);
+        }
+
+        function setHandSensitivity(s) {
+            handSensitivity = s;
+            const btnSlow = document.getElementById('btn-sens-slow');
+            const btnNorm = document.getElementById('btn-sens-norm');
+            const btnFast = document.getElementById('btn-sens-fast');
+
+            [btnSlow, btnNorm, btnFast].forEach(b => {
+                if (b) {
+                    b.style.background = '#1e293b';
+                    b.style.borderColor = '#475569';
+                    b.style.color = '#94a3b8';
+                    b.style.fontWeight = 'normal';
+                }
+            });
+
+            if (s === 0.5 && btnSlow) {
+                btnSlow.style.background = '#0284c7';
+                btnSlow.style.borderColor = '#38bdf8';
+                btnSlow.style.color = '#fff';
+                btnSlow.style.fontWeight = '700';
+                showToast("🎯 Đã chuyển sang chế độ 0.5x (Siêu Tinh Chỉnh cho phôi nhỏ)");
+            } else if (s === 1.5 && btnFast) {
+                btnFast.style.background = '#0284c7';
+                btnFast.style.borderColor = '#38bdf8';
+                btnFast.style.color = '#fff';
+                btnFast.style.fontWeight = '700';
+                showToast("⚡ Đã chuyển sang chế độ 1.5x (Biên độ vung tay rộng)");
+            } else if (btnNorm) {
+                btnNorm.style.background = '#0284c7';
+                btnNorm.style.borderColor = '#38bdf8';
+                btnNorm.style.color = '#fff';
+                btnNorm.style.fontWeight = '700';
+                showToast("⚖️ Đã chuyển về chế độ 1.0x (Tiêu Chuẩn)");
+            }
+        }
+
+        function calibrateHandNeutral() {
+            if (!handLastSeenLandmarks) {
+                showToast("⚠️ Chưa phát hiện bàn tay! Hãy giơ tay trước camera trước khi bấm lấy mốc.");
+                return;
+            }
+            handCalib.calibrated = true;
+            handCalib.centerNormX = handLastSeenNorm.x;
+            handCalib.centerNormY = handLastSeenNorm.y;
+            handCalib.centerScale = handLastSeenNorm.scale;
+
+            euroX.reset();
+            euroY.reset();
+            euroZ.reset();
+
+            const badge = document.getElementById('hand-calib-status-badge');
+            if (badge) {
+                badge.style.background = "rgba(16, 185, 129, 0.25)";
+                badge.style.color = "#34d399";
+                badge.style.borderColor = "#10b981";
+                badge.innerText = `Mốc 0: X=${(handCalib.centerNormX).toFixed(2)}, Y=${(handCalib.centerNormY).toFixed(2)}`;
+            }
+
+            showToast("🎯 ĐÃ HIỆU CHUẨN TÂM MỐC 0! Mọi chuyển động nay sẽ tính từ tư thế thoải mái này của bạn.");
+        }
+
+        function resetHandNeutral() {
+            handCalib.calibrated = false;
+            handCalib.centerNormX = 0.50;
+            handCalib.centerNormY = 0.50;
+            handCalib.centerScale = 0.18;
+
+            euroX.reset();
+            euroY.reset();
+            euroZ.reset();
+
+            const badge = document.getElementById('hand-calib-status-badge');
+            if (badge) {
+                badge.style.background = "rgba(14, 165, 233, 0.2)";
+                badge.style.color = "#38bdf8";
+                badge.style.borderColor = "rgba(56, 189, 248, 0.4)";
+                badge.innerText = "Mốc: Mặc định";
+            }
+            showToast("🔄 Đã đặt lại tâm mốc 0 về giữa khung hình camera.");
+        }
+
+        async function initHandTeleopTab() {
+            updateHandSettingsUI();
+            updateCustomLimits();
+            updateHandRobotStatusBadge();
+            await populateHandCameraDevices();
+        }
+
+        function updateHandRobotStatusBadge() {
+            const badge = document.getElementById('hand-robot-badge');
+            if (badge) {
+                if (isRobotConnected || isRobotHardwareConnected) {
+                    badge.className = "sys-badge live";
+                    badge.innerText = "DOBOT: ĐÃ KẾT NỐI ●";
+                } else {
+                    badge.className = "sys-badge offline";
+                    badge.innerText = "DOBOT: CHƯA KẾT NỐI ○";
+                }
+            }
+        }
+
+        async function populateHandCameraDevices() {
+            const selectEl = document.getElementById('hand-cam-select');
+            if (!selectEl) return;
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                    selectEl.innerHTML = '<option value="">-- Trình duyệt không hỗ trợ Camera API --</option>';
+                    return;
+                }
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                if (videoDevices.length === 0) {
+                    selectEl.innerHTML = '<option value="">-- Không tìm thấy camera nào --</option>';
+                    return;
+                }
+                const currentVal = selectEl.value;
+                selectEl.innerHTML = '';
+                videoDevices.forEach((dev, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = dev.deviceId;
+                    opt.text = dev.label || `Camera ${idx + 1}`;
+                    selectEl.appendChild(opt);
+                });
+                if (currentVal && Array.from(selectEl.options).some(o => o.value === currentVal)) {
+                    selectEl.value = currentVal;
+                }
+            } catch (err) {
+                console.warn("Lỗi dò tìm camera:", err);
+            }
+        }
+
+        function toggleHandMirror() {
+            isHandMirrored = !isHandMirrored;
+            showToast(isHandMirrored ? "🔄 Đã bật chế độ lật gương (Mirror)" : "🔄 Đã tắt chế độ lật gương");
+        }
+
+        function toggleTeleopMaster() {
+            isTeleopMasterActive = !isTeleopMasterActive;
+            const btn = document.getElementById('btn-teleop-master');
+            const txt = document.getElementById('teleop-master-text');
+            const statusBadge = document.getElementById('hand-status-badge');
+
+            if (isTeleopMasterActive) {
+                if (btn) btn.className = "btn-teleop-master on";
+                if (txt) txt.innerText = "🟢 ĐANG PHÁT LỆNH ĐIỀU KHIỂN (CLICK ĐỂ TẮT)";
+                if (statusBadge) {
+                    statusBadge.className = "sys-badge live";
+                    statusBadge.innerText = "🟢 TELEOP BẬT";
+                }
+                showToast("🚀 ĐÃ KÍCH HOẠT ĐIỀU KHIỂN DOBOT! Robot sẽ di chuyển bám sát tay bạn.");
+            } else {
+                if (btn) btn.className = "btn-teleop-master off";
+                if (txt) txt.innerText = "KÍCH HOẠT PHÁT LỆNH ĐẾN DOBOT (ĐANG TẮT)";
+                if (statusBadge) {
+                    statusBadge.className = "sys-badge offline";
+                    statusBadge.innerText = "🔴 TELEOP TẮT";
+                }
+                sendAction('suction', false);
+                handCurrentSuction = false;
+                const metricSuction = document.getElementById('teleop-metric-suction');
+                if (metricSuction) {
+                    metricSuction.innerText = "OFF (ĐÃ TẮT)";
+                    metricSuction.style.color = "#94a3b8";
+                }
+                showToast("⏹️ Đã tắt phát lệnh điều khiển Dobot. Chuyển về chế độ preview.");
+            }
+        }
+
+        async function toggleHandCamera() {
+            if (handCameraRunning) {
+                stopHandCamera();
+            } else {
+                await startHandCamera();
+            }
+        }
+
+        async function startHandCamera() {
+            const btn = document.getElementById('btn-hand-cam-toggle');
+            const videoEl = document.getElementById('hand-raw-video');
+            const selectEl = document.getElementById('hand-cam-select');
+            const placeholder = document.getElementById('hand-cam-placeholder');
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showToast("❌ Trình duyệt không hỗ trợ truy cập Webcam!");
+                return;
+            }
+
+            try {
+                if (btn) {
+                    btn.innerText = "⏳ Đang mở...";
+                    btn.disabled = true;
+                }
+
+                const deviceId = selectEl ? selectEl.value : null;
+                const constraints = {
+                    video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } } : { width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                };
+
+                handCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEl.srcObject = handCameraStream;
+                await videoEl.play();
+
+                if (placeholder) placeholder.style.display = 'none';
+
+                if (!handMediaPipeInstance) {
+                    initMediaPipeHands();
+                }
+
+                handCameraRunning = true;
+                if (btn) {
+                    btn.innerText = "⏹️ Tắt Camera";
+                    btn.style.background = "#e11d48";
+                    btn.style.borderColor = "#f43f5e";
+                    btn.disabled = false;
+                }
+
+                showToast("📷 Đã mở Camera và khởi động AI nhận diện bàn tay!");
+                runHandProcessLoop();
+            } catch (err) {
+                console.error("Lỗi mở camera:", err);
+                showToast("❌ Không thể mở camera: " + (err.message || err.name));
+                if (btn) {
+                    btn.innerText = "▶️ Bật Camera";
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        function stopHandCamera() {
+            handCameraRunning = false;
+            if (handAnimationId) {
+                cancelAnimationFrame(handAnimationId);
+                handAnimationId = null;
+            }
+            if (handCameraStream) {
+                handCameraStream.getTracks().forEach(t => t.stop());
+                handCameraStream = null;
+            }
+            const videoEl = document.getElementById('hand-raw-video');
+            if (videoEl) videoEl.srcObject = null;
+
+            const btn = document.getElementById('btn-hand-cam-toggle');
+            if (btn) {
+                btn.innerText = "▶️ Bật Camera";
+                btn.style.background = "#0284c7";
+                btn.style.borderColor = "#38bdf8";
+            }
+
+            const placeholder = document.getElementById('hand-cam-placeholder');
+            if (placeholder) placeholder.style.display = 'block';
+
+            const canvas = document.getElementById('hand-teleop-canvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            const trackBadge = document.getElementById('hand-tracking-badge');
+            if (trackBadge) {
+                trackBadge.className = "hand-badge tracking-off";
+                trackBadge.innerText = "○ CHƯA THẤY TAY";
+            }
+
+            if (isTeleopMasterActive) {
+                toggleTeleopMaster();
+            }
+            showToast("⏹️ Đã tắt camera.");
+        }
+
+        function initMediaPipeHands() {
+            if (typeof Hands === 'undefined') {
+                console.warn("MediaPipe Hands JS chưa được tải!");
+                showToast("⚠️ Thư viện MediaPipe Hands đang tải từ CDN, vui lòng đợi vài giây...");
+                return;
+            }
+
+            handMediaPipeInstance = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+
+            handMediaPipeInstance.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.65,
+                minTrackingConfidence: 0.65
+            });
+
+            handMediaPipeInstance.onResults(onHandResults);
+            console.log("[MediaPipe] Hands model initialized.");
+        }
+
+        async function runHandProcessLoop() {
+            if (!handCameraRunning) return;
+            const videoEl = document.getElementById('hand-raw-video');
+
+            if (videoEl && videoEl.readyState >= 2 && handMediaPipeInstance) {
+                try {
+                    await handMediaPipeInstance.send({ image: videoEl });
+                } catch (e) {
+                    console.warn("Lỗi gửi frame MediaPipe:", e);
+                }
+            }
+
+            if (handCameraRunning) {
+                handAnimationId = requestAnimationFrame(runHandProcessLoop);
+            }
+        }
+
+        // Xử lý kết quả trả về từ MediaPipe Hands với độ chính xác cao & 1-Euro Filter
+        function onHandResults(results) {
+            const canvas = document.getElementById('hand-teleop-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Đo FPS
+            handFpsFrameCount++;
+            const now = performance.now();
+            if (now - handFpsLastTime >= 1000) {
+                handCurrentFps = Math.round((handFpsFrameCount * 1000) / (now - handFpsLastTime));
+                handFpsFrameCount = 0;
+                handFpsLastTime = now;
+                const fpsBadge = document.getElementById('hand-fps-badge');
+                if (fpsBadge) fpsBadge.innerText = `FPS: ${handCurrentFps}`;
+            }
+
+            ctx.save();
+            ctx.clearRect(0, 0, w, h);
+
+            // Vẽ video feed nền (hỗ trợ lật gương)
+            if (isHandMirrored) {
+                ctx.translate(w, 0);
+                ctx.scale(-1, 1);
+            }
+            if (results.image) {
+                ctx.drawImage(results.image, 0, 0, w, h);
+            }
+            ctx.restore();
+
+            const trackBadge = document.getElementById('hand-tracking-badge');
+            const gestureBadge = document.getElementById('hand-gesture-badge');
+            const posHud = document.getElementById('hand-pos-hud');
+
+            // Nếu không phát hiện thấy bàn tay
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                handLastSeenLandmarks = null;
+                if (trackBadge) {
+                    trackBadge.className = "hand-badge tracking-off";
+                    trackBadge.innerText = "○ CHƯA THẤY TAY";
+                }
+                return;
+            }
+
+            // Có phát hiện bàn tay
+            if (trackBadge) {
+                trackBadge.className = "hand-badge tracking-on";
+                trackBadge.innerText = "● ĐANG THEO DÕI TAY";
+            }
+
+            const landmarks = results.multiHandLandmarks[0];
+            handLastSeenLandmarks = landmarks;
+
+            // 1. Phân tích cử chỉ: Nắm tay (Fist) hay Mở tay (Open Palm)
+            const wrist = landmarks[0];
+            const middleMCP = landmarks[9];
+            const palmBaseDist = Math.hypot(middleMCP.x - wrist.x, middleMCP.y - wrist.y);
+
+            const fingerTips = [8, 12, 16, 20];
+            const fingerPIPs = [6, 10, 14, 18];
+            let foldedFingersCount = 0;
+
+            for (let i = 0; i < 4; i++) {
+                const tip = landmarks[fingerTips[i]];
+                const pip = landmarks[fingerPIPs[i]];
+                const distTipWrist = Math.hypot(tip.x - wrist.x, tip.y - wrist.y);
+                const distPipWrist = Math.hypot(pip.x - wrist.x, pip.y - wrist.y);
+                if (distTipWrist < distPipWrist * 1.08) {
+                    foldedFingersCount++;
+                }
+            }
+
+            const thumbTip = landmarks[4];
+            const indexMCP = landmarks[5];
+            const thumbDist = Math.hypot(thumbTip.x - indexMCP.x, thumbTip.y - indexMCP.y);
+            if (thumbDist < palmBaseDist * 0.75) {
+                foldedFingersCount++;
+            }
+
+            const isFistDetected = (foldedFingersCount >= 3);
+
+            if (isFistDetected) {
+                handFistDebounceCounter++;
+                handOpenDebounceCounter = 0;
+            } else {
+                handOpenDebounceCounter++;
+                handFistDebounceCounter = 0;
+            }
+
+            let isSuctionActive = handCurrentSuction;
+            if (handFistDebounceCounter >= 2) {
+                isSuctionActive = true;
+            } else if (handOpenDebounceCounter >= 2) {
+                isSuctionActive = false;
+            }
+
+            if (gestureBadge) {
+                if (isSuctionActive) {
+                    gestureBadge.className = "hand-badge gesture-fist";
+                    gestureBadge.innerText = "✊ NẮM TAY (HÚT: BẬT)";
+                } else {
+                    gestureBadge.className = "hand-badge gesture-open";
+                    gestureBadge.innerText = "🖐️ TAY MỞ (HÚT: TẮT)";
+                }
+            }
+
+            const metricGesture = document.getElementById('teleop-metric-gesture');
+            if (metricGesture) {
+                metricGesture.innerText = isSuctionActive ? "✊ NẮM TAY (FIST)" : "🖐️ MỞ (OPEN)";
+                metricGesture.style.color = isSuctionActive ? "#f87171" : "#34d399";
+            }
+
+            // 2. Tọa độ tâm bàn tay chuẩn hóa
+            let palmX = (landmarks[0].x + landmarks[5].x + landmarks[17].x) / 3;
+            let palmY = (landmarks[0].y + landmarks[5].y + landmarks[17].y) / 3;
+            let palmZ = landmarks[0].z || 0;
+
+            let normX = isHandMirrored ? (1.0 - palmX) : palmX;
+            let normY = palmY;
+
+            handLastSeenNorm = { x: normX, y: normY, scale: palmBaseDist };
+
+            if (posHud) {
+                posHud.innerText = `Tay: (${normX.toFixed(2)}, ${normY.toFixed(2)}) | Scale: ${(palmBaseDist * 100).toFixed(0)}%`;
+            }
+
+            // 3. ÁNH XẠ TOẠ ĐỘ DOBOT CÓ HIỆU CHUẨN MỐC 0 & ĐỘ NHẠY
+            const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+            let rawDobotX, rawDobotY, rawDobotZ;
+
+            const xSpan = handCustomLimits.xMax - handCustomLimits.xMin;
+            const ySpan = handCustomLimits.yMax - handCustomLimits.yMin;
+            const zSpan = handCustomLimits.zMax - handCustomLimits.zMin;
+            const xMid = (handCustomLimits.xMin + handCustomLimits.xMax) / 2;
+            const yMid = (handCustomLimits.yMin + handCustomLimits.yMax) / 2;
+            const zMid = (handCustomLimits.zMin + handCustomLimits.zMax) / 2;
+
+            if (handCalib.calibrated) {
+                // Chế độ đã hiệu chuẩn mốc 0: Tính từ độ lệch so với tư thế tự nhiên của người dùng
+                const deltaX = (normX - handCalib.centerNormX) * handSensitivity;
+                const deltaY = (normY - handCalib.centerNormY) * handSensitivity;
+                const deltaScale = (palmBaseDist - handCalib.centerScale) * handSensitivity;
+
+                rawDobotY = yMid + deltaX * (ySpan * 1.5);
+                rawDobotZ = zMid - deltaY * (zSpan * 1.6);
+                rawDobotX = xMid + deltaScale * (xSpan * 6.5);
+            } else {
+                // Chế độ mặc định: Ánh xạ tỷ lệ theo khung hình chuẩn [0.15, 0.85]
+                const rangeNormX = clamp((normX - 0.15) / 0.70, 0, 1);
+                const rangeNormY = clamp((normY - 0.15) / 0.70, 0, 1);
+                const normDist = clamp((palmBaseDist - 0.10) / 0.18, 0, 1);
+
+                rawDobotY = handCustomLimits.yMin + rangeNormX * ySpan;
+                rawDobotZ = handCustomLimits.zMax - rangeNormY * zSpan;
+                rawDobotX = handCustomLimits.xMin + normDist * xSpan;
+            }
+
+            // 4. BỘ LỌC 1-EURO FILTER THÍCH NGHI ĐẲNG CẤP CAO
+            const filteredX = euroX.filter(rawDobotX, now);
+            const filteredY = euroY.filter(rawDobotY, now);
+            const filteredZ = euroZ.filter(rawDobotZ, now);
+
+            // Kẹp trong phạm vi tùy chỉnh
+            const finalX = clamp(Math.round(filteredX * 10) / 10, handCustomLimits.xMin, handCustomLimits.xMax);
+            const finalY = clamp(Math.round(filteredY * 10) / 10, handCustomLimits.yMin, handCustomLimits.yMax);
+            const finalZ = clamp(Math.round(filteredZ * 10) / 10, handCustomLimits.zMin, handCustomLimits.zMax);
+
+            // 5. Vẽ Skeleton, Mốc 0 và Thước đo HUD
+            drawHandSkeleton(ctx, landmarks, w, h, isHandMirrored, isSuctionActive, finalX, finalY, finalZ);
+
+            // Cập nhật Metrics UI
+            const metricTarget = document.getElementById('teleop-metric-target');
+            if (metricTarget) {
+                metricTarget.innerText = `X: ${finalX.toFixed(0)} | Y: ${finalY.toFixed(0)} | Z: ${finalZ.toFixed(0)}`;
+            }
+
+            const metricActual = document.getElementById('teleop-metric-actual');
+            if (metricActual && lastKnownRobotPose) {
+                metricActual.innerText = `X: ${lastKnownRobotPose.x.toFixed(0)} | Y: ${lastKnownRobotPose.y.toFixed(0)} | Z: ${lastKnownRobotPose.z.toFixed(0)}`;
+            }
+
+            // 6. Phát lệnh điều khiển thời gian thực
+            const targetHz = parseInt(document.getElementById('slider-hand-hz')?.value) || 12;
+            const sendIntervalMs = 1000 / targetHz;
+
+            if (isTeleopMasterActive && (now - lastHandSendTime >= sendIntervalMs)) {
+                lastHandSendTime = now;
+
+                const deadbandMm = parseFloat(document.getElementById('slider-hand-deadband')?.value) || 2.0;
+                const distChange = Math.hypot(finalX - handLastTargetX, finalY - handLastTargetY, finalZ - handLastTargetZ);
+
+                if (distChange >= deadbandMm) {
+                    handLastTargetX = finalX;
+                    handLastTargetY = finalY;
+                    handLastTargetZ = finalZ;
+
+                    const zFlange = finalZ + toolOffset;
+                    sendAction('move_xyz', { x: finalX, y: finalY, z: zFlange, r: 0, mode: 2 });
+                }
+
+                if (isSuctionActive !== handCurrentSuction) {
+                    handCurrentSuction = isSuctionActive;
+                    sendAction('suction', handCurrentSuction);
+
+                    const metricSuction = document.getElementById('teleop-metric-suction');
+                    if (metricSuction) {
+                        metricSuction.innerText = handCurrentSuction ? "ON (ĐANG HÚT)" : "OFF (ĐÃ TẮT)";
+                        metricSuction.style.color = handCurrentSuction ? "#f87171" : "#94a3b8";
+                    }
+                }
+            }
+        }
+
+        // Vẽ Khung Xương Bàn Tay & HUD Thước Đo Trực Quan
+        function drawHandSkeleton(ctx, landmarks, w, h, mirrored, isFist, curX, curY, curZ) {
+            const HAND_CONNECTIONS = [
+                [0, 1], [1, 2], [2, 3], [3, 4],
+                [0, 5], [5, 6], [6, 7], [7, 8],
+                [5, 9], [9, 10], [10, 11], [11, 12],
+                [9, 13], [13, 14], [14, 15], [15, 16],
+                [13, 17], [17, 18], [18, 19], [19, 20],
+                [0, 17]
+            ];
+
+            const boneColor = isFist ? "rgba(248, 113, 113, 0.85)" : "rgba(56, 189, 248, 0.85)";
+            const jointColor = isFist ? "#ef4444" : "#38bdf8";
+
+            // Vẽ các đường nối xương
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = boneColor;
+            ctx.beginPath();
+            for (let pair of HAND_CONNECTIONS) {
+                const p1 = landmarks[pair[0]];
+                const p2 = landmarks[pair[1]];
+                const x1 = mirrored ? (1 - p1.x) * w : p1.x * w;
+                const y1 = p1.y * h;
+                const x2 = mirrored ? (1 - p2.x) * w : p2.x * w;
+                const y2 = p2.y * h;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+            }
+            ctx.stroke();
+
+            // Vẽ các khớp đốt (Joints)
+            for (let i = 0; i < landmarks.length; i++) {
+                const pt = landmarks[i];
+                const x = mirrored ? (1 - pt.x) * w : pt.x * w;
+                const y = pt.y * h;
+
+                ctx.beginPath();
+                ctx.arc(x, y, [4, 8, 12, 16, 20].includes(i) ? 6 : 4, 0, 2 * Math.PI);
+                ctx.fillStyle = [4, 8, 12, 16, 20].includes(i) ? (isFist ? "#ffedd5" : "#ffffff") : jointColor;
+                ctx.fill();
+                ctx.strokeStyle = boneColor;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+
+            // Vẽ tâm lòng bàn tay
+            const palmX = (landmarks[0].x + landmarks[5].x + landmarks[17].x) / 3;
+            const palmY = (landmarks[0].y + landmarks[5].y + landmarks[17].y) / 3;
+            const px = mirrored ? (1 - palmX) * w : palmX * w;
+            const py = palmY * h;
+
+            ctx.beginPath();
+            ctx.arc(px, py, 14, 0, 2 * Math.PI);
+            ctx.strokeStyle = isFist ? "#ef4444" : "#10b981";
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(px, py, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = isFist ? "#f87171" : "#34d399";
+            ctx.fill();
+
+            // VẼ MỐC 0 CHUẨN ĐÃ HIỆU CHUẨN (CALIBRATED NEUTRAL CROSSHAIR)
+            if (handCalib.calibrated) {
+                const cx = mirrored ? (1 - handCalib.centerNormX) * w : handCalib.centerNormX * w;
+                const cy = handCalib.centerNormY * h;
+
+                ctx.save();
+                ctx.strokeStyle = "rgba(244, 63, 94, 0.7)";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+
+                // Vòng tròn mốc 0
+                ctx.beginPath();
+                ctx.arc(cx, cy, 22, 0, 2 * Math.PI);
+                ctx.stroke();
+
+                // Dấu cộng tâm
+                ctx.beginPath();
+                ctx.moveTo(cx - 30, cy); ctx.lineTo(cx + 30, cy);
+                ctx.moveTo(cx, cy - 30); ctx.lineTo(cx, cy + 30);
+                ctx.stroke();
+
+                ctx.fillStyle = "#f43f5e";
+                ctx.font = "10px monospace";
+                ctx.fillText("MỐC 0 CHUẨN", cx + 26, cy - 8);
+                ctx.restore();
+            }
+
+            // VẼ THƯỚC ĐO CAO ĐỘ Z (VERTICAL HEIGHT GAUGE) BÊN PHẢI CANVAS
+            const gaugeX = w - 18;
+            const gaugeTop = 60;
+            const gaugeBottom = h - 60;
+            const gaugeH = gaugeBottom - gaugeTop;
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+            ctx.fillRect(gaugeX - 6, gaugeTop, 12, gaugeH);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+            ctx.strokeRect(gaugeX - 6, gaugeTop, 12, gaugeH);
+
+            const zPct = (curZ - handCustomLimits.zMin) / (handCustomLimits.zMax - handCustomLimits.zMin);
+            const zMarkerY = gaugeBottom - Math.max(0, Math.min(1, zPct)) * gaugeH;
+
+            ctx.fillStyle = "#38bdf8";
+            ctx.fillRect(gaugeX - 8, zMarkerY - 3, 16, 6);
+            ctx.fillStyle = "#cbd5e1";
+            ctx.font = "9px monospace";
+            ctx.fillText(`Z: ${curZ.toFixed(0)}`, gaugeX - 48, zMarkerY + 3);
+        }
 
         // Khởi động các module ban đầu
         setMode('live');
