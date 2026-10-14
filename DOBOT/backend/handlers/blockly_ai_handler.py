@@ -44,6 +44,11 @@ DANH SÁCH KHỐI LỆNH BLOCKLY HỖ TRỢ:
    - Fields: TIME (số giây dừng chờ, ví dụ 0.5, 1.0). Sau khi BẬT giác hút NÊN chờ 0.5s để áp suất chân không đạt đỉnh.
 6. dobot_home:
    - Fields: {} (không có tham số, đưa robot về tư thế chuẩn Home X=250, Y=0, Z=50, R=0).
+7. dobot_rail_move:
+   - Fields: L (mm, từ 0 đến 1000), SPEED (mm/s, từ 10 đến 150, mặc định 50).
+   - Dùng để di chuyển cụm cánh tay robot dọc theo hệ ray trượt tuyến tính 1.0m khi gắp thả giữa các trạm cách xa nhau hoặc mở rộng phạm vi làm việc.
+8. dobot_rail_home:
+   - Fields: {} (không có tham số, đưa ray trượt về công tắc cữ hành trình mốc L=0 mm).
 
 QUY TẮC AN TOÀN BẮT BUỘC (SAFETY ENVELOPE):
 - Bán kính làm việc ngang: R_horiz = sqrt(X^2 + Y^2) PHẢI nằm trong khoảng 140mm <= R_horiz <= 330mm. Tránh quá gần đế robot (<140mm) và quá xa (>330mm).
@@ -56,6 +61,9 @@ QUY TẮC AN TOÀN BẮT BUỘC (SAFETY ENVELOPE):
   + Tắt giác hút: dobot_suction (STATE: "OFF").
   + Dừng chờ: dobot_wait (TIME: 0.3) để phôi nhả hoàn toàn.
   + Kết thúc hành trình bằng dobot_home để đưa tay về vị trí an toàn.
+- Khi làm việc với ray trượt (Sliding Rail 1000mm):
+  + Tọa độ ray trượt: 0mm <= L <= 1000mm.
+  + Chu trình điển hình: Trượt ray tới trạm gắp bằng dobot_rail_move, hạ gắp phôi an toàn, nhấc lên độ cao an toàn, trượt ray sang trạm thả bằng dobot_rail_move, hạ thả phôi, rồi kết thúc.
 
 QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
 - Nếu người dùng hỏi những câu hỏi ngoài lề (như thời tiết, thơ văn, lập trình web, lịch sử, toán ngoài lề, tán gẫu không liên quan tới điều khiển robot Dobot):

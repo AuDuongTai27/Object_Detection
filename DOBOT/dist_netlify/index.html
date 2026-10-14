@@ -609,6 +609,7 @@
                         <label style="font-size: 11px; color: #38bdf8; font-weight: 700; white-space: nowrap;">⚡ Mẫu:</label>
                         <select id="sel-blockly-preset" style="width: 100%; background: #1e2430; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 4px 6px; font-size: 11px; outline: none;" onchange="loadBlocklyPreset(this.value)">
                             <option value="pick_and_place">📦 Gắp & Thả Phôi 3 Lần</option>
+                            <option value="rail_pick_and_place">🚄 Gắp & Thả Dọc Ray Trượt (1.0m)</option>
                             <option value="square_patrol">🔄 Tuần Tra 4 Góc Bàn</option>
                             <option value="joint_wave">👋 Lắc Khớp J1-J4</option>
                         </select>
@@ -643,11 +644,12 @@
                     <div id="ai-copilot-content" style="margin-top: 8px;">
                         <!-- Input Prompt Area -->
                         <div style="position: relative;">
-                            <textarea id="inp-ai-prompt" rows="2" placeholder="💬 Nhập yêu cầu bằng tiếng Việt (Ví dụ: 'Gắp phôi tại X=220, Y=0 nhấc lên bỏ vào khay bên phải (180, 140, 20), sau đó về Home')..." style="width: 100%; box-sizing: border-box; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(168,85,247,0.35); border-radius: 7px; color: #fff; font-size: 11px; padding: 7px 8px; outline: none; resize: vertical; line-height: 1.4; font-family: inherit;"></textarea>
+                            <textarea id="inp-ai-prompt" rows="2" placeholder="💬 Nhập yêu cầu bằng tiếng Việt (Ví dụ: 'Trượt ray tới L=200 gắp phôi tại (220, 0, -20), rồi trượt tới L=750 thả vào khay')..." style="width: 100%; box-sizing: border-box; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(168,85,247,0.35); border-radius: 7px; color: #fff; font-size: 11px; padding: 7px 8px; outline: none; resize: vertical; line-height: 1.4; font-family: inherit;"></textarea>
                         </div>
 
                         <!-- Prompt Suggestion Chips -->
                         <div style="display: flex; gap: 4px; overflow-x: auto; padding: 4px 0 6px; scrollbar-width: none;">
+                            <span class="ai-chip" onclick="setAiPromptAndFocus('Trượt ray tới L=200 để gắp phôi tại X=220, Y=0, Z=-20, sau đó trượt tới L=750 để thả')">🚄 Gắp phôi trên ray trượt</span>
                             <span class="ai-chip" onclick="setAiPromptAndFocus('Gắp phôi tại X=220, Y=0, Z=-20 nhấc lên chuyển sang khay X=180, Y=140, Z=20 rồi về Home')">📦 Gắp & Thả phôi</span>
                             <span class="ai-chip" onclick="setAiPromptAndFocus('Tuần tra 4 góc bàn làm việc ở độ cao an toàn Z=40 bằng Safe Jump')">🔄 Tuần tra 4 góc</span>
                             <span class="ai-chip" onclick="setAiPromptAndFocus('Lắc khớp J1 từ -30 đến 30 độ 3 lần để vẫy chào khán giả')">👋 Vẫy chào khán giả</span>
@@ -770,6 +772,13 @@
                         <field name="DR">0</field>
                     </block>
                     <block type="dobot_home"></block>
+                </category>
+                <category name="🚄 Ray Trượt" colour="#0284c7">
+                    <block type="dobot_rail_move">
+                        <field name="L">250</field>
+                        <field name="SPEED">50</field>
+                    </block>
+                    <block type="dobot_rail_home"></block>
                 </category>
                 <category name="💨 Đầu Hút & Chờ" colour="#2f9e44">
                     <block type="dobot_suction">

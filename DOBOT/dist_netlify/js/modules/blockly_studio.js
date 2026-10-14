@@ -139,6 +139,26 @@
                     "nextStatement": null,
                     "colour": "#e8590c",
                     "tooltip": "Hiệu chuẩn và đưa robot về tọa độ chuẩn cơ khí"
+                },
+                {
+                    "type": "dobot_rail_move",
+                    "message0": "🚄 ray trượt tới L %1 mm tốc độ %2 mm/s",
+                    "args0": [
+                        { "type": "field_number", "name": "L", "value": 200, "min": 0, "max": 1000 },
+                        { "type": "field_number", "name": "SPEED", "value": 50, "min": 10, "max": 150 }
+                    ],
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": "#0284c7",
+                    "tooltip": "Di chuyển cụm cánh tay robot dọc ray trượt tuyến tính tới vị trí L (0 - 1000 mm)"
+                },
+                {
+                    "type": "dobot_rail_home",
+                    "message0": "🚄 Homing ray trượt về mốc L=0",
+                    "previousStatement": null,
+                    "nextStatement": null,
+                    "colour": "#0369a1",
+                    "tooltip": "Hiệu chuẩn và đưa ray trượt về công tắc cữ hành trình mốc L=0 mm"
                 }
             ]);
 
@@ -196,6 +216,16 @@
                 reg(jsGen, 'dobot_home', function(block) {
                     return `await dobotApi.home('${block.id}');\n`;
                 });
+
+                reg(jsGen, 'dobot_rail_move', function(block) {
+                    const l = Number(block.getFieldValue('L')) || 0;
+                    const speed = Number(block.getFieldValue('SPEED')) || 50;
+                    return `await dobotApi.moveRail(${l}, ${speed}, '${block.id}');\n`;
+                });
+
+                reg(jsGen, 'dobot_rail_home', function(block) {
+                    return `await dobotApi.homeRail('${block.id}');\n`;
+                });
             }
 
             if (pyGen) {
@@ -236,6 +266,16 @@
 
                 reg(pyGen, 'dobot_home', function(block) {
                     return `dobot.home()\n`;
+                });
+
+                reg(pyGen, 'dobot_rail_move', function(block) {
+                    const l = block.getFieldValue('L');
+                    const speed = block.getFieldValue('SPEED') || 50;
+                    return `dobot.rail_move_to(pos=${l}, speed=${speed})\n`;
+                });
+
+                reg(pyGen, 'dobot_rail_home', function(block) {
+                    return `dobot.rail_home()\n`;
                 });
             }
 
@@ -451,6 +491,41 @@
             });
         }
 
+        function waitForBlocklyRailToReach(targetL, timeoutMs=15000) {
+            return new Promise(resolve => {
+                const startTime = Date.now();
+                const timer = setInterval(() => {
+                    if (!isBlocklyRunning) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    if (isBlocklyPaused) return;
+
+                    if (!isSimulationMode()) {
+                        const cur = lastKnownRobotPose;
+                        const curL = (cur && typeof cur.l !== 'undefined') ? cur.l : (typeof currentRailL !== 'undefined' ? currentRailL : 0);
+                        if (Math.abs(curL - targetL) <= 2.0) {
+                            clearInterval(timer);
+                            resolve();
+                            return;
+                        }
+                    } else {
+                        if (Date.now() - startTime >= 400) {
+                            clearInterval(timer);
+                            resolve();
+                            return;
+                        }
+                    }
+
+                    if (Date.now() - startTime > timeoutMs) {
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+
         function getBlocklySimSpeedFactor() {
             const sel = document.getElementById('sel-blockly-sim-speed');
             if (!sel) return 1.0;
@@ -640,6 +715,56 @@
                 } else {
                     sendAction('home');
                     await sleepMs(4000);
+                }
+                await this.checkExecution(blockId);
+            },
+
+            async moveRail(l, speed, blockId) {
+                await this.checkExecution(blockId);
+                const targetL = Math.max(0, Math.min(1000, parseFloat(l) || 0));
+                const targetSpeed = Math.max(10, Math.min(150, parseFloat(speed) || 50));
+                const isSim = isSimulationMode();
+                showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🚄'} Ray trượt tới L=${targetL.toFixed(1)}mm (V=${targetSpeed}mm/s)...`, "#0284c7");
+
+                if (isSim) {
+                    if (typeof animateRailMove === 'function') {
+                        const speedFactor = getBlocklySimSpeedFactor();
+                        const effectiveSpeed = targetSpeed * speedFactor;
+                        await animateRailMove(targetL, effectiveSpeed);
+                    } else {
+                        if (typeof currentRailL !== 'undefined') currentRailL = targetL;
+                        if (typeof targetRailL !== 'undefined') targetRailL = targetL;
+                    }
+                    await sleepMs(150);
+                } else {
+                    if (typeof isRailModeActive !== 'undefined' && !isRailModeActive) {
+                        sendAction('set_rail_mode', { is_rail_mode: true });
+                        isRailModeActive = true;
+                    }
+                    sendAction('rail_move', { pos: targetL, speed: targetSpeed });
+                    await waitForBlocklyRailToReach(targetL, 15000);
+                }
+                await this.checkExecution(blockId);
+            },
+
+            async homeRail(blockId) {
+                await this.checkExecution(blockId);
+                const isSim = isSimulationMode();
+                showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🚄'} Homing Ray trượt về mốc L=0...`, "#0369a1");
+
+                if (isSim) {
+                    if (typeof animateRailMove === 'function') {
+                        const speedFactor = getBlocklySimSpeedFactor();
+                        await animateRailMove(0, 45 * speedFactor);
+                    }
+                    await sleepMs(200);
+                } else {
+                    if (typeof isRailModeActive !== 'undefined' && !isRailModeActive) {
+                        sendAction('set_rail_mode', { is_rail_mode: true });
+                        isRailModeActive = true;
+                    }
+                    sendAction('rail_home');
+                    await waitForBlocklyRailToReach(0, 20000);
                 }
                 await this.checkExecution(blockId);
             }
@@ -855,6 +980,67 @@
     <next>
       <block type="dobot_move_xyz">
         <field name="X">240</field><field name="Y">0</field><field name="Z">50</field><field name="R">0</field><field name="MODE">safe</field>
+      </block>
+    </next>
+  </block>
+</xml>`,
+
+            rail_pick_and_place: `<xml xmlns="https://developers.google.com/blockly/xml">
+  <block type="dobot_rail_home" x="20" y="20">
+    <next>
+      <block type="dobot_rail_move">
+        <field name="L">150</field>
+        <field name="SPEED">60</field>
+        <next>
+          <block type="dobot_move_xyz">
+            <field name="X">220</field><field name="Y">0</field><field name="Z">-20</field><field name="R">0</field><field name="MODE">safe</field>
+            <next>
+              <block type="dobot_suction">
+                <field name="STATE">ON</field>
+                <next>
+                  <block type="dobot_wait">
+                    <field name="TIME">0.5</field>
+                    <next>
+                      <block type="dobot_move_xyz">
+                        <field name="X">220</field><field name="Y">0</field><field name="Z">50</field><field name="R">0</field><field name="MODE">direct</field>
+                        <next>
+                          <block type="dobot_rail_move">
+                            <field name="L">750</field>
+                            <field name="SPEED">70</field>
+                            <next>
+                              <block type="dobot_move_xyz">
+                                <field name="X">200</field><field name="Y">80</field><field name="Z">-10</field><field name="R">0</field><field name="MODE">safe</field>
+                                <next>
+                                  <block type="dobot_suction">
+                                    <field name="STATE">OFF</field>
+                                    <next>
+                                      <block type="dobot_wait">
+                                        <field name="TIME">0.4</field>
+                                        <next>
+                                          <block type="dobot_rail_move">
+                                            <field name="L">300</field>
+                                            <field name="SPEED">60</field>
+                                            <next>
+                                              <block type="dobot_home"></block>
+                                            </next>
+                                          </block>
+                                        </next>
+                                      </block>
+                                    </next>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
       </block>
     </next>
   </block>
@@ -1215,11 +1401,16 @@ DANH SÁCH KHỐI LỆNH HỖ TRỢ:
    - Fields: TIME (giây, ví dụ 0.5, 1.0).
 6. dobot_home:
    - Fields: {}.
+7. dobot_rail_move:
+   - Fields: L (0 đến 1000), SPEED (10 đến 150). Dùng để di chuyển cánh tay robot dọc hệ ray trượt tuyến tính 1.0m khi gắp thả giữa các trạm làm việc xa nhau.
+8. dobot_rail_home:
+   - Fields: {}. Homing ray trượt về mốc L=0 mm.
 
 QUY TẮC AN TOÀN:
 - Bán kính ngang: 140mm <= sqrt(X^2 + Y^2) <= 330mm.
 - Cao độ đầu hút Z: -65mm <= Z <= 165mm.
 - Khi gắp phôi: Luôn dùng MODE "safe", BẬT hút, chờ 0.5s, di chuyển "safe", TẮT hút, chờ 0.3s, về Home.
+- Khi dùng ray trượt: Trượt ray tới trạm gắp (dobot_rail_move), gắp phôi an toàn, trượt ray sang trạm thả (dobot_rail_move), nhả phôi, sau đó về Home.
 
 QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
 - Nếu người dùng hỏi những câu hỏi ngoài lề (thời tiết, thơ văn, lập trình web, lịch sử, toán ngoài lề, tán gẫu không liên quan tới robot Dobot):
@@ -1319,6 +1510,14 @@ QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
                 icon = '🏠';
                 title = 'Về Vị Trí Home An Toàn';
                 fieldDetails = 'X=250, Y=0, Z=50, R=0';
+            } else if (stepData.block_type === 'dobot_rail_move') {
+                icon = '🚄';
+                title = `Ray Trượt tới L=${stepData.fields?.L ?? 0}mm`;
+                fieldDetails = `L=${stepData.fields?.L ?? 0}mm, V=${stepData.fields?.SPEED ?? 50}mm/s`;
+            } else if (stepData.block_type === 'dobot_rail_home') {
+                icon = '🚄';
+                title = 'Homing Ray Trượt về L=0';
+                fieldDetails = 'Mốc chuẩn 0 mm';
             }
 
             card.innerHTML = `

@@ -28,3 +28,7 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Khóa bí mật API
+gemini_api_key.json
+**/gemini_api_key.json
