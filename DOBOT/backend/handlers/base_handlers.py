@@ -10,14 +10,14 @@ class MainHandler(tornado.web.RequestHandler):
         self.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.set_header("Pragma", "no-cache")
         self.set_header("Expires", "0")
-        file_path = os.path.join(os.path.dirname(__file__), "dobot_visualizer.html")
+        file_path = os.path.join(BASE_DIR, "dobot_visualizer.html")
         with open(file_path, "r", encoding="utf-8") as f:
             self.write(f.read())
 
 
 class StaticFileHandler(tornado.web.RequestHandler):
     def get(self, filename):
-        file_path = os.path.join(os.path.dirname(__file__), filename)
+        file_path = os.path.join(BASE_DIR, filename)
         if os.path.exists(file_path):
             if filename.endswith(".js"):
                 self.set_header("Content-Type", "application/javascript")

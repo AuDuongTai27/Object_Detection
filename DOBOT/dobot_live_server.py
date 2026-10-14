@@ -80,9 +80,9 @@ def main():
         (r"/api/robot/connect", ApiRobotConnectHandler),
         (r"/api/robot/disconnect", ApiRobotDisconnectHandler),
         (r"/api/robot/ports", ApiRobotPortsHandler),
-        (r"/(.*\.(?:js|css|ico|png|svg|json))", StaticFileHandler),
         (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": str(BASE_DIR / "js")}),
         (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": str(BASE_DIR / "css")}),
+        (r"/(.*\.(?:js|css|ico|png|svg|json))", StaticFileHandler),
         # Web Studio Streaming & APIs
         (r"/ws/video", VideoWsHandler),
         (r"/api/tool/launch", ApiToolLaunchHandler),
