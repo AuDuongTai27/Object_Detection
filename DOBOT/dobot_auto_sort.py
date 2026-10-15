@@ -695,6 +695,152 @@ def find_yolo_model(requested_model=None):
     return None
 
 
+def detect_available_cameras(max_tested=4):
+    """Quét tìm tất cả camera đang kết nối."""
+    available_cams = []
+    for i in range(max_tested):
+        backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+        cap = cv2.VideoCapture(i, backend)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                h, w = frame.shape[:2]
+                available_cams.append((i, f"{w}x{h}"))
+            cap.release()
+    return available_cams
+
+
+def open_camera(cam_index, width=1280, height=720):
+    """Mở camera với DirectShow trên Windows để chống treo và nạp cấu hình phân giải."""
+    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+    cap = cv2.VideoCapture(cam_index, backend)
+    if not cap.isOpened() and sys.platform == "win32":
+        cap = cv2.VideoCapture(cam_index)
+    if cap.isOpened():
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
+
+
+def draw_dobot_ui(
+    frame,
+    engine_name,
+    cam_idx,
+    detected_cubes,
+    auto_sort_enabled,
+    is_busy,
+    is_rail_mode=False,
+    rail_pos=0.0,
+    show_workspace_roi=True,
+    flash_msg="",
+    alert_info=None,
+):
+    """
+    Vẽ giao diện hiển thị chuẩn như capture_from_camera:
+    1. Thanh tiêu đề phía trên (Model AI, Camera, Số khối phát hiện, Đèn trạng thái)
+    2. Banner thông báo flash / cảnh báo OSD
+    3. Thanh 4 nút bấm điều khiển tương tác chuột và phím tắt phía dưới
+    """
+    h, w = frame.shape[:2]
+    ui_frame = frame.copy()
+
+    # --- 1. Thanh tiêu đề phía trên ---
+    cv2.rectangle(ui_frame, (0, 0), (w, 45), (25, 25, 25), -1)
+    cam_type = "USB Cam" if cam_idx > 0 else "Laptop Cam"
+    rail_txt = f" | Ray: {rail_pos:.0f}mm" if is_rail_mode else ""
+    title_text = f"Class: {engine_name}  |  Camera [{cam_idx} - {cam_type}]  |  Da phat hien: {len(detected_cubes)} khoi{rail_txt}"
+    cv2.putText(ui_frame, title_text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2, cv2.LINE_AA)
+
+    # Đèn báo trạng thái ở góc phải thanh tiêu đề
+    if is_busy:
+        cv2.putText(ui_frame, "DANG GAP THA...", (w - 230, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 165, 255), 2, cv2.LINE_AA)
+    elif auto_sort_enabled:
+        blink = int(time.time() * 3) % 2 == 0
+        rec_color = (0, 0, 255) if blink else (50, 50, 150)
+        cv2.circle(ui_frame, (w - 245, 23), 10, rec_color, -1)
+        cv2.putText(
+            ui_frame,
+            "AUTO SORT (BAT)",
+            (w - 225, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.62,
+            (0, 0, 255),
+            2,
+            cv2.LINE_AA,
+        )
+    else:
+        cv2.putText(ui_frame, "THU CONG (SAN SANG)", (w - 250, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 180, 180), 2, cv2.LINE_AA)
+
+    # --- 2. Thông báo Flash / Cảnh báo ngoài vùng an toàn ---
+    if alert_info and time.time() < alert_info.get("expire", 0):
+        banner_h = 36
+        cv2.rectangle(ui_frame, (0, 46), (w, 46 + banner_h), (0, 0, 180), -1)
+        cv2.putText(ui_frame, alert_info["msg"], (18, 46 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+    elif flash_msg:
+        f_size = cv2.getTextSize(flash_msg, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)[0]
+        fx = (w - f_size[0]) // 2
+        cv2.rectangle(ui_frame, (fx - 15, 52), (fx + f_size[0] + 15, 88), (20, 20, 20), -1)
+        cv2.rectangle(ui_frame, (fx - 15, 52), (fx + f_size[0] + 15, 88), (0, 255, 100), 1)
+        cv2.putText(ui_frame, flash_msg, (fx, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 100), 2, cv2.LINE_AA)
+
+    # --- 3. Thanh 4 nút bấm phía dưới đáy màn hình ---
+    bar_height = 70
+    bar_y1 = h - bar_height
+    cv2.rectangle(ui_frame, (0, bar_y1), (w, h), (35, 35, 35), -1)
+
+    margin = 12
+    btn_gap = 10
+    total_gap = btn_gap * 3 + margin * 2
+    btn_w = (w - total_gap) // 4
+    btn_h = bar_height - 20
+    btn_y1 = bar_y1 + 10
+    btn_y2 = btn_y1 + btn_h
+
+    # Nút 1 đổi trạng thái & màu sắc tương tự nút LƯU LIÊN TỤC trong ảnh mẫu
+    if auto_sort_enabled:
+        btn1_text = "DUNG TU DONG"
+        btn1_color = (0, 0, 220)  # Đỏ khi đang hoạt động
+    else:
+        btn1_text = "TU DONG SORT"
+        btn1_color = (0, 90, 200)  # Cam/Đỏ cam
+
+    btn_defs = [
+        {"action": "toggle_auto", "text": btn1_text, "color": btn1_color, "key": "A"},
+        {"action": "pick_one", "text": "GAP 1 KHOI", "color": (40, 160, 40), "key": "SPACE"},
+        {"action": "switch_cam", "text": "DOI CAMERA", "color": (180, 100, 30), "key": "S / TAB"},
+        {"action": "quit", "text": "THOAT", "color": (60, 60, 180), "key": "Q / ESC"},
+    ]
+
+    buttons = []
+    for i, btn in enumerate(btn_defs):
+        bx1 = margin + i * (btn_w + btn_gap)
+        bx2 = bx1 + btn_w
+
+        cv2.rectangle(ui_frame, (bx1, btn_y1), (bx2, btn_y2), btn["color"], -1)
+        cv2.rectangle(ui_frame, (bx1, btn_y1), (bx2, btn_y2), (255, 255, 255), 1)
+
+        label_1 = btn["text"]
+        label_2 = f"({btn['key']})"
+
+        t_size1 = cv2.getTextSize(label_1, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 2)[0]
+        tx1 = bx1 + (btn_w - t_size1[0]) // 2
+        ty1 = btn_y1 + 20
+        cv2.putText(ui_frame, label_1, (tx1, ty1), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 2, cv2.LINE_AA)
+
+        t_size2 = cv2.getTextSize(label_2, cv2.FONT_HERSHEY_SIMPLEX, 0.40, 1)[0]
+        tx2 = bx1 + (btn_w - t_size2[0]) // 2
+        ty2 = btn_y1 + 36
+        cv2.putText(ui_frame, label_2, (tx2, ty2), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (220, 220, 220), 1, cv2.LINE_AA)
+
+        buttons.append({"rect": (bx1, btn_y1, bx2, btn_y2), "action": btn["action"]})
+
+    return ui_frame, buttons
+
+
 def main():
     parser = argparse.ArgumentParser(description="Dobot Vision Auto Sorting")
     parser.add_argument("--cam", type=int, default=1, help="ID camera (default: 1)")
@@ -769,61 +915,78 @@ def main():
     # Kết nối Dobot
     executor = DobotExecutor(drop_target=drop_target, pick_z=args.pick_z)
 
-    # Mở Camera (hỗ trợ Windows DirectShow và Linux V4L2)
-    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_V4L2
-    cap = cv2.VideoCapture(args.cam, backend)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(args.cam)
-    if not cap.isOpened() and args.cam != 0:
-        print(f"[!] Không thể mở camera {args.cam}, đang thử camera 0...")
-        cap = cv2.VideoCapture(0, backend)
+    # Mở Camera và tìm kiếm camera sẵn có
+    available_cams = detect_available_cameras()
+    available_indices = [idx for idx, _ in available_cams]
+    if not available_indices:
+        available_indices = [args.cam, 0] if args.cam != 0 else [0]
+    if args.cam not in available_indices:
+        available_indices.append(args.cam)
+
+    current_cam_idx = args.cam
+    cap = open_camera(current_cam_idx, args.width, args.height)
+    if not cap.isOpened() and current_cam_idx != 0:
+        print(f"[!] Không thể mở camera {current_cam_idx}, đang thử camera 0...")
+        current_cam_idx = 0
+        cap = open_camera(current_cam_idx, args.width, args.height)
     if not cap.isOpened():
         print(f"[!] Không thể mở bất kỳ camera nào! Vui lòng kiểm tra lại thiết bị.")
         return
 
-    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-    cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-    cap.set(cv2.CAP_PROP_FPS, 30)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-    win_name = "FABLAB - Dobot Magician Vision Auto-Sorting"
+    win_name = "Camera AI & Auto-Sorting - DOBOT FabLab"
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+    try:
+        cv2.setWindowProperty(win_name, cv2.WND_PROP_TOPMOST, 1)
+    except Exception:
+        pass
 
     current_detected_cubes = []
+    current_buttons = []
+    mouse_action = None
     alert_info = {"msg": "", "expire": 0.0}
+    flash_msg = ""
+    flash_time = 0.0
 
     # Khởi tạo dữ liệu hình học Vùng Làm Việc An Toàn (ROI 140 <= R <= 330 mm, X >= 70 mm)
     roi_poly, roi_arc_outer, roi_arc_inner, roi_lbl_outer, roi_lbl_inner = transformer.get_workspace_roi()
     show_workspace_roi = True
 
     def on_mouse(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN and not executor.is_busy:
-            for cube in current_detected_cubes:
-                bx, by, bw, bh = cube["box"]
-                if bx <= x <= bx + bw and by <= y <= by + bh:
-                    rx, ry = cube["rx"], cube["ry"]
-                    r_dist = math.hypot(rx, ry)
-                    sol_rail = None
-                    can_pick = is_safe_workspace(rx, ry)
-                    if not can_pick and executor.is_rail_mode:
-                        sol_rail = solve_rail_kinematics(rx, ry, current_rail_l=executor.rail_current_pos)
-                        if sol_rail is not None:
-                            can_pick = True
+        nonlocal mouse_action
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # 1. Kiểm tra click vào nút bấm dưới thanh action bar
+            for btn in current_buttons:
+                bx1, by1, bx2, by2 = btn["rect"]
+                if bx1 <= x <= bx2 and by1 <= y <= by2:
+                    mouse_action = btn["action"]
+                    return
 
-                    if not can_pick:
-                        print(f"\n[!] TỪ CHỐI GẮP: {cube['name']} nằm ngoài vùng an toàn (X={rx:.1f}, Y={ry:.1f}, R={r_dist:.1f}mm)!")
-                        alert_info["msg"] = f"CANH BAO: {cube['name']} NGOAI VUNG AN TOAN! (R={r_dist:.1f}mm | YEU CAU 140 <= R <= 330 mm)"
-                        alert_info["expire"] = time.time() + 3.0
+            # 2. Kiểm tra click vào khối màu để gắp
+            if not executor.is_busy:
+                for cube in current_detected_cubes:
+                    bx, by, bw, bh = cube["box"]
+                    if bx <= x <= bx + bw and by <= y <= by + bh:
+                        rx, ry = cube["rx"], cube["ry"]
+                        r_dist = math.hypot(rx, ry)
+                        sol_rail = None
+                        can_pick = is_safe_workspace(rx, ry)
+                        if not can_pick and executor.is_rail_mode:
+                            sol_rail = solve_rail_kinematics(rx, ry, current_rail_l=executor.rail_current_pos)
+                            if sol_rail is not None:
+                                can_pick = True
+
+                        if not can_pick:
+                            print(f"\n[!] TỪ CHỐI GẮP: {cube['name']} nằm ngoài vùng an toàn (X={rx:.1f}, Y={ry:.1f}, R={r_dist:.1f}mm)!")
+                            alert_info["msg"] = f"CANH BAO: {cube['name']} NGOAI VUNG AN TOAN! (R={r_dist:.1f}mm | YEU CAU 140 <= R <= 330 mm)"
+                            alert_info["expire"] = time.time() + 3.0
+                            break
+                        
+                        if sol_rail is not None:
+                            print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | CẦN DI CHUYỂN RAY ĐẾN L={sol_rail['optimal_l']:.1f}mm")
+                        else:
+                            print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | R={r_dist:.1f}mm")
+                        executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"])
                         break
-                    
-                    if sol_rail is not None:
-                        print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | CẦN DI CHUYỂN RAY ĐẾN L={sol_rail['optimal_l']:.1f}mm")
-                    else:
-                        print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | R={r_dist:.1f}mm")
-                    executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"])
-                    break
 
     cv2.setMouseCallback(win_name, on_mouse)
 
@@ -959,27 +1122,24 @@ def main():
                 cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), red_color, -1)
                 cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # 5. Thanh Header trạng thái
-        cv2.rectangle(frame, (0, 0), (w_img, 45), (25, 25, 25), -1)
-        robot_status = "DANG GAP THA..." if executor.is_busy else "SAN SANG (IDLE)"
-        status_color = (0, 165, 255) if executor.is_busy else (0, 255, 0)
-        mode_text = "[AUTO ON]" if auto_sort_enabled else "[MANUAL]"
-        roi_text = "[W] ROI: ON" if show_workspace_roi else "[W] ROI: OFF"
-        rail_txt = f" | RAY: L={executor.rail_current_pos:.1f}mm" if executor.is_rail_mode else ""
+        # 5. Vẽ giao diện Header & Bottom Action Bar chuẩn đẹp như capture_from_camera
+        display_frame, current_buttons = draw_dobot_ui(
+            frame=frame,
+            engine_name=engine_name,
+            cam_idx=current_cam_idx,
+            detected_cubes=detected_cubes,
+            auto_sort_enabled=auto_sort_enabled,
+            is_busy=executor.is_busy,
+            is_rail_mode=executor.is_rail_mode,
+            rail_pos=executor.rail_current_pos,
+            show_workspace_roi=show_workspace_roi,
+            flash_msg=flash_msg if (time.time() - flash_time <= 1.5) else "",
+            alert_info=alert_info,
+        )
 
-        header_text = f"Dobot: {engine_name} | {len(detected_cubes)} cube | {robot_status} | {mode_text} | {roi_text}{rail_txt}"
-        cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, status_color, 2, status_color, 2, cv2.LINE_AA) if False else cv2.putText(frame, header_text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.60, status_color, 2, cv2.LINE_AA)
-
-        # 6. Banner cảnh báo đỏ OSD nổi bật nếu người dùng click nhầm ngoài vùng
-        if time.time() < alert_info["expire"]:
-            banner_h = 36
-            cv2.rectangle(frame, (0, 46), (w_img, 46 + banner_h), (0, 0, 180), -1)
-            cv2.putText(frame, alert_info["msg"], (18, 46 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
-
-        # 7. Xử lý chế độ Tự Động (Auto Sort)
+        # 6. Xử lý chế độ Tự Động (Auto Sort)
         if auto_sort_enabled and not executor.is_busy:
             if time.time() - last_auto_pick_time > 2.0 and len(detected_cubes) > 0:
-                # Chọn cube trong tầm với an toàn (hoặc cần trượt ray)
                 valid_cubes = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
                 if valid_cubes:
                     target = valid_cubes[0]
@@ -987,26 +1147,71 @@ def main():
                     executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
                     last_auto_pick_time = time.time()
 
-        cv2.imshow(win_name, frame)
+        cv2.imshow(win_name, display_frame)
 
         key = cv2.waitKey(10) & 0xFF
-        if key in [ord('q'), ord('Q'), 27]:
-            break
-        elif key == ord(' '): # Phím cách: Gắp khối đầu tiên an toàn
+
+        action = None
+        if mouse_action is not None:
+            action = mouse_action
+            mouse_action = None
+        elif key in [ord('a'), ord('A')]:
+            action = "toggle_auto"
+        elif key == 32:  # SPACE
+            action = "pick_one"
+        elif key in [ord('s'), ord('S'), 9]:  # S / TAB
+            action = "switch_cam"
+        elif key in [ord('q'), ord('Q'), 27]:  # Q / ESC
+            action = "quit"
+        elif key in [ord('w'), ord('W')]:
+            action = "toggle_roi"
+
+        # 7. Xử lý các tác vụ điều khiển
+        if action == "toggle_auto":
+            auto_sort_enabled = not auto_sort_enabled
+            status_str = "BAT" if auto_sort_enabled else "TAT"
+            flash_msg = f"Tu dong phan loai: {status_str}"
+            flash_time = time.time()
+            print(f"[*] Chế độ Tự Động Phân Loại (Auto Sort): {status_str}")
+
+        elif action == "pick_one":
             if not executor.is_busy and len(detected_cubes) > 0:
                 safe_candidates = [c for c in detected_cubes if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
                 if safe_candidates:
                     target = safe_candidates[0]
-                    print(f"[+] NHẤN SPACE: Gắp {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
+                    print(f"[+] LỆNH GẮP: {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
                     executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
+                    flash_msg = f"Dang gap {target['name']}..."
+                    flash_time = time.time()
                 else:
+                    flash_msg = "Khong co khoi an toan trong tam voi!"
+                    flash_time = time.time()
                     print("[!] Không có phôi nào nằm trong tầm với của Robot (kể cả ray trượt) để gắp!")
-        elif key in [ord('a'), ord('A')]: # Bật/Tắt Auto Sort
-            auto_sort_enabled = not auto_sort_enabled
-            print(f"[*] Chế độ Tự Động Phân Loại (Auto Sort): {'BẬT' if auto_sort_enabled else 'TẮT'}")
-        elif key in [ord('w'), ord('W')]: # Bật/Tắt hiển thị Vùng An Toàn ROI
+
+        elif action == "switch_cam":
+            if len(available_indices) > 1:
+                cur_pos = available_indices.index(current_cam_idx) if current_cam_idx in available_indices else 0
+                next_pos = (cur_pos + 1) % len(available_indices)
+                current_cam_idx = available_indices[next_pos]
+                print(f"[*] Chuyển sang Camera [{current_cam_idx}]...")
+                cap.release()
+                time.sleep(0.2)
+                cap = open_camera(current_cam_idx, args.width, args.height)
+                flash_msg = f"Da doi sang Camera [{current_cam_idx}]"
+                flash_time = time.time()
+            else:
+                flash_msg = "Chi co 1 camera ket noi!"
+                flash_time = time.time()
+
+        elif action == "toggle_roi":
             show_workspace_roi = not show_workspace_roi
-            print(f"[*] Hiển thị Vùng Làm Việc An Toàn ROI: {'BẬT' if show_workspace_roi else 'TẮT'}")
+            status_str = "BAT" if show_workspace_roi else "TAT"
+            flash_msg = f"Vung ROI: {status_str}"
+            flash_time = time.time()
+            print(f"[*] Hiển thị Vùng Làm Việc An Toàn ROI: {status_str}")
+
+        elif action == "quit":
+            break
 
     cap.release()
     cv2.destroyAllWindows()
