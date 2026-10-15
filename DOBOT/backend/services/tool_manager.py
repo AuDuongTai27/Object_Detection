@@ -8,6 +8,7 @@ import threading
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_ROOT = BASE_DIR.parent
 
 class ToolProcessManager:
     """Quản lý các công cụ Native GUI độc lập (capture_from_camera.py, dobot_auto_sort.py)."""

@@ -2464,6 +2464,10 @@ QUY TẮC GUARDRAIL (TỪ CHỐI THÂN THIỆN):
         async function fetchVisionModels() {
             try {
                 const res = await fetch('/api/vision/models');
+                if (!res.ok) {
+                    console.warn(`fetchVisionModels HTTP error: ${res.status}`);
+                    return;
+                }
                 const data = await res.json();
                 const sel = document.getElementById('sel-vision-model');
                 if (sel && data.status === 'ok' && data.models) {

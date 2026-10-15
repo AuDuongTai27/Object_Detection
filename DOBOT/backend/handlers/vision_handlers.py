@@ -5,7 +5,7 @@ import json
 import tornado.web
 import tornado.websocket
 from backend.context import (
-    robot, BASE_DIR, HAS_WEB_STUDIO, tool_manager, vision_engine
+    robot, BASE_DIR, PROJECT_ROOT, MODELS_DIR, HAS_WEB_STUDIO, tool_manager, vision_engine
 )
 try:
     from web_vision_engine import WebVisionEngine
@@ -149,50 +149,60 @@ class ApiVisionModelsHandler(tornado.web.RequestHandler):
         self.set_header("Access-Control-Allow-Headers", "Content-Type")
 
     def get(self):
-        candidates = []
-        # Ưu tiên các mô hình ONNX siêu nhẹ trước
-        if (PROJECT_ROOT / "yolov8n.onnx").exists() and "yolov8n.onnx" not in candidates:
-            candidates.append("yolov8n.onnx")
-        if MODELS_DIR.exists():
-            for f in sorted(MODELS_DIR.glob("*.onnx")):
-                if f.name not in candidates:
-                    candidates.append(f.name)
-            # Sau đó mới đến các file .pt dự phòng nếu chưa có onnx tương ứng
-            for f in sorted(MODELS_DIR.glob("*.pt")):
-                if f.with_suffix(".onnx").name not in candidates and f.name not in candidates:
-                    candidates.append(f.name)
+        try:
+            candidates = []
+            # Ưu tiên các mô hình ONNX siêu nhẹ trước
+            if (PROJECT_ROOT / "yolov8n.onnx").exists() and "yolov8n.onnx" not in candidates:
+                candidates.append("yolov8n.onnx")
+            if MODELS_DIR.exists():
+                for f in sorted(MODELS_DIR.glob("*.onnx")):
+                    if f.name not in candidates:
+                        candidates.append(f.name)
+                # Sau đó mới đến các file .pt dự phòng nếu chưa có onnx tương ứng
+                for f in sorted(MODELS_DIR.glob("*.pt")):
+                    if f.with_suffix(".onnx").name not in candidates and f.name not in candidates:
+                        candidates.append(f.name)
 
-        model_objs = []
-        for name in candidates:
-            p = MODELS_DIR / name
-            if not p.exists() and (PROJECT_ROOT / name).exists():
-                p = PROJECT_ROOT / name
-            size_mb = round(p.stat().st_size / (1024 * 1024), 1) if p.exists() else 0.0
-            is_onnx = name.lower().endswith(".onnx")
-            tag = "⚡ ONNX Siêu Nhẹ" if is_onnx else "PyTorch"
-            if "best_trained" in name:
-                label = f"Mô hình vừa Train ({name}) [{tag}]"
-            elif "more_augmentation" in name:
-                label = f"Mô hình Augmented ({name}) [{tag}]"
-            elif name.startswith("yolov8n"):
-                label = f"YOLOv8 Nano ({name}) [{tag}]"
-            else:
-                label = f"{name} [{tag}]"
+            model_objs = []
+            for name in candidates:
+                p = MODELS_DIR / name
+                if not p.exists() and (PROJECT_ROOT / name).exists():
+                    p = PROJECT_ROOT / name
+                size_mb = round(p.stat().st_size / (1024 * 1024), 1) if p.exists() else 0.0
+                is_onnx = name.lower().endswith(".onnx")
+                tag = "⚡ ONNX Siêu Nhẹ" if is_onnx else "PyTorch"
+                if "best_trained" in name:
+                    label = f"Mô hình vừa Train ({name}) [{tag}]"
+                elif "more_augmentation" in name:
+                    label = f"Mô hình Augmented ({name}) [{tag}]"
+                elif name.startswith("yolov8n"):
+                    label = f"YOLOv8 Nano ({name}) [{tag}]"
+                else:
+                    label = f"{name} [{tag}]"
 
-            model_objs.append({
-                "name": name,
-                "label": label,
-                "size_mb": size_mb,
-                "is_onnx": is_onnx,
-                "exists": p.exists()
+                model_objs.append({
+                    "name": name,
+                    "label": label,
+                    "size_mb": size_mb,
+                    "is_onnx": is_onnx,
+                    "exists": p.exists()
+                })
+            active = vision_engine.active_model_name if HAS_WEB_STUDIO and vision_engine else (candidates[0] if candidates else "")
+            self.write({
+                "status": "ok",
+                "models": model_objs,
+                "current_model": active,
+                "active_model": active
             })
-        active = vision_engine.active_model_name if HAS_WEB_STUDIO and vision_engine else (candidates[0] if candidates else "")
-        self.write({
-            "status": "ok",
-            "models": model_objs,
-            "current_model": active,
-            "active_model": active
-        })
+        except Exception as e:
+            print(f"[VisionHandler] ❌ Lỗi lấy danh sách models: {e}")
+            self.write({
+                "status": "error",
+                "models": [],
+                "current_model": "",
+                "active_model": "",
+                "error": str(e)
+            })
 
     def post(self):
         try:
