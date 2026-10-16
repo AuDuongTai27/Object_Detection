@@ -1,4 +1,4 @@
 {
-    "confirm_required": false,
-    "tts_enabled": false
+    "confirm_required": true,
+    "tts_enabled": true
 }

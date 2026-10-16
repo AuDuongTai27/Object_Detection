@@ -3,8 +3,10 @@
 import json
 import serial
 import serial.tools.list_ports
+import threading
 import tornado.web
 import tornado.websocket
+from backend.driver.dobot_controller import DEFAULT_SPEED_MM_S
 from backend.context import robot, connected_clients, BASE_DIR
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
