@@ -1607,6 +1607,11 @@
                         <select id="hand-cam-select" class="hand-select-cam">
                             <option value="">-- Đang dò tìm camera máy tính... --</option>
                         </select>
+                        <select id="hand-cam-res-select" class="hand-select-cam" style="max-width: 145px;" onchange="if(handCameraRunning) { stopHandCamera(); startHandCamera(); }" title="Độ phân giải Camera">
+                            <option value="720p" selected>HD 720p (Sắc Nét)</option>
+                            <option value="1080p">FHD 1080p (Cực Nét)</option>
+                            <option value="480p">VGA 480p (Nhẹ)</option>
+                        </select>
                     </div>
                     <button class="btn-action" id="btn-hand-cam-toggle" onclick="toggleHandCamera()" style="padding: 6px 14px; font-weight: 700; background: #0284c7; border-color: #38bdf8;">
                         ▶️ Bật Camera
@@ -1618,11 +1623,12 @@
 
                 <div class="hand-video-box">
                     <video id="hand-raw-video" playsinline style="display: none;"></video>
-                    <canvas id="hand-teleop-canvas" width="640" height="480"></canvas>
+                    <canvas id="hand-teleop-canvas" width="1280" height="720"></canvas>
                     
                     <div class="hand-video-hud">
                         <span id="hand-fps-badge" class="hand-hud-pill">FPS: 0</span>
-                        <span id="hand-pos-hud" class="hand-hud-pill">Tay: (0.50, 0.50, 0.00)</span>
+                        <span id="hand-pos-hud" class="hand-hud-pill">Tay: (0.50, 0.50)</span>
+                        <span id="hand-dist-hud" class="hand-hud-pill" style="color: #38bdf8;">Khoảng cách: 35 cm</span>
                     </div>
 
                     <div id="hand-cam-placeholder" style="position: absolute; text-align: center; color: #64748b; font-size: 13px;">
@@ -1753,6 +1759,38 @@
                             <div style="font-size: 10px; color: #94a3b8;">Tự động đẩy 380mm/s & giảm trễ khi vung tay nhanh</div>
                         </div>
                         <input type="checkbox" id="chk-adaptive-fast" checked onchange="toggleAdaptiveFast(this.checked)" style="transform: scale(1.2); cursor: pointer; accent-color: #f59e0b;">
+                    </div>
+
+                    <!-- VÙNG KHOẢNG CÁCH TAY ĐẾN CAMERA (DEPTH RANGE 20CM - 60CM) -->
+                    <div style="margin-bottom: 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 11px; font-weight: 700; color: #cbd5e1;">📏 VÙNG KHOẢNG CÁCH TAY (DEPTH):</span>
+                            <span id="lbl-live-hand-dist" style="font-size: 11px; font-family: monospace; color: #38bdf8; font-weight: 700;">35 cm (20-60cm)</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 2px;">Gần nhất (Vươn X_max):</label>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="number" id="inp-hand-dist-min" min="10" max="45" value="20" step="1"
+                                        style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 11px; padding: 3px 6px; font-family: monospace;"
+                                        onchange="updateHandDistanceRange()">
+                                    <span style="color: #64748b; font-size: 10px;">cm</span>
+                                </div>
+                            </div>
+                            <span style="color: #64748b; font-size: 12px; margin-top: 14px;">➔</span>
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 2px;">Xa nhất (Rút X_min):</label>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="number" id="inp-hand-dist-max" min="40" max="100" value="60" step="1"
+                                        style="width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; color: #38bdf8; font-size: 11px; padding: 3px 6px; font-family: monospace;"
+                                        onchange="updateHandDistanceRange()">
+                                    <span style="color: #64748b; font-size: 10px;">cm</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 5px;">
+                            💡 Đưa tay lại gần (20cm) Dobot vươn tới trước, lùi tay ra xa (60cm) Dobot rút về sau.
+                        </div>
                     </div>
 
                     <!-- BỘ CHỌN ĐỘ NHẠY / TỶ LỆ ĐIỀU KHIỂN (GEAR RATIO) -->

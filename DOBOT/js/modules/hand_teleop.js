@@ -32,6 +32,19 @@
             zMax: 80.0
         };
 
+        // Cấu hình vùng khoảng cách bàn tay tới Camera (Depth Range: 20cm - 60cm)
+        let handDistMinCm = 20.0;
+        let handDistMaxCm = 60.0;
+        let handCurrentDistCm = 35.0;
+
+        function updateHandDistanceRange() {
+            const minVal = parseFloat(document.getElementById('inp-hand-dist-min')?.value) || 20.0;
+            const maxVal = parseFloat(document.getElementById('inp-hand-dist-max')?.value) || 60.0;
+            handDistMinCm = Math.min(minVal, maxVal);
+            handDistMaxCm = Math.max(minVal, maxVal);
+            showToast(`📏 Vùng khoảng cách tay: ${handDistMinCm} cm ➔ ${handDistMaxCm} cm`);
+        }
+
         // Thuật toán 1-Euro Filter Thích Nghi Vận Tốc (Velocity-Adaptive 1-Euro Filter)
         class OneEuroFilter {
             constructor(minCutoff = 0.8, beta = 0.05, dCutoff = 1.0) {
@@ -376,6 +389,7 @@
             const btn = document.getElementById('btn-hand-cam-toggle');
             const videoEl = document.getElementById('hand-raw-video');
             const selectEl = document.getElementById('hand-cam-select');
+            const resSelect = document.getElementById('hand-cam-res-select');
             const placeholder = document.getElementById('hand-cam-placeholder');
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -389,15 +403,41 @@
                     btn.disabled = true;
                 }
 
-                const deviceId = selectEl ? selectEl.value : null;
-                const constraints = {
-                    video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } } : { width: { ideal: 640 }, height: { ideal: 480 } },
-                    audio: false
-                };
+                const resMode = resSelect ? resSelect.value : '720p';
+                let idealW = 1280;
+                let idealH = 720;
+                if (resMode === '1080p') {
+                    idealW = 1920;
+                    idealH = 1080;
+                } else if (resMode === '480p') {
+                    idealW = 640;
+                    idealH = 480;
+                }
 
-                handCameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const deviceId = selectEl ? selectEl.value : null;
+                const videoConstraints = {
+                    width: { ideal: idealW },
+                    height: { ideal: idealH },
+                    frameRate: { ideal: 30, min: 15 }
+                };
+                if (deviceId) {
+                    videoConstraints.deviceId = { exact: deviceId };
+                }
+
+                handCameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: videoConstraints,
+                    audio: false
+                });
                 videoEl.srcObject = handCameraStream;
                 await videoEl.play();
+
+                // Đồng bộ độ phân giải thật của webcam vào canvas
+                const canvas = document.getElementById('hand-teleop-canvas');
+                if (canvas && videoEl.videoWidth && videoEl.videoHeight) {
+                    canvas.width = videoEl.videoWidth;
+                    canvas.height = videoEl.videoHeight;
+                    console.log(`[HandCam] Camera đã kích hoạt ở độ phân giải: ${videoEl.videoWidth}x${videoEl.videoHeight}`);
+                }
 
                 if (placeholder) placeholder.style.display = 'none';
 
@@ -413,7 +453,7 @@
                     btn.disabled = false;
                 }
 
-                showToast("📷 Đã mở Camera và khởi động AI nhận diện bàn tay!");
+                showToast(`📷 Camera đã bật (${videoEl.videoWidth || idealW}x${videoEl.videoHeight || idealH} HD Sắc Nét)!`);
                 runHandProcessLoop();
             } catch (err) {
                 console.error("Lỗi mở camera:", err);
@@ -510,8 +550,16 @@
             const canvas = document.getElementById('hand-teleop-canvas');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
+
+            // Đồng bộ kích thước canvas với ảnh đầu vào để tránh mờ
+            if (results.image && (canvas.width !== results.image.width || canvas.height !== results.image.height)) {
+                canvas.width = results.image.width;
+                canvas.height = results.image.height;
+            }
             const w = canvas.width;
             const h = canvas.height;
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
 
             // Đo FPS
             handFpsFrameCount++;
@@ -683,7 +731,7 @@
                 }
             }
 
-            // 2. Tọa độ tâm bàn tay chuẩn hóa
+            // 2. Tọa độ tâm bàn tay chuẩn hóa & Ước lượng khoảng cách tay (cm)
             let palmX = (landmarks[0].x + landmarks[5].x + landmarks[17].x) / 3;
             let palmY = (landmarks[0].y + landmarks[5].y + landmarks[17].y) / 3;
             let palmZ = landmarks[0].z || 0;
@@ -691,10 +739,25 @@
             let normX = isHandMirrored ? (1.0 - palmX) : palmX;
             let normY = palmY;
 
-            handLastSeenNorm = { x: normX, y: normY, scale: palmBaseDist };
+            // Ước lượng khoảng cách từ camera (cm): D = 5.8 / palmBaseDist (D ~ 20cm khi palmBaseDist ~ 0.29; D ~ 60cm khi palmBaseDist ~ 0.097)
+            const rawEstimatedCm = 5.8 / Math.max(0.04, palmBaseDist);
+            handCurrentDistCm = Math.round(Math.max(10, Math.min(100, rawEstimatedCm)));
+
+            handLastSeenNorm = { x: normX, y: normY, scale: palmBaseDist, distCm: handCurrentDistCm };
 
             if (posHud) {
-                posHud.innerText = `Tay: (${normX.toFixed(2)}, ${normY.toFixed(2)}) | Scale: ${(palmBaseDist * 100).toFixed(0)}%`;
+                posHud.innerText = `Tay: (${normX.toFixed(2)}, ${normY.toFixed(2)}) | Cách: ${handCurrentDistCm} cm`;
+            }
+
+            const distHud = document.getElementById('hand-dist-hud');
+            if (distHud) {
+                distHud.innerText = `Khoảng cách: ${handCurrentDistCm} cm (${handDistMinCm}-${handDistMaxCm}cm)`;
+            }
+
+            const lblDist = document.getElementById('lbl-live-hand-dist');
+            if (lblDist) {
+                lblDist.innerText = `${handCurrentDistCm} cm`;
+                lblDist.style.color = (handCurrentDistCm >= handDistMinCm && handCurrentDistCm <= handDistMaxCm) ? '#38bdf8' : '#f59e0b';
             }
 
             // 3. ÁNH XẠ TOẠ ĐỘ DOBOT CÓ HIỆU CHUẨN MỐC 0 & ĐỘ NHẠY
@@ -716,16 +779,21 @@
 
                 rawDobotY = yMid + deltaX * (ySpan * 1.5);
                 rawDobotZ = zMid - deltaY * (zSpan * 1.6);
-                rawDobotX = xMid + deltaScale * (xSpan * 6.5);
+                rawDobotX = xMid + deltaScale * (xSpan * 5.5);
             } else {
-                // Chế độ mặc định: Ánh xạ tỷ lệ theo khung hình chuẩn [0.15, 0.85]
+                // Chế độ mặc định: Ánh xạ theo khoảng cách tay [handDistMinCm, handDistMaxCm] (mặc định 20cm - 60cm)
                 const rangeNormX = clamp((normX - 0.15) / 0.70, 0, 1);
                 const rangeNormY = clamp((normY - 0.15) / 0.70, 0, 1);
-                const normDist = clamp((palmBaseDist - 0.10) / 0.18, 0, 1);
+
+                const distSpan = Math.max(5.0, handDistMaxCm - handDistMinCm);
+                const distClamped = Math.max(handDistMinCm, Math.min(handDistMaxCm, rawEstimatedCm));
+                // 1.0 khi tay ở gần nhất (20cm) -> Dobot vươn ra xa (X_max)
+                // 0.0 khi tay ở xa nhất (60cm) -> Dobot rút về gần (X_min)
+                const distProgress = (handDistMaxCm - distClamped) / distSpan;
 
                 rawDobotY = handCustomLimits.yMin + rangeNormX * ySpan;
                 rawDobotZ = handCustomLimits.zMax - rangeNormY * zSpan;
-                rawDobotX = handCustomLimits.xMin + normDist * xSpan;
+                rawDobotX = handCustomLimits.xMin + distProgress * xSpan;
             }
 
             // 3.1. KẸP BÁN KÍNH AN TOÀN TRÁNH VÙNG LỖI KẸT KHỚP (RADIAL SAFETY BOUNDARY)
@@ -773,7 +841,7 @@
             const finalZ = clamp(Math.round(filteredZ * 10) / 10, handCustomLimits.zMin, handCustomLimits.zMax);
 
             // 5. Vẽ Skeleton, Mốc 0 và Thước đo HUD
-            drawHandSkeleton(ctx, landmarks, w, h, isHandMirrored, isSuctionActive, finalX, finalY, finalZ, isFastMoving, currentHandVelocityMmS, peacePct, isGestureRecovering);
+            drawHandSkeleton(ctx, landmarks, w, h, isHandMirrored, isSuctionActive, finalX, finalY, finalZ, isFastMoving, currentHandVelocityMmS, peacePct, isGestureRecovering, handCurrentDistCm);
 
             // Cập nhật Metrics UI
             const metricTarget = document.getElementById('teleop-metric-target');
@@ -835,7 +903,7 @@
         }
 
         // Vẽ Khung Xương Bàn Tay & HUD Thước Đo Trực Quan
-        function drawHandSkeleton(ctx, landmarks, w, h, mirrored, isFist, curX, curY, curZ, isFast = false, velMmS = 0, peacePct = 0, isRecovering = false) {
+        function drawHandSkeleton(ctx, landmarks, w, h, mirrored, isFist, curX, curY, curZ, isFast = false, velMmS = 0, peacePct = 0, isRecovering = false, distCm = 35) {
             const HAND_CONNECTIONS = [
                 [0, 1], [1, 2], [2, 3], [3, 4],
                 [0, 5], [5, 6], [6, 7], [7, 8],
@@ -942,6 +1010,8 @@
             ctx.fillStyle = "#cbd5e1";
             ctx.font = "9px monospace";
             ctx.fillText(`Z: ${curZ.toFixed(0)}`, gaugeX - 48, zMarkerY + 3);
+            ctx.fillStyle = "#38bdf8";
+            ctx.fillText(`${distCm}cm`, gaugeX - 44, gaugeBottom + 16);
 
             // VẼ HUD TỐC ĐỘ VÀ TRẠNG THÁI BOOST
             if (isFast && !peacePct && !isRecovering) {
