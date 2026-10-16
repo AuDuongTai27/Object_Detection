@@ -32,9 +32,9 @@
             zMax: 80.0
         };
 
-        // Thuật toán 1-Euro Filter (Bộ lọc triệt rung thích nghi đẳng cấp công nghiệp)
+        // Thuật toán 1-Euro Filter Thích Nghi Vận Tốc (Velocity-Adaptive 1-Euro Filter)
         class OneEuroFilter {
-            constructor(minCutoff = 0.8, beta = 0.04, dCutoff = 1.0) {
+            constructor(minCutoff = 0.8, beta = 0.05, dCutoff = 1.0) {
                 this.minCutoff = minCutoff;
                 this.beta = beta;
                 this.dCutoff = dCutoff;
@@ -42,7 +42,7 @@
                 this.dxPrev = 0;
                 this.tPrev = null;
             }
-            filter(val, timestamp) {
+            filter(val, timestamp, dynamicBeta = null) {
                 if (this.xPrev === null) {
                     this.xPrev = val;
                     this.tPrev = timestamp;
@@ -54,7 +54,8 @@
                 const aD = this.alpha(dt, this.dCutoff);
                 const dxHat = aD * dx + (1 - aD) * this.dxPrev;
                 this.dxPrev = dxHat;
-                const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
+                const activeBeta = (dynamicBeta !== null) ? dynamicBeta : this.beta;
+                const cutoff = this.minCutoff + activeBeta * Math.abs(dxHat);
                 const a = this.alpha(dt, cutoff);
                 const xHat = a * val + (1 - a) * this.xPrev;
                 this.xPrev = xHat;
@@ -71,9 +72,18 @@
             }
         }
 
-        const euroX = new OneEuroFilter(0.8, 0.05);
-        const euroY = new OneEuroFilter(0.8, 0.05);
-        const euroZ = new OneEuroFilter(0.8, 0.05);
+        const euroX = new OneEuroFilter(0.8, 0.06);
+        const euroY = new OneEuroFilter(0.8, 0.06);
+        const euroZ = new OneEuroFilter(0.8, 0.06);
+
+        // Chế độ Động Học & Tăng Tốc Thích Ứng Khi Vung Tay Nhanh
+        let handTeleopMotionMode = 1; // 1: MOVJ_XYZ (Nội suy góc khớp - Khuyến nghị siêu nhanh & mượt), 2: MOVL_XYZ (Đường thẳng)
+        let isAdaptiveFastEnabled = true;
+        let prevRawDobotX = 230.0;
+        let prevRawDobotY = 0.0;
+        let prevRawDobotZ = 20.0;
+        let lastHandVelTime = 0;
+        let currentHandVelocityMmS = 0.0;
 
         // Trạng thái mượt & Rate limit
         let lastHandSendTime = 0;
@@ -87,15 +97,57 @@
         let handFistDebounceCounter = 0;
         let handOpenDebounceCounter = 0;
 
+        // Cử chỉ Chữ V ✌️ để Gỡ Lỗi & Thu gọn an toàn
+        let handPeaceHoldCounter = 0;
+        let handRecoveryCooldown = 0;
+        let isGestureRecovering = false;
+
         // FPS tracking
         let handFpsFrameCount = 0;
         let handFpsLastTime = performance.now();
         let handCurrentFps = 0;
 
+        function setHandMotionMode(mode) {
+            handTeleopMotionMode = mode;
+            const btnMovj = document.getElementById('btn-mode-movj');
+            const btnMovl = document.getElementById('btn-mode-movl');
+            if (btnMovj && btnMovl) {
+                if (mode === 1) {
+                    btnMovj.style.background = '#0284c7';
+                    btnMovj.style.borderColor = '#38bdf8';
+                    btnMovj.style.color = '#fff';
+                    btnMovj.style.fontWeight = '700';
+                    btnMovl.style.background = '#1e293b';
+                    btnMovl.style.borderColor = '#475569';
+                    btnMovl.style.color = '#94a3b8';
+                    btnMovl.style.fontWeight = 'normal';
+                } else {
+                    btnMovl.style.background = '#0284c7';
+                    btnMovl.style.borderColor = '#38bdf8';
+                    btnMovl.style.color = '#fff';
+                    btnMovl.style.fontWeight = '700';
+                    btnMovj.style.background = '#1e293b';
+                    btnMovj.style.borderColor = '#475569';
+                    btnMovj.style.color = '#94a3b8';
+                    btnMovj.style.fontWeight = 'normal';
+                }
+            }
+            const metricMode = document.getElementById('teleop-metric-mode');
+            if (metricMode) {
+                metricMode.innerText = mode === 1 ? "⚡ MOVJ (Khớp)" : "📐 MOVL (Thẳng)";
+            }
+            showToast(mode === 1 ? "⚡ Đã chọn MOVJ: Chuyển động góc khớp siêu nhanh & mượt!" : "📐 Đã chọn MOVL: Chuyển động đường thẳng tuyệt đối.");
+        }
+
+        function toggleAdaptiveFast(enabled) {
+            isAdaptiveFastEnabled = !!enabled;
+            showToast(isAdaptiveFastEnabled ? "🚀 Đã bật Tăng Tốc Thích Ứng khi vung tay nhanh!" : "⚖️ Đã tắt Tăng Tốc Thích Ứng.");
+        }
+
         function updateHandSettingsUI() {
-            const hz = document.getElementById('slider-hand-hz')?.value || 12;
+            const hz = document.getElementById('slider-hand-hz')?.value || 20;
             const ema = document.getElementById('slider-hand-ema')?.value || 0.25;
-            const deadband = document.getElementById('slider-hand-deadband')?.value || 2.0;
+            const deadband = document.getElementById('slider-hand-deadband')?.value || 1.5;
             const fistThresh = document.getElementById('slider-hand-fist-thresh')?.value || 0.65;
 
             const lblHz = document.getElementById('val-hand-hz');
@@ -508,7 +560,7 @@
             const landmarks = results.multiHandLandmarks[0];
             handLastSeenLandmarks = landmarks;
 
-            // 1. Phân tích cử chỉ: Nắm tay (Fist) hay Mở tay (Open Palm)
+            // 1. Phân tích cử chỉ: Chữ V ✌️ (Gỡ lỗi), Nắm tay (Fist), Mở tay (Open Palm)
             const wrist = landmarks[0];
             const middleMCP = landmarks[9];
             const palmBaseDist = Math.hypot(middleMCP.x - wrist.x, middleMCP.y - wrist.y);
@@ -534,37 +586,101 @@
                 foldedFingersCount++;
             }
 
-            const isFistDetected = (foldedFingersCount >= 3);
+            // Kiểm tra Cử chỉ Chữ V ✌️ (Index & Middle duỗi, Ring & Pinky gập)
+            const dTip8 = Math.hypot(landmarks[8].x - wrist.x, landmarks[8].y - wrist.y);
+            const dPip6 = Math.hypot(landmarks[6].x - wrist.x, landmarks[6].y - wrist.y);
+            const dTip12 = Math.hypot(landmarks[12].x - wrist.x, landmarks[12].y - wrist.y);
+            const dPip10 = Math.hypot(landmarks[10].x - wrist.x, landmarks[10].y - wrist.y);
+            const dTip16 = Math.hypot(landmarks[16].x - wrist.x, landmarks[16].y - wrist.y);
+            const dPip14 = Math.hypot(landmarks[14].x - wrist.x, landmarks[14].y - wrist.y);
+            const dTip20 = Math.hypot(landmarks[20].x - wrist.x, landmarks[20].y - wrist.y);
+            const dPip18 = Math.hypot(landmarks[18].x - wrist.x, landmarks[18].y - wrist.y);
 
-            if (isFistDetected) {
-                handFistDebounceCounter++;
-                handOpenDebounceCounter = 0;
-            } else {
-                handOpenDebounceCounter++;
+            const isIndexExt = dTip8 > dPip6 * 1.15;
+            const isMiddleExt = dTip12 > dPip10 * 1.15;
+            const isRingFold = dTip16 < dPip14 * 1.10;
+            const isPinkyFold = dTip20 < dPip18 * 1.10;
+            const isPeaceDetected = isIndexExt && isMiddleExt && isRingFold && isPinkyFold;
+
+            let peacePct = 0;
+            if (isPeaceDetected) {
+                handPeaceHoldCounter++;
                 handFistDebounceCounter = 0;
+                handOpenDebounceCounter = 0;
+                peacePct = Math.min(100, Math.round((handPeaceHoldCounter / 18) * 100));
+
+                if (handPeaceHoldCounter >= 18 && now > handRecoveryCooldown) {
+                    handRecoveryCooldown = now + 4000;
+                    handPeaceHoldCounter = 0;
+                    isGestureRecovering = true;
+                    sendAction('recover_pose');
+                    euroX.reset();
+                    euroY.reset();
+                    euroZ.reset();
+                    showToast("🛡️ CỬ CHỈ ✌️: ĐÃ GỠ LỖI ĐÈN ĐỎ & ĐƯA DOBOT VỀ AN TOÀN!");
+                    setTimeout(() => { isGestureRecovering = false; }, 3000);
+                }
+            } else {
+                handPeaceHoldCounter = Math.max(0, handPeaceHoldCounter - 1);
+            }
+
+            const isFistDetected = !isPeaceDetected && (foldedFingersCount >= 3);
+
+            if (!isPeaceDetected) {
+                if (isFistDetected) {
+                    handFistDebounceCounter++;
+                    handOpenDebounceCounter = 0;
+                } else {
+                    handOpenDebounceCounter++;
+                    handFistDebounceCounter = 0;
+                }
             }
 
             let isSuctionActive = handCurrentSuction;
-            if (handFistDebounceCounter >= 2) {
-                isSuctionActive = true;
-            } else if (handOpenDebounceCounter >= 2) {
-                isSuctionActive = false;
+            if (!isPeaceDetected && !isGestureRecovering) {
+                if (handFistDebounceCounter >= 2) {
+                    isSuctionActive = true;
+                } else if (handOpenDebounceCounter >= 2) {
+                    isSuctionActive = false;
+                }
             }
 
             if (gestureBadge) {
-                if (isSuctionActive) {
+                if (isGestureRecovering) {
+                    gestureBadge.className = "hand-badge gesture-peace";
+                    gestureBadge.style.background = "rgba(16, 185, 129, 0.35)";
+                    gestureBadge.style.color = "#34d399";
+                    gestureBadge.innerText = "🛡️ ĐANG GỠ LỖI & VỀ AN TOÀN...";
+                } else if (isPeaceDetected) {
+                    gestureBadge.className = "hand-badge gesture-peace";
+                    gestureBadge.style.background = "rgba(16, 185, 129, 0.25)";
+                    gestureBadge.style.color = "#34d399";
+                    gestureBadge.innerText = `✌️ CHỮ V: GIỮ ĐỂ GỠ LỖI (${peacePct}%)`;
+                } else if (isSuctionActive) {
                     gestureBadge.className = "hand-badge gesture-fist";
+                    gestureBadge.style.background = "";
+                    gestureBadge.style.color = "";
                     gestureBadge.innerText = "✊ NẮM TAY (HÚT: BẬT)";
                 } else {
                     gestureBadge.className = "hand-badge gesture-open";
+                    gestureBadge.style.background = "";
+                    gestureBadge.style.color = "";
                     gestureBadge.innerText = "🖐️ TAY MỞ (HÚT: TẮT)";
                 }
             }
 
             const metricGesture = document.getElementById('teleop-metric-gesture');
             if (metricGesture) {
-                metricGesture.innerText = isSuctionActive ? "✊ NẮM TAY (FIST)" : "🖐️ MỞ (OPEN)";
-                metricGesture.style.color = isSuctionActive ? "#f87171" : "#34d399";
+                if (isGestureRecovering) {
+                    metricGesture.innerText = "🛡️ GỠ LỖI AN TOÀN";
+                    metricGesture.style.color = "#34d399";
+                } else if (isPeaceDetected) {
+                    metricGesture.innerText = `✌️ CHỮ V (${peacePct}%)`;
+                    metricGesture.style.color = "#34d399";
+                } else {
+                    metricGesture.innerText = isSuctionActive ? "✊ NẮM TAY (FIST)" : "🖐️ MỞ (OPEN)";
+                    metricGesture.style.color = isSuctionActive ? "#f87171" : "#34d399";
+                }
             }
 
             // 2. Tọa độ tâm bàn tay chuẩn hóa
@@ -612,10 +728,44 @@
                 rawDobotX = handCustomLimits.xMin + normDist * xSpan;
             }
 
-            // 4. BỘ LỌC 1-EURO FILTER THÍCH NGHI ĐẲNG CẤP CAO
-            const filteredX = euroX.filter(rawDobotX, now);
-            const filteredY = euroY.filter(rawDobotY, now);
-            const filteredZ = euroZ.filter(rawDobotZ, now);
+            // 3.1. KẸP BÁN KÍNH AN TOÀN TRÁNH VÙNG LỖI KẸT KHỚP (RADIAL SAFETY BOUNDARY)
+            const curRadius = Math.hypot(rawDobotX, rawDobotY);
+            if (curRadius > 290.0) {
+                const radScale = 290.0 / curRadius;
+                rawDobotX *= radScale;
+                rawDobotY *= radScale;
+            } else if (curRadius < 185.0 && curRadius > 0.001) {
+                const radScale = 185.0 / curRadius;
+                rawDobotX *= radScale;
+                rawDobotY *= radScale;
+            }
+
+            // 4. TÍNH VẬN TỐC TAY & BỘ LỌC 1-EURO FILTER THÍCH NGHI VẬN TỐC (VELOCITY-ADAPTIVE)
+            const dtVel = (now - lastHandVelTime) / 1000.0;
+            if (dtVel > 0.005 && lastHandVelTime > 0) {
+                const instantDist = Math.hypot(rawDobotX - prevRawDobotX, rawDobotY - prevRawDobotY, rawDobotZ - prevRawDobotZ);
+                const instantVel = instantDist / dtVel; // mm/s
+                currentHandVelocityMmS = currentHandVelocityMmS * 0.7 + instantVel * 0.3; // EMA smoothing
+            }
+            prevRawDobotX = rawDobotX;
+            prevRawDobotY = rawDobotY;
+            prevRawDobotZ = rawDobotZ;
+            lastHandVelTime = now;
+
+            // Khi vung tay nhanh (> 120 mm/s), tự động đẩy beta lên cao (tới 0.38) để triệt tiêu độ trễ lọc
+            let dynamicBeta = 0.06;
+            let isFastMoving = false;
+            if (isAdaptiveFastEnabled) {
+                if (currentHandVelocityMmS > 120) {
+                    isFastMoving = true;
+                    const velFactor = Math.min(1.0, (currentHandVelocityMmS - 120) / 250);
+                    dynamicBeta = 0.06 + velFactor * 0.32;
+                }
+            }
+
+            const filteredX = euroX.filter(rawDobotX, now, dynamicBeta);
+            const filteredY = euroY.filter(rawDobotY, now, dynamicBeta);
+            const filteredZ = euroZ.filter(rawDobotZ, now, dynamicBeta);
 
             // Kẹp trong phạm vi tùy chỉnh
             const finalX = clamp(Math.round(filteredX * 10) / 10, handCustomLimits.xMin, handCustomLimits.xMax);
@@ -623,7 +773,7 @@
             const finalZ = clamp(Math.round(filteredZ * 10) / 10, handCustomLimits.zMin, handCustomLimits.zMax);
 
             // 5. Vẽ Skeleton, Mốc 0 và Thước đo HUD
-            drawHandSkeleton(ctx, landmarks, w, h, isHandMirrored, isSuctionActive, finalX, finalY, finalZ);
+            drawHandSkeleton(ctx, landmarks, w, h, isHandMirrored, isSuctionActive, finalX, finalY, finalZ, isFastMoving, currentHandVelocityMmS, peacePct, isGestureRecovering);
 
             // Cập nhật Metrics UI
             const metricTarget = document.getElementById('teleop-metric-target');
@@ -636,23 +786,39 @@
                 metricActual.innerText = `X: ${lastKnownRobotPose.x.toFixed(0)} | Y: ${lastKnownRobotPose.y.toFixed(0)} | Z: ${lastKnownRobotPose.z.toFixed(0)}`;
             }
 
-            // 6. Phát lệnh điều khiển thời gian thực
-            const targetHz = parseInt(document.getElementById('slider-hand-hz')?.value) || 12;
+            const metricVel = document.getElementById('teleop-metric-vel');
+            if (metricVel) {
+                metricVel.innerText = `${Math.round(currentHandVelocityMmS)} mm/s ${isFastMoving ? '⚡ BOOST' : ''}`;
+                metricVel.style.color = isFastMoving ? '#f59e0b' : '#38bdf8';
+            }
+
+            // 6. Phát lệnh điều khiển thời gian thực (Dừng phát khi đang giơ Chữ V hoặc đang gỡ lỗi)
+            const targetHz = parseInt(document.getElementById('slider-hand-hz')?.value) || 20;
             const sendIntervalMs = 1000 / targetHz;
 
-            if (isTeleopMasterActive && (now - lastHandSendTime >= sendIntervalMs)) {
+            if (isTeleopMasterActive && !isPeaceDetected && !isGestureRecovering && (now - lastHandSendTime >= sendIntervalMs)) {
                 lastHandSendTime = now;
 
-                const deadbandMm = parseFloat(document.getElementById('slider-hand-deadband')?.value) || 2.0;
+                const baseDeadbandMm = parseFloat(document.getElementById('slider-hand-deadband')?.value) || 1.5;
+                // Khi vung tay nhanh, hạ deadband xuống để nhạy ngay lập tức
+                const effectiveDeadband = isFastMoving ? Math.min(baseDeadbandMm, 0.4) : baseDeadbandMm;
                 const distChange = Math.hypot(finalX - handLastTargetX, finalY - handLastTargetY, finalZ - handLastTargetZ);
 
-                if (distChange >= deadbandMm) {
+                if (distChange >= effectiveDeadband) {
                     handLastTargetX = finalX;
                     handLastTargetY = finalY;
                     handLastTargetZ = finalZ;
 
                     const zFlange = finalZ + toolOffset;
-                    sendAction('move_xyz', { x: finalX, y: finalY, z: zFlange, r: 0, mode: 2 });
+                    // Sử dụng action 'teleop_stream' chuyên dụng (clear backlog queue và tự boost vận tốc khi fast=true)
+                    sendAction('teleop_stream', { 
+                        x: finalX, 
+                        y: finalY, 
+                        z: zFlange, 
+                        r: 0, 
+                        mode: handTeleopMotionMode, 
+                        fast: isFastMoving 
+                    });
                 }
 
                 if (isSuctionActive !== handCurrentSuction) {
@@ -669,7 +835,7 @@
         }
 
         // Vẽ Khung Xương Bàn Tay & HUD Thước Đo Trực Quan
-        function drawHandSkeleton(ctx, landmarks, w, h, mirrored, isFist, curX, curY, curZ) {
+        function drawHandSkeleton(ctx, landmarks, w, h, mirrored, isFist, curX, curY, curZ, isFast = false, velMmS = 0, peacePct = 0, isRecovering = false) {
             const HAND_CONNECTIONS = [
                 [0, 1], [1, 2], [2, 3], [3, 4],
                 [0, 5], [5, 6], [6, 7], [7, 8],
@@ -679,11 +845,11 @@
                 [0, 17]
             ];
 
-            const boneColor = isFist ? "rgba(248, 113, 113, 0.85)" : "rgba(56, 189, 248, 0.85)";
-            const jointColor = isFist ? "#ef4444" : "#38bdf8";
+            const boneColor = isRecovering ? "rgba(16, 185, 129, 0.9)" : (peacePct > 0 ? "rgba(52, 211, 153, 0.9)" : (isFist ? "rgba(248, 113, 113, 0.85)" : (isFast ? "rgba(245, 158, 11, 0.9)" : "rgba(56, 189, 248, 0.85)")));
+            const jointColor = isRecovering ? "#10b981" : (peacePct > 0 ? "#34d399" : (isFist ? "#ef4444" : (isFast ? "#f59e0b" : "#38bdf8")));
 
             // Vẽ các đường nối xương
-            ctx.lineWidth = 3;
+            ctx.lineWidth = isFast || peacePct > 0 ? 4 : 3;
             ctx.strokeStyle = boneColor;
             ctx.beginPath();
             for (let pair of HAND_CONNECTIONS) {
@@ -706,7 +872,7 @@
 
                 ctx.beginPath();
                 ctx.arc(x, y, [4, 8, 12, 16, 20].includes(i) ? 6 : 4, 0, 2 * Math.PI);
-                ctx.fillStyle = [4, 8, 12, 16, 20].includes(i) ? (isFist ? "#ffedd5" : "#ffffff") : jointColor;
+                ctx.fillStyle = [4, 8, 12, 16, 20].includes(i) ? (peacePct > 0 ? "#d1fae5" : (isFist ? "#ffedd5" : "#ffffff")) : jointColor;
                 ctx.fill();
                 ctx.strokeStyle = boneColor;
                 ctx.lineWidth = 1.5;
@@ -721,13 +887,13 @@
 
             ctx.beginPath();
             ctx.arc(px, py, 14, 0, 2 * Math.PI);
-            ctx.strokeStyle = isFist ? "#ef4444" : "#10b981";
+            ctx.strokeStyle = peacePct > 0 ? "#10b981" : (isFist ? "#ef4444" : (isFast ? "#f59e0b" : "#10b981"));
             ctx.lineWidth = 2.5;
             ctx.stroke();
 
             ctx.beginPath();
             ctx.arc(px, py, 4, 0, 2 * Math.PI);
-            ctx.fillStyle = isFist ? "#f87171" : "#34d399";
+            ctx.fillStyle = peacePct > 0 ? "#34d399" : (isFist ? "#f87171" : (isFast ? "#fbbf24" : "#34d399"));
             ctx.fill();
 
             // VẼ MỐC 0 CHUẨN ĐÃ HIỆU CHUẨN (CALIBRATED NEUTRAL CROSSHAIR)
@@ -771,10 +937,55 @@
             const zPct = (curZ - handCustomLimits.zMin) / (handCustomLimits.zMax - handCustomLimits.zMin);
             const zMarkerY = gaugeBottom - Math.max(0, Math.min(1, zPct)) * gaugeH;
 
-            ctx.fillStyle = "#38bdf8";
+            ctx.fillStyle = isFast ? "#f59e0b" : "#38bdf8";
             ctx.fillRect(gaugeX - 8, zMarkerY - 3, 16, 6);
             ctx.fillStyle = "#cbd5e1";
             ctx.font = "9px monospace";
             ctx.fillText(`Z: ${curZ.toFixed(0)}`, gaugeX - 48, zMarkerY + 3);
+
+            // VẼ HUD TỐC ĐỘ VÀ TRẠNG THÁI BOOST
+            if (isFast && !peacePct && !isRecovering) {
+                ctx.save();
+                ctx.fillStyle = "rgba(245, 158, 11, 0.9)";
+                ctx.fillRect(12, h - 34, 165, 22);
+                ctx.fillStyle = "#0f172a";
+                ctx.font = "bold 11px system-ui, sans-serif";
+                ctx.fillText(`⚡ FAST TRACK: ${Math.round(velMmS)} mm/s`, 18, h - 19);
+                ctx.restore();
+            }
+
+            // VẼ HUD CỬ CHỈ CHỮ V ✌️ GỠ LỖI & VỀ AN TOÀN
+            if (isRecovering) {
+                ctx.save();
+                ctx.fillStyle = "rgba(16, 185, 129, 0.92)";
+                ctx.fillRect(w / 2 - 140, 20, 280, 36);
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(w / 2 - 140, 20, 280, 36);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 12.5px system-ui, sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("🛡️ ĐANG GỠ LỖI & THU GỌN AN TOÀN...", w / 2, 43);
+                ctx.restore();
+            } else if (peacePct > 0) {
+                ctx.save();
+                ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+                ctx.fillRect(w / 2 - 130, 16, 260, 44);
+                ctx.strokeStyle = peacePct >= 100 ? "#10b981" : "#38bdf8";
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(w / 2 - 130, 16, 260, 44);
+
+                ctx.fillStyle = peacePct >= 100 ? "#34d399" : "#38bdf8";
+                ctx.font = "bold 11.5px system-ui, sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(`✌️ GIỮ 1 GIÂY ĐỂ GỠ LỖI (${peacePct}%)`, w / 2, 33);
+
+                // Thanh tiến trình (Progress bar)
+                ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.fillRect(w / 2 - 100, 40, 200, 10);
+                ctx.fillStyle = peacePct >= 100 ? "#10b981" : "#38bdf8";
+                ctx.fillRect(w / 2 - 100, 40, 200 * (peacePct / 100), 10);
+                ctx.restore();
+            }
         }
 

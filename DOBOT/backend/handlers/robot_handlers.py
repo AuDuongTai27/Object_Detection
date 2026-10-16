@@ -47,6 +47,14 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 dr = step if axis == "r" else 0.0
                 ok, msg = robot.move_relative(dx, dy, dz, dr)
                 self.write_message(json.dumps({"type": "feedback", "msg": msg}))
+            elif action == "teleop_stream":
+                x = float(cmd.get("x", 200))
+                y = float(cmd.get("y", 0))
+                z = float(cmd.get("z", 100))
+                r = float(cmd.get("r", 0))
+                mode = int(cmd.get("mode", 1))
+                fast = bool(cmd.get("fast", False))
+                robot.teleop_move(x, y, z, r, mode=mode, fast=fast)
             elif action == "move_xyz":
                 x = float(cmd.get("x", 200))
                 y = float(cmd.get("y", 0))
@@ -168,6 +176,16 @@ class ApiCmdHandler(tornado.web.RequestHandler):
         try:
             cmd = json.loads(self.request.body)
             action = cmd.get("action")
+            if action == "teleop_stream":
+                x = float(cmd.get("x", 200))
+                y = float(cmd.get("y", 0))
+                z = float(cmd.get("z", 100))
+                r = float(cmd.get("r", 0))
+                mode = int(cmd.get("mode", 1))
+                fast = bool(cmd.get("fast", False))
+                ok = robot.teleop_move(x, y, z, r, mode=mode, fast=fast)
+                self.write({"status": "ok" if ok else "fail"})
+                return
             if action == "move_xyz":
                 x = float(cmd.get("x", 200))
                 y = float(cmd.get("y", 0))

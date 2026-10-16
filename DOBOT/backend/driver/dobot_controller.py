@@ -70,7 +70,7 @@ class DobotController:
         self.safety_limits = self._load_safety_limits()
         self.pulses_per_mm = float(self.safety_limits.get("pulses_per_mm", PULSES_PER_MM))
         self.rail_motion = {"active": False, "start_time": 0.0, "duration": 0.0, "start_pos": 0.0, "target_pos": 0.0}
-        self.safety_limits = self._load_safety_limits()
+        self._is_fast_mode = False
 
     def _load_rail_state(self):
         if RAIL_STATE_FILE.exists():
@@ -319,6 +319,40 @@ class DobotController:
                 return True
         return False
 
+    def teleop_move(self, x, y, z, r=0.0, mode=1, fast=False):
+        """
+        Di chuyển Teleop thời gian thực bám sát tay:
+        1. Xóa lệnh cũ đang chờ trong queue (SetQueuedCmdClear ID 245) để triệt tiêu hoàn toàn độ trễ tích lũy
+        2. Tự động tăng tốc độ & gia tốc PTP (ID 81, 83) khi phát hiện người dùng vung tay nhanh
+        3. Sử dụng MOVJ (mode 1) để chuyển động cực êm mượt, không bị khựng tại các điểm kỳ dị IK
+        """
+        with self.lock:
+            if not self.connected:
+                self.connect()
+            if self.connected:
+                # Điều chỉnh tốc độ động theo vận tốc cử chỉ tay
+                if fast:
+                    if not self._is_fast_mode:
+                        # Tăng tốc độ PTP lên 380 mm/s và 100% gia tốc
+                        self._send_raw_cmd(id=81, ctrl=1, params=struct.pack('<4f', 380.0, 380.0, 380.0, 380.0))
+                        self._send_raw_cmd(id=83, ctrl=1, params=struct.pack('<2f', 100.0, 100.0))
+                        self._is_fast_mode = True
+                else:
+                    if self._is_fast_mode:
+                        # Đưa về mức tiêu chuẩn 220 mm/s để di chuyển đầm và chính xác
+                        self._send_raw_cmd(id=81, ctrl=1, params=struct.pack('<4f', 220.0, 220.0, 220.0, 220.0))
+                        self._send_raw_cmd(id=83, ctrl=1, params=struct.pack('<2f', 60.0, 60.0))
+                        self._is_fast_mode = False
+
+                # Triệt tiêu độ trễ hàng đợi: Xóa các lệnh cũ chưa kịp chạy để robot bám sát tay thời gian thực
+                self._send_raw_cmd(id=245, ctrl=1)
+                self._send_raw_cmd(id=240, ctrl=1)
+
+                params = bytes([mode]) + struct.pack("<4f", float(x), float(y), float(z), float(r))
+                self._send_raw_cmd(id=84, ctrl=3, params=params)
+                return True
+        return False
+
     def move_relative(self, dx, dy, dz, dr):
         """
         Di chuyển tương đối (JOG) an toàn:
@@ -403,6 +437,61 @@ class DobotController:
                 print("[+] ĐÃ GỬI BỘ 3 LỆNH KHÔI PHỤC (ID 20 + 245 + 240): XÓA LỖI & MỞ KHÓA QUEUE")
                 return True
         return False
+
+    def teleop_move(self, target_x: float, target_y: float, target_z: float, target_r: float = 0.0, mode: int = 1, fast: bool = False) -> bool:
+        """
+        Di chuyển thời gian thực độ trễ cực thấp cho Hand Teleoperation (Tab 6):
+        1. Giới hạn hình học an toàn (Radial Clamping): R = sqrt(X^2 + Y^2) trong [180, 290] mm để ngăn ngừa lỗi kẹt khớp khi vung tay quá xa.
+        2. Tự động xóa cờ lỗi nếu có cảnh báo nhẹ.
+        3. Tự động điều chỉnh gia tốc & vận tốc: fast=True -> 380 mm/s, fast=False -> 200 mm/s.
+        4. Xóa hàng đợi tồn đọng (ID 245) để robot luôn bám sát vị trí tay mới nhất, triệt tiêu độ trễ backlog.
+        5. Gửi lệnh PTP (ID 84, ctrl=3) kèm Start Queue (ID 240, ctrl=1).
+        """
+        with self.lock:
+            if not self.connected:
+                self.connect()
+            if not self.connected:
+                return False
+
+            # 1. Kẹp giới hạn hình học an toàn (Radial & Z Limits)
+            r_dist = math.hypot(target_x, target_y)
+            if r_dist > 290.0:
+                scale = 290.0 / r_dist
+                target_x *= scale
+                target_y *= scale
+            elif r_dist < 180.0 and r_dist > 0.001:
+                scale = 180.0 / r_dist
+                target_x *= scale
+                target_y *= scale
+            target_z = max(-125.0, min(110.0, float(target_z)))
+
+            # 2. Xóa cờ lỗi nếu có lỗi
+            if self.cached_alarms:
+                self._send_raw_cmd(id=20, ctrl=1)
+                self.cached_alarms = []
+
+            # 3. Tối ưu vận tốc & gia tốc động
+            if fast and not getattr(self, "_is_fast_mode", False):
+                params_vel = struct.pack("<4f", 380.0, 380.0, 380.0, 380.0)
+                self._send_raw_cmd(id=81, ctrl=1, params=params_vel)
+                params_common = struct.pack("<2f", 100.0, 100.0)
+                self._send_raw_cmd(id=83, ctrl=1, params=params_common)
+                self._is_fast_mode = True
+            elif not fast and getattr(self, "_is_fast_mode", False):
+                params_vel = struct.pack("<4f", 200.0, 200.0, 200.0, 200.0)
+                self._send_raw_cmd(id=81, ctrl=1, params=params_vel)
+                params_common = struct.pack("<2f", 75.0, 75.0)
+                self._send_raw_cmd(id=83, ctrl=1, params=params_common)
+                self._is_fast_mode = False
+
+            # 4. Xóa các waypoint tồn đọng trong queue để bám theo tay tức thì
+            self._send_raw_cmd(id=245, ctrl=1)  # ClearQueuedCmd
+            self._send_raw_cmd(id=240, ctrl=1)  # StartExecQueuedCmd
+
+            # 5. Gửi điểm mới (mode 1: MOVJ_XYZ, mode 2: MOVL_XYZ)
+            params = bytes([mode]) + struct.pack("<4f", float(target_x), float(target_y), float(target_z), float(target_r))
+            self._send_raw_cmd(id=84, ctrl=3, params=params)
+            return True
 
     def home(self):
         """

@@ -1652,8 +1652,11 @@
                         <span id="teleop-master-text">KÍCH HOẠT PHÁT LỆNH ĐẾN DOBOT (ĐANG TẮT)</span>
                     </button>
 
-                    <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
-                        🛡️ <i>Khi công tắc TẮT: Hệ thống chỉ nhận diện và hiển thị tọa độ mô phỏng an toàn. Khi BẬT: Cánh tay Dobot sẽ bám theo bàn tay bạn trong thời gian thực.</i>
+                    <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; line-height: 1.4; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 3px;">📖 CÁC THAO TÁC CỬ CHỈ TAY:</div>
+                        <div>✊ <b>Nắm tay:</b> Kích hoạt giác hút khí nén</div>
+                        <div>🖐️ <b>Mở bàn tay:</b> Nhả giác hút thả phôi</div>
+                        <div>✌️ <b>Chữ V (Giữ 1s):</b> <span style="color: #34d399; font-weight: 700;">Gỡ lỗi đèn đỏ & Tự thu gọn cánh tay về vị trí an toàn</span></div>
                     </div>
 
                     <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -1683,6 +1686,14 @@
                         <div class="hand-metric-box">
                             <div class="hand-metric-label">Giác Hút Khí Nén</div>
                             <div class="hand-metric-val" id="teleop-metric-suction" style="color: #94a3b8;">OFF (ĐANG TẮT)</div>
+                        </div>
+                        <div class="hand-metric-box">
+                            <div class="hand-metric-label">Vận Tốc Tay & Boost</div>
+                            <div class="hand-metric-val" id="teleop-metric-vel" style="font-size: 13px; color: #38bdf8;">0 mm/s</div>
+                        </div>
+                        <div class="hand-metric-box">
+                            <div class="hand-metric-label">Chế Độ Động Học</div>
+                            <div class="hand-metric-val" id="teleop-metric-mode" style="font-size: 13px; color: #38bdf8;">⚡ MOVJ (Khớp)</div>
                         </div>
                         <div class="hand-metric-box">
                             <div class="hand-metric-label">Dobot Mục Tiêu (XYZ)</div>
@@ -1717,6 +1728,33 @@
                         </div>
                     </div>
 
+                    <!-- CHẾ ĐỘ NỘI SUY CHUYỂN ĐỘNG (MOVJ VS MOVL) -->
+                    <div style="margin-bottom: 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 11px; color: #cbd5e1; font-weight: 700;">CHẾ ĐỘ ĐỘNG HỌC DOBOT:</span>
+                            <span style="font-size: 10px; color: #38bdf8; font-weight: 600;">Khuyến nghị: MOVJ</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                            <button id="btn-mode-movj" class="btn-action" onclick="setHandMotionMode(1)"
+                                style="padding: 6px; font-size: 11px; background: #0284c7; border-color: #38bdf8; color: #fff; font-weight: 700;">
+                                ⚡ MOVJ (Góc Khớp - Siêu Nhanh)
+                            </button>
+                            <button id="btn-mode-movl" class="btn-action" onclick="setHandMotionMode(2)"
+                                style="padding: 6px; font-size: 11px; background: #1e293b; border-color: #475569; color: #94a3b8;">
+                                📐 MOVL (Đường Thẳng)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TĂNG TỐC THÍCH ỨNG KHI VUNG TAY NHANH (ADAPTIVE FAST TRACKING) -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 700; color: #fbbf24;">⚡ Tăng Tốc Thích Ứng (Adaptive Fast Boost)</div>
+                            <div style="font-size: 10px; color: #94a3b8;">Tự động đẩy 380mm/s & giảm trễ khi vung tay nhanh</div>
+                        </div>
+                        <input type="checkbox" id="chk-adaptive-fast" checked onchange="toggleAdaptiveFast(this.checked)" style="transform: scale(1.2); cursor: pointer; accent-color: #f59e0b;">
+                    </div>
+
                     <!-- BỘ CHỌN ĐỘ NHẠY / TỶ LỆ ĐIỀU KHIỂN (GEAR RATIO) -->
                     <div style="margin-bottom: 10px;">
                         <div style="font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 4px;">ĐỘ NHẠY / TỶ LỆ TRUYỀN ĐỘNG:</div>
@@ -1735,8 +1773,8 @@
 
                     <div class="hand-slider-row">
                         <label>Tần số phát lệnh:</label>
-                        <input type="range" id="slider-hand-hz" min="5" max="25" step="1" value="12" oninput="updateHandSettingsUI()">
-                        <span class="hand-slider-val" id="val-hand-hz">12 Hz</span>
+                        <input type="range" id="slider-hand-hz" min="5" max="30" step="1" value="20" oninput="updateHandSettingsUI()">
+                        <span class="hand-slider-val" id="val-hand-hz">20 Hz</span>
                     </div>
 
                     <div class="hand-slider-row">
@@ -1747,8 +1785,8 @@
 
                     <div class="hand-slider-row">
                         <label>Vùng chết triệt rung (Deadband):</label>
-                        <input type="range" id="slider-hand-deadband" min="0.5" max="8.0" step="0.5" value="2.0" oninput="updateHandSettingsUI()">
-                        <span class="hand-slider-val" id="val-hand-deadband">2.0 mm</span>
+                        <input type="range" id="slider-hand-deadband" min="0.5" max="8.0" step="0.5" value="1.5" oninput="updateHandSettingsUI()">
+                        <span class="hand-slider-val" id="val-hand-deadband">1.5 mm</span>
                     </div>
 
                     <div class="hand-slider-row">
