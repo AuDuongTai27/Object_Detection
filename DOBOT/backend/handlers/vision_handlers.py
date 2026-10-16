@@ -284,3 +284,33 @@ class ApiDropTargetsHandler(tornado.web.RequestHandler):
             self.write({"status": "ok", "message": "Đã lưu vị trí thả đồ thành công!"})
         except Exception as e:
             self.write({"status": "error", "message": str(e)})
+
+
+class ApiVoiceConfigHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def get(self):
+        cfg_file = BASE_DIR / "voice_config.json"
+        if cfg_file.exists():
+            try:
+                with open(cfg_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.write({"status": "ok", "data": data})
+                return
+            except Exception:
+                pass
+        self.write({"status": "ok", "data": {"confirm_required": True, "tts_enabled": True}})
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body)
+            cfg_file = BASE_DIR / "voice_config.json"
+            with open(cfg_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            print(f"[LiveServer] 💾 Đã lưu cấu hình Voice AI: {data}")
+            self.write({"status": "ok", "message": "Đã lưu cấu hình Voice AI!"})
+        except Exception as e:
+            self.write({"status": "error", "message": str(e)})
+

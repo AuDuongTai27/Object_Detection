@@ -726,6 +726,213 @@ def open_camera(cam_index, width=1280, height=720):
     return cap
 
 
+# ==============================================================================
+# 4. TRỢ LÝ GIỌNG NÓI AI (VOICE ASSISTANT: PUSH-TO-TALK & SAFETY CONFIG)
+# ==============================================================================
+VOICE_CONFIG_PATH = BASE_DIR / "voice_config.json"
+
+
+def parse_voice_command(raw_text):
+    """Phân tích câu lệnh giọng nói tiếng Việt thành hành động robot."""
+    t = raw_text.lower().strip()
+    t_clean = t.replace(".", "").replace(",", "").replace("!", "")
+
+    # 1. Phân tích màu sắc
+    if any(k in t_clean for k in ["xanh lá", "xanh luc", "xanh lục", "lá cây", "lục"]):
+        return {"action": "pick_color", "color": "cube_green", "color_vn": "xanh lục", "prompt": "Gắp khối xanh lục"}
+    elif any(k in t_clean for k in ["xanh dương", "xanh biển", "da trời", "xanh nước biển", "biển"]):
+        return {"action": "pick_color", "color": "cube_blue", "color_vn": "xanh dương", "prompt": "Gắp khối xanh dương"}
+    elif any(k in t_clean for k in ["đỏ", "màu đỏ", "khối đỏ", "red"]):
+        return {"action": "pick_color", "color": "cube_red", "color_vn": "đỏ", "prompt": "Gắp khối đỏ"}
+    elif any(k in t_clean for k in ["vàng", "màu vàng", "khối vàng", "yellow"]):
+        return {"action": "pick_color", "color": "cube_yellow", "color_vn": "vàng", "prompt": "Gắp khối vàng"}
+    elif "xanh" in t_clean:  # Fallback nếu chỉ nói "màu xanh"
+        return {"action": "pick_color", "color": "cube_blue", "color_vn": "xanh dương", "prompt": "Gắp khối xanh dương"}
+
+    # 2. Phân tích các chế độ thao tác
+    if any(k in t_clean for k in ["bật tự động", "chạy tự động", "tự động phân loại", "auto sort", "bật phân loại"]):
+        return {"action": "enable_auto", "prompt": "Bật tự động phân loại"}
+    elif any(k in t_clean for k in ["tắt tự động", "dừng tự động", "dừng phân loại", "dừng lại", "ngừng", "dừng"]):
+        return {"action": "disable_auto", "prompt": "Dừng tự động phân loại"}
+    elif any(k in t_clean for k in ["dừng khẩn cấp", "khẩn cấp", "cấp cứu"]):
+        return {"action": "emergency_stop", "prompt": "Dừng khẩn cấp"}
+    elif any(k in t_clean for k in ["về an toàn", "vị trí an toàn", "thu tay", "về home", "home"]):
+        return {"action": "safe_home", "prompt": "Về vị trí an toàn"}
+    elif any(k in t_clean for k in ["gắp một", "gắp 1", "gắp phôi", "gắp khối", "gắp vật", "gắp đi"]):
+        return {"action": "pick_one", "prompt": "Gắp khối đầu tiên"}
+    elif any(k in t_clean for k in ["đếm", "bao nhiêu"]):
+        return {"action": "count", "prompt": "Đếm số lượng khối"}
+
+    return {"action": "unknown", "prompt": raw_text}
+
+
+class VoiceAssistantManager:
+    """Quản lý Thu âm Push-To-Talk trên Camera, Nhận diện giọng nói tiếng Việt (STT) và Phản hồi (TTS)."""
+    def __init__(self):
+        self.confirm_required = True
+        self.tts_enabled = True
+        self.is_recording = False
+        self.is_processing = False
+        self.status_msg = ""
+        self.last_status_time = 0.0
+        self.pending_confirm = None
+        self.confirm_expire = 0.0
+
+        self._audio_frames = []
+        self._stream = None
+        self._tts_lock = threading.Lock()
+        self.reload_config()
+
+    def reload_config(self):
+        """Đồng bộ cấu hình an toàn từ Web UI (voice_config.json)."""
+        if VOICE_CONFIG_PATH.exists():
+            try:
+                with open(VOICE_CONFIG_PATH, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                if "confirm_required" in cfg:
+                    self.confirm_required = bool(cfg["confirm_required"])
+                if "tts_enabled" in cfg:
+                    self.tts_enabled = bool(cfg["tts_enabled"])
+            except Exception:
+                pass
+
+    def start_recording(self):
+        if self.is_recording or self.is_processing:
+            return
+        self.reload_config()
+        try:
+            import sounddevice as sd
+            self._audio_frames = []
+            self.is_recording = True
+            self.status_msg = "Dang thu am giong noi... (Giu nut)"
+            self.last_status_time = time.time()
+
+            def _callback(indata, frames, time_info, status):
+                if self.is_recording:
+                    self._audio_frames.append(indata.copy())
+
+            self._stream = sd.InputStream(
+                samplerate=16000,
+                channels=1,
+                dtype="int16",
+                callback=_callback
+            )
+            self._stream.start()
+            print("[VoiceAI] 🎙️ Bắt đầu thu âm giọng nói...")
+        except Exception as e:
+            print(f"[VoiceAI] ❌ Không mở được Micro: {e}")
+            self.is_recording = False
+            self.status_msg = f"Loi Micro: {e}"
+            self.last_status_time = time.time()
+
+    def stop_and_process(self, on_command_callback):
+        if not self.is_recording:
+            return
+        self.is_recording = False
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+
+        if not self._audio_frames:
+            self.status_msg = ""
+            return
+
+        self.is_processing = True
+        self.status_msg = "Dang nhan dien giong noi..."
+        self.last_status_time = time.time()
+
+        def _worker():
+            try:
+                import io
+                import numpy as np
+                import soundfile as sf
+                import speech_recognition as sr
+
+                audio_data = np.concatenate(self._audio_frames, axis=0)
+                if len(audio_data) < 16000 * 0.4:
+                    print("[VoiceAI] ⚠️ Đoạn thu âm quá ngắn (<0.4s).")
+                    self.status_msg = "Giong noi qua ngan"
+                    self.last_status_time = time.time()
+                    return
+
+                wav_io = io.BytesIO()
+                sf.write(wav_io, audio_data, 16000, format="WAV", subtype="PCM_16")
+                wav_io.seek(0)
+
+                recognizer = sr.Recognizer()
+                with sr.AudioFile(wav_io) as source:
+                    audio = recognizer.record(source)
+
+                text = recognizer.recognize_google(audio, language="vi-VN")
+                print(f"[VoiceAI] 🗣️ Nhận diện thành công: \"{text}\"")
+                self.status_msg = f"Da nghe: \"{text}\""
+                self.last_status_time = time.time()
+
+                cmd = parse_voice_command(text)
+                if on_command_callback:
+                    on_command_callback(cmd, text)
+            except Exception as e:
+                err_str = str(e)
+                if "UnknownValueError" in err_str or not err_str:
+                    print("[VoiceAI] ⚠️ Không nhận diện rõ câu nói.")
+                    self.status_msg = "Khong nghe ro cau noi"
+                    self.last_status_time = time.time()
+                    self.speak("Không thể thực hiện yêu cầu. Xin vui lòng nói lại.")
+                else:
+                    print(f"[VoiceAI] ❌ Lỗi STT: {e}")
+                    self.status_msg = "Loi nhan dien"
+                    self.last_status_time = time.time()
+            finally:
+                self.is_processing = False
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def speak(self, text):
+        self.reload_config()
+        if not self.tts_enabled or not text:
+            return
+
+        def _tts_worker():
+            with self._tts_lock:
+                try:
+                    import asyncio
+                    import io
+                    import sounddevice as sd
+                    import soundfile as sf
+                    import edge_tts
+
+                    async def _gen():
+                        comm = edge_tts.Communicate(text, "vi-VN-HoaiMyNeural")
+                        chunks = []
+                        async for chunk in comm.stream():
+                            if chunk["type"] == "audio":
+                                chunks.append(chunk["data"])
+                        return b"".join(chunks)
+
+                    raw = asyncio.run(_gen())
+                    if raw:
+                        data, fs = sf.read(io.BytesIO(raw))
+                        sd.play(data, fs)
+                        sd.wait()
+                except Exception as e:
+                    print(f"[VoiceAI TTS] ❌ Lỗi phát âm: {e}")
+
+        threading.Thread(target=_tts_worker, daemon=True).start()
+
+    def set_pending_confirm(self, cmd, prompt):
+        self.pending_confirm = cmd
+        self.pending_confirm["prompt"] = prompt
+        self.confirm_expire = time.time() + 12.0
+
+    def clear_pending_confirm(self):
+        self.pending_confirm = None
+        self.confirm_expire = 0.0
+
+
 def draw_dobot_ui(
     frame,
     engine_name,
@@ -738,12 +945,13 @@ def draw_dobot_ui(
     show_workspace_roi=True,
     flash_msg="",
     alert_info=None,
+    voice_mgr=None,
 ):
     """
-    Vẽ giao diện hiển thị chuẩn như capture_from_camera:
+    Vẽ giao diện hiển thị chuẩn gồm:
     1. Thanh tiêu đề phía trên (Model AI, Camera, Số khối phát hiện, Đèn trạng thái)
-    2. Banner thông báo flash / cảnh báo OSD
-    3. Thanh 4 nút bấm điều khiển tương tác chuột và phím tắt phía dưới
+    2. Banner thông báo flash / Cảnh báo OSD / Xác nhận giọng nói an toàn
+    3. Thanh 5 nút bấm điều khiển (có nút GIỮ ĐỂ NÓI tích hợp trực tiếp trên Camera)
     """
     h, w = frame.shape[:2]
     ui_frame = frame.copy()
@@ -775,11 +983,25 @@ def draw_dobot_ui(
     else:
         cv2.putText(ui_frame, "THU CONG (SAN SANG)", (w - 250, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 180, 180), 2, cv2.LINE_AA)
 
-    # --- 2. Thông báo Flash / Cảnh báo ngoài vùng an toàn ---
-    if alert_info and time.time() < alert_info.get("expire", 0):
+    # --- 2. Thông báo Flash / Cảnh báo ngoài vùng / Xác nhận giọng nói ---
+    if voice_mgr and voice_mgr.pending_confirm and time.time() < voice_mgr.confirm_expire:
+        banner_h = 42
+        cv2.rectangle(ui_frame, (0, 46), (w, 46 + banner_h), (50, 20, 80), -1)
+        cv2.rectangle(ui_frame, (0, 46), (w, 46 + banner_h), (168, 85, 247), 2)
+        confirm_txt = f"XAC NHAN LENH: {voice_mgr.pending_confirm.get('prompt', '')}?"
+        cv2.putText(ui_frame, confirm_txt, (18, 46 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(ui_frame, "Bam [SPACE] de Dong Y  |  Bam [ESC] de Huy", (18, 46 + 36), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (0, 255, 255), 1, cv2.LINE_AA)
+    elif alert_info and time.time() < alert_info.get("expire", 0):
         banner_h = 36
         cv2.rectangle(ui_frame, (0, 46), (w, 46 + banner_h), (0, 0, 180), -1)
         cv2.putText(ui_frame, alert_info["msg"], (18, 46 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+    elif voice_mgr and (voice_mgr.is_recording or voice_mgr.is_processing or (time.time() - voice_mgr.last_status_time < 3.0 and voice_mgr.status_msg)):
+        v_msg = f"[VOICE AI]: {voice_mgr.status_msg}"
+        f_size = cv2.getTextSize(v_msg, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
+        fx = (w - f_size[0]) // 2
+        cv2.rectangle(ui_frame, (fx - 15, 50), (fx + f_size[0] + 15, 84), (40, 20, 70), -1)
+        cv2.rectangle(ui_frame, (fx - 15, 50), (fx + f_size[0] + 15, 84), (168, 85, 247), 1)
+        cv2.putText(ui_frame, v_msg, (fx, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (230, 200, 255), 2, cv2.LINE_AA)
     elif flash_msg:
         f_size = cv2.getTextSize(flash_msg, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)[0]
         fx = (w - f_size[0]) // 2
@@ -787,30 +1009,45 @@ def draw_dobot_ui(
         cv2.rectangle(ui_frame, (fx - 15, 52), (fx + f_size[0] + 15, 88), (0, 255, 100), 1)
         cv2.putText(ui_frame, flash_msg, (fx, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 100), 2, cv2.LINE_AA)
 
-    # --- 3. Thanh 4 nút bấm phía dưới đáy màn hình ---
+    # --- 3. Thanh 5 nút bấm phía dưới đáy màn hình Camera ---
     bar_height = 70
     bar_y1 = h - bar_height
     cv2.rectangle(ui_frame, (0, bar_y1), (w, h), (35, 35, 35), -1)
 
-    margin = 12
-    btn_gap = 10
-    total_gap = btn_gap * 3 + margin * 2
-    btn_w = (w - total_gap) // 4
+    margin = 10
+    btn_gap = 8
+    total_gap = btn_gap * 4 + margin * 2
+    btn_w = (w - total_gap) // 5
     btn_h = bar_height - 20
     btn_y1 = bar_y1 + 10
     btn_y2 = btn_y1 + btn_h
 
-    # Nút 1 đổi trạng thái & màu sắc tương tự nút LƯU LIÊN TỤC trong ảnh mẫu
+    # Nút 1: Tự động sort
     if auto_sort_enabled:
         btn1_text = "DUNG TU DONG"
-        btn1_color = (0, 0, 220)  # Đỏ khi đang hoạt động
+        btn1_color = (0, 0, 220)
     else:
         btn1_text = "TU DONG SORT"
-        btn1_color = (0, 90, 200)  # Cam/Đỏ cam
+        btn1_color = (0, 90, 200)
+
+    # Nút 3: Giữ để nói (Voice Assistant)
+    if voice_mgr and voice_mgr.is_recording:
+        btn_v_text = "DANG THU AM..."
+        btn_v_key = "THA CHUOT GUI"
+        btn_v_color = (0, 0, 220)  # Đỏ sáng khi thu âm
+    elif voice_mgr and voice_mgr.is_processing:
+        btn_v_text = "DANG NHAN DIEN"
+        btn_v_key = "CHO TRONG GIAY LAT"
+        btn_v_color = (0, 140, 255)  # Cam đang phân tích
+    else:
+        btn_v_text = "GIU DE NOI"
+        btn_v_key = "PHIM [V]"
+        btn_v_color = (140, 40, 180)  # Tím Voice AI
 
     btn_defs = [
         {"action": "toggle_auto", "text": btn1_text, "color": btn1_color, "key": "A"},
         {"action": "pick_one", "text": "GAP 1 KHOI", "color": (40, 160, 40), "key": "SPACE"},
+        {"action": "voice_hold", "text": btn_v_text, "color": btn_v_color, "key": btn_v_key},
         {"action": "switch_cam", "text": "DOI CAMERA", "color": (180, 100, 30), "key": "S / TAB"},
         {"action": "quit", "text": "THOAT", "color": (60, 60, 180), "key": "Q / ESC"},
     ]
@@ -826,19 +1063,20 @@ def draw_dobot_ui(
         label_1 = btn["text"]
         label_2 = f"({btn['key']})"
 
-        t_size1 = cv2.getTextSize(label_1, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 2)[0]
+        t_size1 = cv2.getTextSize(label_1, cv2.FONT_HERSHEY_SIMPLEX, 0.44, 2)[0]
         tx1 = bx1 + (btn_w - t_size1[0]) // 2
         ty1 = btn_y1 + 20
-        cv2.putText(ui_frame, label_1, (tx1, ty1), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(ui_frame, label_1, (tx1, ty1), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (255, 255, 255), 2, cv2.LINE_AA)
 
-        t_size2 = cv2.getTextSize(label_2, cv2.FONT_HERSHEY_SIMPLEX, 0.40, 1)[0]
+        t_size2 = cv2.getTextSize(label_2, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)[0]
         tx2 = bx1 + (btn_w - t_size2[0]) // 2
         ty2 = btn_y1 + 36
-        cv2.putText(ui_frame, label_2, (tx2, ty2), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (220, 220, 220), 1, cv2.LINE_AA)
+        cv2.putText(ui_frame, label_2, (tx2, ty2), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (220, 220, 220), 1, cv2.LINE_AA)
 
         buttons.append({"rect": (bx1, btn_y1, bx2, btn_y2), "action": btn["action"]})
 
     return ui_frame, buttons
+
 
 
 def main():
@@ -946,6 +1184,100 @@ def main():
     alert_info = {"msg": "", "expire": 0.0}
     flash_msg = ""
     flash_time = 0.0
+    auto_sort_enabled = False
+
+    # Khởi tạo Trợ lý giọng nói AI (Push-To-Talk trên camera)
+    voice_mgr = VoiceAssistantManager()
+
+    def execute_voice_command(cmd):
+        nonlocal auto_sort_enabled, flash_msg, flash_time
+        act = cmd.get("action")
+        if act == "pick_color":
+            target_color = cmd["color"]
+            color_vn = cmd.get("color_vn", "màu")
+            matched = [c for c in current_detected_cubes if c["name"] == target_color]
+            valid = [c for c in matched if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
+            if valid:
+                cube = valid[0]
+                print(f"[VoiceAI] 🚀 Thực hiện gắp khối {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f})")
+                flash_msg = f"Dang gap {cube['name']}..."
+                flash_time = time.time()
+                voice_mgr.speak(f"Đang thực hiện gắp khối {color_vn}.")
+                def _on_done():
+                    voice_mgr.speak("Đã hoàn thành yêu cầu.")
+                executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"], on_complete=_on_done)
+            elif matched:
+                print(f"[VoiceAI] ⚠️ Khối {target_color} nằm ngoài vùng an toàn.")
+                flash_msg = f"Khoi {target_color} ngoai vung an toan!"
+                flash_time = time.time()
+                voice_mgr.speak(f"Không thể thực hiện yêu cầu. Khối {color_vn} nằm ngoài vùng an toàn.")
+            else:
+                print(f"[VoiceAI] ⚠️ Không tìm thấy khối {target_color} trên bàn.")
+                flash_msg = f"Khong tim thay khoi {target_color}!"
+                flash_time = time.time()
+                voice_mgr.speak(f"Không thể thực hiện yêu cầu. Không tìm thấy khối {color_vn} trên bàn.")
+
+        elif act == "pick_one":
+            valid = [c for c in current_detected_cubes if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
+            if valid:
+                cube = valid[0]
+                voice_mgr.speak("Đang thực hiện gắp khối.")
+                def _on_done():
+                    voice_mgr.speak("Đã hoàn thành yêu cầu.")
+                executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"], on_complete=_on_done)
+            else:
+                voice_mgr.speak("Không thể thực hiện yêu cầu. Không có khối nào trong vùng an toàn.")
+
+        elif act == "enable_auto":
+            auto_sort_enabled = True
+            flash_msg = "Giong noi: Bat tu dong phan loai"
+            flash_time = time.time()
+            voice_mgr.speak("Đã bật chế độ tự động phân loại.")
+
+        elif act == "disable_auto":
+            auto_sort_enabled = False
+            flash_msg = "Giong noi: Dung tu dong phan loai"
+            flash_time = time.time()
+            voice_mgr.speak("Đã dừng chế độ tự động phân loại.")
+
+        elif act == "safe_home":
+            flash_msg = "Giong noi: Ve vi tri an toan"
+            flash_time = time.time()
+            executor.recover_to_safe_pose()
+            voice_mgr.speak("Đã đưa robot về vị trí an toàn.")
+
+        elif act == "emergency_stop":
+            auto_sort_enabled = False
+            flash_msg = "Giong noi: DUNG KHAN CAP"
+            flash_time = time.time()
+            executor.recover_to_safe_pose()
+            voice_mgr.speak("Đã kích hoạt dừng khẩn cấp.")
+
+        elif act == "count":
+            n = len(current_detected_cubes)
+            flash_msg = f"Phat hien: {n} khoi"
+            flash_time = time.time()
+            voice_mgr.speak(f"Hệ thống phát hiện được {n} khối màu trên bàn.")
+
+        else:
+            voice_mgr.speak("Không thể thực hiện yêu cầu. Lệnh không hợp lệ.")
+
+    def handle_voice_command(cmd, raw_text):
+        nonlocal flash_msg, flash_time
+        if not cmd or cmd.get("action") == "unknown":
+            voice_mgr.speak("Không thể thực hiện yêu cầu. Xin vui lòng nói lại.")
+            return
+
+        voice_mgr.reload_config()
+        # Kiểm tra chế độ yêu cầu xác nhận an toàn trước khi di chuyển
+        if voice_mgr.confirm_required and cmd.get("action") in ["pick_color", "pick_one", "enable_auto", "safe_home"]:
+            prompt = cmd.get("prompt", "thực hiện lệnh")
+            voice_mgr.set_pending_confirm(cmd, prompt)
+            flash_msg = f"Xac nhan: {prompt}? [SPACE]: Dong y | [ESC]: Huy"
+            flash_time = time.time() + 12.0
+            voice_mgr.speak(f"Bạn có muốn {prompt.lower()} không? Bấm phím SPACE để xác nhận hoặc ESC để hủy.")
+        else:
+            execute_voice_command(cmd)
 
     # Khởi tạo dữ liệu hình học Vùng Làm Việc An Toàn (ROI 140 <= R <= 330 mm, X >= 70 mm)
     roi_poly, roi_arc_outer, roi_arc_inner, roi_lbl_outer, roi_lbl_inner = transformer.get_workspace_roi()
@@ -958,8 +1290,12 @@ def main():
             for btn in current_buttons:
                 bx1, by1, bx2, by2 = btn["rect"]
                 if bx1 <= x <= bx2 and by1 <= y <= by2:
-                    mouse_action = btn["action"]
-                    return
+                    if btn["action"] == "voice_hold":
+                        voice_mgr.start_recording()
+                        return
+                    else:
+                        mouse_action = btn["action"]
+                        return
 
             # 2. Kiểm tra click vào khối màu để gắp
             if not executor.is_busy:
@@ -980,7 +1316,7 @@ def main():
                             alert_info["msg"] = f"CANH BAO: {cube['name']} NGOAI VUNG AN TOAN! (R={r_dist:.1f}mm | YEU CAU 140 <= R <= 330 mm)"
                             alert_info["expire"] = time.time() + 3.0
                             break
-                        
+
                         if sol_rail is not None:
                             print(f"\n[+] BẠN ĐÃ CLICK VÀO: {cube['name']} tại ({cube['rx']:.1f}, {cube['ry']:.1f}) | CẦN DI CHUYỂN RAY ĐẾN L={sol_rail['optimal_l']:.1f}mm")
                         else:
@@ -988,19 +1324,23 @@ def main():
                         executor.pick_and_place_async(cube["rx"], cube["ry"], cube["name"])
                         break
 
+        elif event == cv2.EVENT_LBUTTONUP:
+            if voice_mgr.is_recording:
+                voice_mgr.stop_and_process(handle_voice_command)
+
     cv2.setMouseCallback(win_name, on_mouse)
 
-    auto_sort_enabled = False
     last_auto_pick_time = 0
     kernel = np.ones((5, 5), np.uint8)
 
     print("\n" + "=" * 65)
-    print(" HƯỚNG DẪN ĐIỀU KHIỂN:")
-    print(" - CLICK CHUỘT vào bất kỳ khối màu nào trên màn hình để gắp khối đó")
-    print(" - Nhấn [SPACE] : Gắp khối màu đầu tiên nằm trong vùng an toàn (hoặc tầm với ray)")
+    print(" HƯỚNG DẪN ĐIỀU KHIỂN AUTO SORT & TRỢ LÝ GIỌNG NÓI AI:")
+    print(" - NHẤN GIỮ NÚT [GIỮ ĐỂ NÓI] (hoặc Phím [V]): Ra lệnh giọng nói tiếng Việt")
+    print(" - CLICK CHUỘT vào bất kỳ khối màu nào trên màn hình để gắp tức thì")
+    print(" - Nhấn [SPACE] : Gắp khối đầu tiên (hoặc Đồng ý xác nhận lệnh giọng nói)")
     print(" - Nhấn [A]     : Bật / Tắt chế độ Tự Động Hoàn Toàn (Auto Sorting)")
     print(" - Nhấn [W]     : Bật / Tắt hiển thị Vùng Làm Việc An Toàn (ROI)")
-    print(" - Nhấn [Q]     : Thoát chương trình")
+    print(" - Nhấn [Q/ESC] : Thoát chương trình (hoặc Hủy lệnh xác nhận an toàn)")
     print("=" * 65 + "\n")
 
     while True:
@@ -1017,7 +1357,6 @@ def main():
 
         # 2. Nhận diện vật thể
         if yolo_model is not None:
-            # Nhận diện qua YOLO
             results = yolo_model.predict(frame, imgsz=416, conf=0.65, verbose=False)
             boxes = results[0].boxes
             if boxes is not None:
@@ -1037,7 +1376,6 @@ def main():
                         "color": COLOR_RANGES.get(name, {}).get("bgr_color", (0, 255, 255))
                     })
         else:
-            # Nhận diện qua OpenCV HSV
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             for name, cfg in COLOR_RANGES.items():
                 if name == "cube_red":
@@ -1090,7 +1428,6 @@ def main():
                 sol_rail = solve_rail_kinematics(rx, ry, current_rail_l=executor.rail_current_pos)
 
             if safe:
-                # Phôi nằm trong vùng an toàn: Viền màu theo phôi, chấm tròn tâm xanh
                 cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
                 cv2.circle(frame, cube["center"], 4, (0, 255, 0), -1)
 
@@ -1099,7 +1436,6 @@ def main():
                 cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), color, -1)
                 cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
             elif sol_rail is not None:
-                # Phôi ngoài tầm hiện tại nhưng ĐẠT ĐƯỢC KHI TRƯỢT RAY: Viền Vàng Kim/Cyan
                 rail_color = (255, 215, 0)
                 cv2.rectangle(frame, (x, y), (x + w, y + h), rail_color, 2)
                 cv2.circle(frame, cube["center"], 4, (255, 255, 0), -1)
@@ -1110,7 +1446,6 @@ def main():
                 cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), (180, 100, 0), -1)
                 cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
             else:
-                # Phôi ngoài vùng an toàn: Viền ĐỎ RỰC, gạch chéo ❌, nhãn cảnh báo BLOCKED
                 red_color = (0, 0, 240)
                 cv2.rectangle(frame, (x, y), (x + w, y + h), red_color, 2)
                 cv2.line(frame, (x, y), (x + w, y + h), red_color, 2, cv2.LINE_AA)
@@ -1122,7 +1457,7 @@ def main():
                 cv2.rectangle(frame, (x, y - 22), (x + t_size[0] + 6, y), red_color, -1)
                 cv2.putText(frame, label, (x + 3, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
-        # 5. Vẽ giao diện Header & Bottom Action Bar chuẩn đẹp như capture_from_camera
+        # 5. Vẽ giao diện Header & Bottom Action Bar chuẩn đẹp với nút Giữ Để Nói (Voice Assistant)
         display_frame, current_buttons = draw_dobot_ui(
             frame=frame,
             engine_name=engine_name,
@@ -1135,6 +1470,7 @@ def main():
             show_workspace_roi=show_workspace_roi,
             flash_msg=flash_msg if (time.time() - flash_time <= 1.5) else "",
             alert_info=alert_info,
+            voice_mgr=voice_mgr,
         )
 
         # 6. Xử lý chế độ Tự Động (Auto Sort)
@@ -1155,14 +1491,31 @@ def main():
         if mouse_action is not None:
             action = mouse_action
             mouse_action = None
+        elif key in [ord('v'), ord('V')]:
+            # Phím tắt V để thu âm giọng nói
+            if not voice_mgr.is_recording:
+                voice_mgr.start_recording()
+            else:
+                voice_mgr.stop_and_process(handle_voice_command)
         elif key in [ord('a'), ord('A')]:
             action = "toggle_auto"
         elif key == 32:  # SPACE
-            action = "pick_one"
+            if voice_mgr.pending_confirm and time.time() < voice_mgr.confirm_expire:
+                confirmed_cmd = voice_mgr.pending_confirm
+                voice_mgr.clear_pending_confirm()
+                execute_voice_command(confirmed_cmd)
+            else:
+                action = "pick_one"
         elif key in [ord('s'), ord('S'), 9]:  # S / TAB
             action = "switch_cam"
         elif key in [ord('q'), ord('Q'), 27]:  # Q / ESC
-            action = "quit"
+            if voice_mgr.pending_confirm and time.time() < voice_mgr.confirm_expire and key == 27:
+                voice_mgr.clear_pending_confirm()
+                voice_mgr.speak("Đã hủy yêu cầu.")
+                flash_msg = "Da huy lenh xac nhan giong noi."
+                flash_time = time.time()
+            else:
+                action = "quit"
         elif key in [ord('w'), ord('W')]:
             action = "toggle_roi"
 
