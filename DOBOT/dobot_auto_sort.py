@@ -1379,6 +1379,10 @@ def main():
     print(" - Nhấn [Q/ESC] : Thoát chương trình (hoặc Hủy lệnh xác nhận an toàn)")
     print("=" * 65 + "\n")
 
+    # Xóa lệnh Tab 6 còn sót từ phiên trước để robot không tự chạy khi vừa mở tool
+    try: (BASE_DIR / ".auto_sort_cmd.json").unlink(missing_ok=True)
+    except Exception: pass
+
     while True:
         ret, raw_frame = cap.read()
         if not ret or raw_frame is None:
@@ -1443,7 +1447,8 @@ def main():
 
         # Ghi danh sách khối màu phát hiện ra file chia sẻ để Web Studio và Tab 6 dùng chung
         try:
-            with open(BASE_DIR / ".detected_cubes.json", "w", encoding="utf-8") as f_det:
+            shared_tmp = BASE_DIR / ".detected_cubes.json.tmp"
+            with open(shared_tmp, "w", encoding="utf-8") as f_det:
                 json.dump({
                     "timestamp": time.time(),
                     "count": len(detected_cubes),
@@ -1463,6 +1468,7 @@ def main():
                         for c in detected_cubes
                     ]
                 }, f_det)
+            os.replace(shared_tmp, BASE_DIR / ".detected_cubes.json")
         except Exception:
             pass
 
@@ -1589,7 +1595,12 @@ def main():
                     ext_cmd = json.load(f_cmd)
                 try: cmd_file.unlink(missing_ok=True)
                 except Exception: pass
-                ext_act = ext_cmd.get("action")
+                cmd_ts = float(ext_cmd.get("ts", 0))
+                # Bỏ qua lệnh cũ (quá 3 giây nếu có ts)
+                if cmd_ts > 0 and (time.time() - cmd_ts) > 3.0:
+                    ext_act = None
+                else:
+                    ext_act = ext_cmd.get("action")
                 if ext_act == "toggle_auto":
                     req_enable = ext_cmd.get("enable")
                     if req_enable is not None:

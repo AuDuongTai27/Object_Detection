@@ -188,9 +188,11 @@ class ApiVisionHandAutoSortHandler(tornado.web.RequestHandler):
 
             # Đồng bộ trực tiếp lệnh bật/tắt vào dobot_auto_sort.py
             cmd_file = BASE_DIR / ".auto_sort_cmd.json"
+            tmp_file = cmd_file.with_suffix(".tmp")
             try:
-                with open(cmd_file, "w", encoding="utf-8") as f_cmd:
-                    json.dump({"action": "toggle_auto", "enable": enable}, f_cmd)
+                with open(tmp_file, "w", encoding="utf-8") as f_cmd:
+                    json.dump({"action": "toggle_auto", "enable": enable, "ts": time.time()}, f_cmd)
+                os.replace(tmp_file, cmd_file)
             except Exception:
                 pass
 
@@ -240,6 +242,7 @@ class ApiVisionPickColorHandler(tornado.web.RequestHandler):
 
             matched_cube = None
             is_auto_sort_alive = False
+            shared_data = {}
 
             # 1. Kiểm tra camera ngoài đang chạy qua dobot_auto_sort.py
             shared_file = BASE_DIR / ".detected_cubes.json"
@@ -264,6 +267,22 @@ class ApiVisionPickColorHandler(tornado.web.RequestHandler):
                         candidates.sort(key=lambda x: x.get("confidence", 0), reverse=True)
                         matched_cube = candidates[0]
 
+            # Kiểm tra trạng thái camera: nếu cả 2 nguồn camera đều chưa bật
+            server_cam_online = bool(HAS_WEB_STUDIO and vision_engine and getattr(vision_engine, "camera_online", False))
+            if not is_auto_sort_alive and not server_cam_online:
+                self.write({
+                    "success": False,
+                    "error": "Công cụ Auto Sort (Tab 4) chưa chạy! Hãy bấm 'Khởi chạy Auto Sort' hoặc bật Camera trước."
+                })
+                return
+
+            if is_auto_sort_alive and shared_data.get("is_busy"):
+                self.write({
+                    "success": False,
+                    "error": "Robot đang bận gắp thả, vui lòng thử lại sau!"
+                })
+                return
+
             if not matched_cube:
                 self.write({
                     "success": False, 
@@ -271,12 +290,14 @@ class ApiVisionPickColorHandler(tornado.web.RequestHandler):
                 })
                 return
 
-            # Nếu dobot_auto_sort.py đang chạy, gửi lệnh trực tiếp vào kênh đồng bộ
+            # Nếu dobot_auto_sort.py đang chạy, gửi lệnh trực tiếp vào kênh đồng bộ (kèm timestamp và ghi nguyên tử)
             if is_auto_sort_alive:
                 cmd_file = BASE_DIR / ".auto_sort_cmd.json"
+                tmp_file = cmd_file.with_suffix(".tmp")
                 try:
-                    with open(cmd_file, "w", encoding="utf-8") as f_cmd:
-                        json.dump({"action": "pick_color", "color": target_class}, f_cmd)
+                    with open(tmp_file, "w", encoding="utf-8") as f_cmd:
+                        json.dump({"action": "pick_color", "color": target_class, "ts": time.time()}, f_cmd)
+                    os.replace(tmp_file, cmd_file)
                     self.write({
                         "success": True,
                         "status": "ok",
