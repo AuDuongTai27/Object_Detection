@@ -9,6 +9,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
 # Runtime cache
 .detected_cubes.json
 .cmd_pick.json
