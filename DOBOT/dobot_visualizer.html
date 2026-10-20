@@ -2153,11 +2153,23 @@
                         <span id="teleop-master-text">KÍCH HOẠT PHÁT LỆNH ĐẾN DOBOT (ĐANG TẮT)</span>
                     </button>
 
-                    <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; line-height: 1.4; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-                        <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 3px;">📖 CÁC THAO TÁC CỬ CHỈ TAY:</div>
-                        <div>✊ <b>Nắm tay:</b> Kích hoạt giác hút khí nén</div>
-                        <div>🖐️ <b>Mở bàn tay:</b> Nhả giác hút thả phôi</div>
-                        <div>✌️ <b>Chữ V (Giữ 1s):</b> <span style="color: #34d399; font-weight: 700;">Gỡ lỗi đèn đỏ & Tự thu gọn cánh tay về vị trí an toàn</span></div>
+                    <div style="margin-top: 8px; font-size: 11px; color: #94a3b8; line-height: 1.45; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 5px; display: flex; justify-content: space-between;">
+                            <span>📖 BẢNG CỬ CHỈ ĐIỀU KHIỂN:</span>
+                            <span style="color: #38bdf8; font-size: 10px;">MediaPipe 21 Landmarks</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 10.5px;">
+                            <div>👍 <b>Like (2s):</b> BẬT phát lệnh Dobot</div>
+                            <div>👎 <b>Dislike (2s):</b> TẮT phát lệnh Dobot</div>
+                            <div>👌 <b>OK (2s):</b> <span style="color: #34d399; font-weight: 700;">Gỡ lỗi & Thu an toàn</span></div>
+                            <div>🤟 <b>Rock (2s):</b> Bật/Tắt Auto Sort</div>
+                            <div>✊ <b>Nắm tay:</b> Bật giác hút (Hút)</div>
+                            <div>🖐️ <b>Xòe tay:</b> Tắt giác hút (Nhả)</div>
+                            <div style="color: #f87171;">☝️ <b>1 ngón (2s):</b> Gắp khối ĐỎ</div>
+                            <div style="color: #4ade80;">✌️ <b>2 ngón (2s):</b> Gắp khối XANH LÁ</div>
+                            <div style="color: #60a5fa;">3️⃣ <b>3 ngón (2s):</b> Gắp khối XANH DƯƠNG</div>
+                            <div style="color: #facc15;">4️⃣ <b>4 ngón (2s):</b> Gắp khối VÀNG</div>
+                        </div>
                     </div>
 
                     <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -2418,7 +2430,7 @@
     <script src="js/modules/jog_teach.js"></script>
     <script src="js/modules/vision_sort.js"></script>
     <script src="js/modules/blockly_studio.js"></script>
-    <script src="js/modules/hand_teleop.js"></script>
+    <script src="js/modules/hand_teleop.js?v=6"></script>
     <script src="js/modules/voice_controller.js"></script>
 
     <!-- Khởi động Hệ Thống -->

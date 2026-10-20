@@ -1405,6 +1405,29 @@ def main():
 
         current_detected_cubes = detected_cubes
 
+        # Ghi danh sách khối màu phát hiện ra file chia sẻ để Web Studio và Tab 6 dùng chung
+        try:
+            with open(BASE_DIR / ".detected_cubes.json", "w", encoding="utf-8") as f_det:
+                json.dump({
+                    "timestamp": time.time(),
+                    "count": len(detected_cubes),
+                    "cubes": [
+                        {
+                            "class_name": c["name"],
+                            "rx": float(c["rx"]),
+                            "ry": float(c["ry"]),
+                            "dobot_coord": {"x": float(c["rx"]), "y": float(c["ry"])},
+                            "dobot_x": float(c["rx"]),
+                            "dobot_y": float(c["ry"]),
+                            "confidence": 0.95
+                        }
+                        for c in detected_cubes
+                    ]
+                }, f_det)
+        except Exception:
+            pass
+
+
         # 3. Vẽ Lớp Phủ Vùng Làm Việc An Toàn (Workspace ROI: 140 <= R <= 330 mm)
         if show_workspace_roi and roi_poly is not None and len(roi_poly) > 0:
             overlay = frame.copy()
