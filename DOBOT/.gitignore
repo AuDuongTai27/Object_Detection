@@ -13,3 +13,9 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Runtime cache
+.detected_cubes.json
+.cmd_pick.json
+.server_port.json
+.auto_sort_cmd.json

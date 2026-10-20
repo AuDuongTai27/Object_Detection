@@ -44,6 +44,15 @@ class ToolProcessManager:
                     cmd.extend(["--cam", str(kwargs["cam_id"])])
                 if "model" in kwargs and kwargs["model"]:
                     cmd.extend(["--model", str(kwargs["model"])])
+                port_file = BASE_DIR / ".server_port.json"
+                if port_file.exists():
+                    try:
+                        with open(port_file, "r", encoding="utf-8") as f_p:
+                            p = json.load(f_p).get("port")
+                            if p:
+                                cmd.extend(["--port", str(p)])
+                    except Exception:
+                        pass
 
             elif tool_name == "calib":
                 script = BASE_DIR / "calibrate_camera_to_dobot.py"

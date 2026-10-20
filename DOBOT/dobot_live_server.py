@@ -49,7 +49,7 @@ from backend.handlers.training_handlers import (
 )
 from backend.handlers.vision_handlers import (
     VideoWsHandler, ApiVisionStatusHandler, ApiVisionPickHandler,
-    ApiVisionAutoSortHandler, ApiVisionModelsHandler,
+    ApiVisionPickColorHandler, ApiVisionAutoSortHandler, ApiVisionModelsHandler,
     ApiDropTargetsHandler, ApiCalibInfoHandler, ApiVoiceConfigHandler
 )
 from backend.handlers.blockly_ai_handler import (
@@ -109,6 +109,7 @@ def main():
         (r"/api/train/kaggle/stop", ApiKaggleStopHandler),
         (r"/api/vision/status", ApiVisionStatusHandler),
         (r"/api/vision/pick", ApiVisionPickHandler),
+        (r"/api/vision/pick_color", ApiVisionPickColorHandler),
         (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
         (r"/api/vision/models", ApiVisionModelsHandler),
         (r"/api/vision/drop_targets", ApiDropTargetsHandler),
@@ -121,6 +122,11 @@ def main():
     ])
     
     app.listen(port, address="0.0.0.0")
+    try:
+        with open(BASE_DIR / ".server_port.json", "w", encoding="utf-8") as f_p:
+            json.dump({"port": port}, f_p)
+    except Exception:
+        pass
     print("=" * 60)
     print(f"  DOBOT MAGICIAN 3D LIVE DIGITAL TWIN SERVER")
     print(f"  Giao diện Web: http://localhost:{port}")

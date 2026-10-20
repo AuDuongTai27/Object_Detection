@@ -323,18 +323,52 @@ def solve_rail_kinematics(rx, ry, current_rail_l=0.0, calib_rail_l=0.0):
     return best
 
 
+def find_live_server_port(preferred_port=None):
+    """Tự động dò cổng của Dobot Live Server (hỗ trợ cả 8080, 8081, 8082, 8088)."""
+    if preferred_port:
+        return preferred_port
+    port_file = BASE_DIR / ".server_port.json"
+    if port_file.exists():
+        try:
+            with open(port_file, "r", encoding="utf-8") as f:
+                p = int(json.load(f).get("port", 8080))
+                req = urllib.request.Request(f"http://127.0.0.1:{p}/api/cmd", method="GET")
+                with urllib.request.urlopen(req, timeout=0.6) as resp:
+                    if resp.status == 200:
+                        return p
+        except Exception:
+            pass
+
+    for p in [8080, 8081, 8082, 8088]:
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{p}/api/cmd", method="GET")
+            with urllib.request.urlopen(req, timeout=0.5) as resp:
+                if resp.status == 200:
+                    return p
+        except Exception:
+            pass
+    return 8080
+
+
 # ==============================================================================
 # 2. BỘ ĐIỀU KHIỂN DOBOT (HỖ TRỢ CẢ HTTP API VÀ SERIAL TRỰC TIẾP)
 # ==============================================================================
 class DobotExecutor:
-    def __init__(self, server_url="http://127.0.0.1:8080/api/cmd", drop_target=None, pick_z=Z_PICK_FLANGE):
-        self.server_url = server_url
+    def __init__(self, server_url=None, drop_target=None, pick_z=Z_PICK_FLANGE, server_port=None):
+        self.server_port = server_port or find_live_server_port()
+        self.server_url = server_url or f"http://127.0.0.1:{self.server_port}/api/cmd"
         self.drop_target = drop_target or DEFAULT_DROP_TARGET
-        self.pick_z = pick_z
+        self.pick_z = float(pick_z)
         self.ser = None
         self.is_busy = False
         self.is_rail_mode = True
         self.rail_current_pos = 0.0
+        self.current_task_status = {
+            "state": "idle",
+            "step": "ready",
+            "msg": "Sẵn sàng",
+            "error": False
+        }
         self.use_http = self.check_http_server()
 
         if self.use_http:
@@ -347,7 +381,7 @@ class DobotExecutor:
         """Lấy trạng thái ray trượt và chế độ hoạt động từ Live Server."""
         if not self.use_http:
             return self.is_rail_mode, self.rail_current_pos
-        for endpoint in ["http://127.0.0.1:8080/api/state", "http://127.0.0.1:8080/api/cmd"]:
+        for endpoint in [f"http://127.0.0.1:{self.server_port}/api/state", f"http://127.0.0.1:{self.server_port}/api/cmd"]:
             try:
                 req = urllib.request.Request(endpoint, method="GET")
                 with urllib.request.urlopen(req, timeout=0.8) as resp:
@@ -467,7 +501,7 @@ class DobotExecutor:
     def get_pose(self):
         """Lấy tọa độ hiện tại (x, y, z, r, l) và cờ lỗi của robot từ Live Server."""
         if self.use_http:
-            for endpoint in ["http://127.0.0.1:8080/api/state", "http://127.0.0.1:8080/api/cmd"]:
+            for endpoint in [f"http://127.0.0.1:{self.server_port}/api/state", f"http://127.0.0.1:{self.server_port}/api/cmd"]:
                 try:
                     req = urllib.request.Request(endpoint, method="GET")
                     with urllib.request.urlopen(req, timeout=0.8) as resp:
@@ -509,7 +543,7 @@ class DobotExecutor:
         """Kiểm tra robot hiện tại có đang bị lỗi đèn đỏ không."""
         if self.use_http:
             try:
-                req = urllib.request.Request("http://127.0.0.1:8080/api/cmd", method="GET")
+                req = urllib.request.Request(f"http://127.0.0.1:{self.server_port}/api/cmd", method="GET")
                 with urllib.request.urlopen(req, timeout=0.8) as resp:
                     if resp.status == 200:
                         data = json.loads(resp.read().decode())
@@ -574,6 +608,7 @@ class DobotExecutor:
             if self.is_rail_mode:
                 delta_pick = abs(calib_rail_l - self.rail_current_pos)
                 if delta_pick > 1.0:
+                    self.current_task_status = {"state": "busy", "step": "rail_pick", "msg": f"🚄 Đang chỉnh ray đón phôi {cube_name}...", "error": False}
                     print(f"[*] 🚄 Di chuyển ray về vị trí bàn gắp L = {calib_rail_l:.1f} mm...")
                     # Nâng tay lên an toàn trước khi di chuyển ray
                     self.send_cmd({"action": "move_xyz", "x": 200.0, "y": 0.0, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
@@ -581,6 +616,7 @@ class DobotExecutor:
                     rail_ok = self.move_rail_and_wait(calib_rail_l)
                     if not rail_ok:
                         print(f"[Rail] 🛑 Không thể di chuyển ray về bàn gắp L={calib_rail_l:.1f} mm! Hủy chu trình.")
+                        self.current_task_status = {"state": "error", "step": "rail_error", "msg": "🛑 Lỗi ray trượt không về được bàn gắp!", "error": True}
                         self.recover_to_safe_pose()
                         return
                 else:
@@ -589,47 +625,57 @@ class DobotExecutor:
             print(f"\n🚀 BẮT ĐẦU GẮP: {cube_name} tại Dobot Arm (X={pick_x:.1f}, Y={pick_y:.1f}) ➔ Thả vào {tray_name} (X={place_x:.1f}, Y={place_y:.1f})")
 
             # 2. Bay trên đỉnh phôi ở độ cao an toàn (Safe Arch)
+            self.current_task_status = {"state": "busy", "step": "approaching", "msg": f"🦾 Đang tiếp cận đỉnh phôi {cube_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             # 3. Hạ thẳng xuống gắp khối màu
+            self.current_task_status = {"state": "busy", "step": "lowering", "msg": f"⚡ Đang hạ xuống gắp phôi {cube_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
             self.wait_pose_reached(pick_x, pick_y, self.pick_z, tol=6.0, timeout=7.0)
 
             # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI HẠ
             if self.has_alarm():
                 print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo sau khi hạ gắp! HỦY DI CHUYỂN RAY, tự thu gọn an toàn...")
+                self.current_task_status = {"state": "error", "step": "alarm", "msg": f"🛑 Đèn đỏ báo động khi hạ gắp phôi {cube_name}!", "error": True}
                 self.recover_to_safe_pose()
                 return
 
             # 4. Bật bơm hút
+            self.current_task_status = {"state": "busy", "step": "suction", "msg": f"💨 Bật giác hút phôi {cube_name}...", "error": False}
             self.send_cmd({"action": "suction", "value": True})
             time.sleep(0.3)
 
             # 5. Nhấc lên cao an toàn
+            self.current_task_status = {"state": "busy", "step": "lifting", "msg": f"⬆️ Đang nhấc phôi {cube_name} lên an toàn...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI NHẤC
             if self.has_alarm():
                 print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo khi nhấc phôi! HỦY DI CHUYỂN RAY, tự thu gọn an toàn...")
+                self.current_task_status = {"state": "error", "step": "alarm", "msg": f"🛑 Đèn đỏ báo động khi nhấc phôi {cube_name}!", "error": True}
                 self.recover_to_safe_pose()
                 return
 
             # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ (CHỈ CHẠY NẾU GẮP THÀNH CÔNG VÀ KHÔNG BỊ ĐÈN ĐỎ)
             if self.is_rail_mode:
                 tray_rail_l = float(target.get("rail_l", target.get("l", 0.0)))
+                self.current_task_status = {"state": "busy", "step": "rail_tray", "msg": f"🚚 Đang di chuyển ray sang khay {tray_name}...", "error": False}
                 rail_ok = self.move_rail_and_wait(tray_rail_l)
                 if not rail_ok:
                     print(f"[Rail] 🛑 Ray trượt chưa tới đích L={tray_rail_l:.1f} mm! Hủy thả để bảo vệ an toàn.")
+                    self.current_task_status = {"state": "error", "step": "rail_error", "msg": f"🛑 Ray trượt kẹt khi sang khay {tray_name}!", "error": True}
                     self.recover_to_safe_pose()
                     return
 
             # 7. Bay sang khay phân loại
+            self.current_task_status = {"state": "busy", "step": "moving_tray", "msg": f"🚚 Bay tới khay {tray_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(place_x, place_y, Z_SAFE_FLANGE, tol=6.0, timeout=6.0)
 
             # 8. Hạ vào khay
+            self.current_task_status = {"state": "busy", "step": "dropping", "msg": f"⬇️ Hạ vào khay {tray_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": place_z, "r": 0.0, "mode": 1})
             self.wait_pose_reached(place_x, place_y, place_z, tol=6.0, timeout=6.0)
 
@@ -641,9 +687,11 @@ class DobotExecutor:
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(place_x, place_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
+            self.current_task_status = {"state": "done", "step": "completed", "msg": f"✅ Đã gắp thả thành công khối {cube_name} vào {tray_name}!", "error": False}
             print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
         except Exception as e:
             print(f"[VisionEngine] ❌ Lỗi chu trình gắp: {e}")
+            self.current_task_status = {"state": "error", "step": "exception", "msg": f"❌ Lỗi: {e}", "error": True}
             self.recover_to_safe_pose()
         finally:
             self.is_busy = False
@@ -1097,6 +1145,8 @@ def main():
                         help=f"Độ bù trừ trục X lúc hút (mm, default: {OFFSET_PICK_X} mm = 0.5 cm)")
     parser.add_argument("--offset_y", type=float, default=OFFSET_PICK_Y,
                         help=f"Độ bù trừ trục Y lúc hút (mm, default: {OFFSET_PICK_Y} mm)")
+    parser.add_argument("--port", type=int, default=None,
+                        help="Cổng HTTP của Dobot Live Server (mặc định: tự động dò)")
     args = parser.parse_args()
 
     drop_x = args.drop_x if args.drop_x is not None else DEFAULT_DROP_TARGET["x"]
@@ -1150,8 +1200,8 @@ def main():
     print(f"[*] Độ cao hút phôi: Z_Flange={args.pick_z:.1f} mm (Z_TCP={args.pick_z - 59.5:.1f} mm)")
     print(f"[*] Độ bù vị trí hút: Offset X = +{args.offset_x:.1f} mm, Offset Y = {args.offset_y:.1f} mm")
 
-    # Kết nối Dobot
-    executor = DobotExecutor(drop_target=drop_target, pick_z=args.pick_z)
+    # Kết nối Dobot (tự động nhận diện port 8080/8081)
+    executor = DobotExecutor(drop_target=drop_target, pick_z=args.pick_z, server_port=args.port)
 
     # Mở Camera và tìm kiếm camera sẵn có
     available_cams = detect_available_cameras()
@@ -1405,6 +1455,32 @@ def main():
 
         current_detected_cubes = detected_cubes
 
+        # Ghi danh sách khối màu phát hiện ra file chia sẻ để Web Studio và Tab 6 dùng chung
+        try:
+            with open(BASE_DIR / ".detected_cubes.json", "w", encoding="utf-8") as f_det:
+                json.dump({
+                    "timestamp": time.time(),
+                    "count": len(detected_cubes),
+                    "auto_sort_enabled": auto_sort_enabled,
+                    "is_busy": executor.is_busy,
+                    "task_status": getattr(executor, "current_task_status", None),
+                    "cubes": [
+                        {
+                            "class_name": c["name"],
+                            "rx": float(c["rx"]),
+                            "ry": float(c["ry"]),
+                            "dobot_coord": {"x": float(c["rx"]), "y": float(c["ry"])},
+                            "dobot_x": float(c["rx"]),
+                            "dobot_y": float(c["ry"]),
+                            "confidence": 0.95
+                        }
+                        for c in detected_cubes
+                    ]
+                }, f_det)
+        except Exception:
+            pass
+
+
         # 3. Vẽ Lớp Phủ Vùng Làm Việc An Toàn (Workspace ROI: 140 <= R <= 330 mm)
         if show_workspace_roi and roi_poly is not None and len(roi_poly) > 0:
             overlay = frame.copy()
@@ -1518,6 +1594,55 @@ def main():
                 action = "quit"
         elif key in [ord('w'), ord('W')]:
             action = "toggle_roi"
+
+        # 6.5. Tiếp nhận lệnh điều khiển đồng bộ từ Tab 6 (Cử chỉ tay) & Web Studio
+        cmd_file = BASE_DIR / ".auto_sort_cmd.json"
+        if cmd_file.exists():
+            try:
+                with open(cmd_file, "r", encoding="utf-8") as f_cmd:
+                    ext_cmd = json.load(f_cmd)
+                try: cmd_file.unlink(missing_ok=True)
+                except Exception: pass
+                ext_act = ext_cmd.get("action")
+                if ext_act == "toggle_auto":
+                    req_enable = ext_cmd.get("enable")
+                    if req_enable is not None:
+                        auto_sort_enabled = bool(req_enable)
+                    else:
+                        auto_sort_enabled = not auto_sort_enabled
+                    status_str = "BẬT" if auto_sort_enabled else "TẮT"
+                    flash_msg = f"Tu dong phan loai: {status_str}"
+                    flash_time = time.time()
+                    print(f"[*] [Cử chỉ Tab 6 🤟] Chế độ Tự Động Phân Loại (Auto Sort): {status_str}")
+                elif ext_act == "pick_color":
+                    target_color = str(ext_cmd.get("color", "")).lower().strip()
+                    matched = [c for c in detected_cubes if target_color in c["name"].lower() or c["name"].lower() in target_color]
+                    valid = [c for c in matched if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
+                    if valid and not executor.is_busy:
+                        target = valid[0]
+                        print(f"[+] [Cử chỉ Tab 6] LỆNH GẮP: {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
+                        executor.current_task_status = {"state": "busy", "step": "accepted", "msg": f"🎯 Đã nhận lệnh gắp {target['name']}...", "error": False}
+                        executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
+                        flash_msg = f"Dang gap {target['name']}..."
+                        flash_time = time.time()
+                    elif not matched:
+                        executor.current_task_status = {"state": "error", "step": "not_found", "msg": f"⚠️ Camera không thấy khối {target_color} trên bàn!", "error": True}
+                        flash_msg = f"Khong thay khoi {target_color}!"
+                        flash_time = time.time()
+                        print(f"[!] [Cử chỉ Tab 6] Camera không thấy khối {target_color} trên bàn!")
+                    elif not valid:
+                        executor.current_task_status = {"state": "error", "step": "out_of_bounds", "msg": f"⚠️ Khối {target_color} nằm ngoài tầm với an toàn!", "error": True}
+                        flash_msg = f"Khoi {target_color} ngoai tam an toan!"
+                        flash_time = time.time()
+                        print(f"[!] [Cử chỉ Tab 6] Không tìm thấy phôi {target_color} trong tầm với an toàn!")
+                elif ext_act == "emergency_stop":
+                    auto_sort_enabled = False
+                    executor.recover_to_safe_pose()
+                    flash_msg = "Dung khan cap!"
+                    flash_time = time.time()
+            except Exception as e:
+                try: cmd_file.unlink(missing_ok=True)
+                except Exception: pass
 
         # 7. Xử lý các tác vụ điều khiển
         if action == "toggle_auto":

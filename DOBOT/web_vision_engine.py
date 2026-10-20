@@ -533,6 +533,27 @@ class WebVisionEngine:
                 "cubes": list(self.detected_cubes)
             }
 
+    def toggle_auto_sort(self, enable=None):
+        if enable is not None:
+            self.auto_sort_active = bool(enable)
+        else:
+            self.auto_sort_active = not self.auto_sort_active
+
+        # Gửi lệnh đồng bộ sang dobot_auto_sort.py (nếu đang chạy ngoài)
+        cmd_file = BASE_DIR / ".auto_sort_cmd.json"
+        try:
+            with open(cmd_file, "w", encoding="utf-8") as f:
+                json.dump({"action": "toggle_auto", "enable": self.auto_sort_active}, f)
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "status": "ok",
+            "auto_sort_active": self.auto_sort_active,
+            "auto_sort_enabled": self.auto_sort_active
+        }
+
     def execute_pick_and_place(self, pick_x: float, pick_y: float, cube_name="cube", on_complete=None):
         if not self.robot or not self.robot.connected:
             return {"success": False, "status": "error", "error": "Robot Dobot chưa kết nối!", "message": "Robot Dobot chưa kết nối!"}
