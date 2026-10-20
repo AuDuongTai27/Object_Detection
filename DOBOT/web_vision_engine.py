@@ -92,12 +92,14 @@ COLOR_MAP = {
 
 
 try:
-    from dobot_auto_sort import solve_rail_kinematics
+    from dobot_auto_sort import solve_rail_kinematics, list_linux_capture_devices, camera_backend
 except ImportError:
     try:
-        from .dobot_auto_sort import solve_rail_kinematics
+        from .dobot_auto_sort import solve_rail_kinematics, list_linux_capture_devices, camera_backend
     except Exception:
         solve_rail_kinematics = None
+        list_linux_capture_devices = None
+        camera_backend = None
 
 
 class WebVisionEngine:
@@ -178,6 +180,13 @@ class WebVisionEngine:
         """
         cams = []
         tested_indices = [1, 2, 0]
+        device_names = {}
+        # Linux: số index = /dev/videoN, có thể là 3, 4... sau khi cắm lại USB
+        if sys.platform.startswith("linux") and list_linux_capture_devices:
+            linux_devs = list_linux_capture_devices()
+            if linux_devs:
+                tested_indices = [idx for idx, _ in linux_devs]
+                device_names = dict(linux_devs)
 
         for idx in tested_indices:
             # Nếu camera này đang chạy bởi chính WebVisionEngine, đánh dấu có sẵn luôn
@@ -193,7 +202,7 @@ class WebVisionEngine:
                 continue
 
             try:
-                backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+                backend = camera_backend() if camera_backend else (cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY)
                 c = cv2.VideoCapture(idx, backend)
                 if c.isOpened():
                     ret, _ = c.read()
@@ -202,6 +211,8 @@ class WebVisionEngine:
                     if ret:
                         is_ext = (idx > 0)
                         label = f"Camera {idx} (USB Camera ngoài - Ưu tiên ⭐)" if is_ext else "Camera 0 (Camera tích hợp laptop / PC)"
+                        if idx in device_names:
+                            label = f"Camera {idx} ({device_names[idx]}{' ⭐' if is_ext else ''})"
                         cams.append({
                             "id": idx,
                             "name": label,
@@ -292,6 +303,12 @@ class WebVisionEngine:
             if sys.platform == "win32":
                 try:
                     cap = cv2.VideoCapture(self.cam_id, cv2.CAP_DSHOW)
+                except Exception:
+                    cap = None
+
+            if (not cap or not cap.isOpened()) and sys.platform.startswith("linux"):
+                try:
+                    cap = cv2.VideoCapture(self.cam_id, cv2.CAP_V4L2)
                 except Exception:
                     cap = None
 

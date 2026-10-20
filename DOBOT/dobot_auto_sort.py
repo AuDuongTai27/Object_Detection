@@ -729,11 +729,40 @@ def find_yolo_model(requested_model=None):
     return None
 
 
+def list_linux_capture_devices():
+    """
+    Linux: trả về [(index, tên)] của các /dev/videoN quay được hình.
+    Mỗi webcam UVC tạo 2 node (hình + metadata); chỉ node có index=0 trong sysfs là node hình.
+    """
+    devices = []
+    for d in Path("/sys/class/video4linux").glob("video*"):
+        try:
+            if (d / "index").read_text().strip() != "0":
+                continue
+            devices.append((int(d.name[len("video"):]), (d / "name").read_text().strip()))
+        except Exception:
+            continue
+    return sorted(devices)
+
+
+def camera_backend():
+    """DirectShow trên Windows, V4L2 trên Linux (CAP_ANY trên Linux có thể rơi vào FFMPEG/OBSENSOR và bỏ qua độ phân giải)."""
+    if sys.platform == "win32":
+        return cv2.CAP_DSHOW
+    if sys.platform.startswith("linux"):
+        return cv2.CAP_V4L2
+    return cv2.CAP_ANY
+
+
 def detect_available_cameras(max_tested=4):
     """Quét tìm tất cả camera đang kết nối."""
     available_cams = []
-    for i in range(max_tested):
-        backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
+    if sys.platform.startswith("linux"):
+        indices = [idx for idx, _ in list_linux_capture_devices()]
+    else:
+        indices = range(max_tested)
+    for i in indices:
+        backend = camera_backend()
         cap = cv2.VideoCapture(i, backend)
         if cap.isOpened():
             ret, frame = cap.read()
@@ -746,9 +775,8 @@ def detect_available_cameras(max_tested=4):
 
 def open_camera(cam_index, width=1280, height=720):
     """Mở camera với DirectShow trên Windows để chống treo và nạp cấu hình phân giải."""
-    backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
-    cap = cv2.VideoCapture(cam_index, backend)
-    if not cap.isOpened() and sys.platform == "win32":
+    cap = cv2.VideoCapture(cam_index, camera_backend())
+    if not cap.isOpened():
         cap = cv2.VideoCapture(cam_index)
     if cap.isOpened():
         fourcc = cv2.VideoWriter_fourcc(*'MJPG')
@@ -757,6 +785,16 @@ def open_camera(cam_index, width=1280, height=720):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         cap.set(cv2.CAP_PROP_FPS, 30)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        # Homography được calib theo pixel ở đúng độ phân giải này, lệch là tọa độ gắp & vòng R sai
+        ret, frame = cap.read()
+        if ret and frame is not None:
+            got_h, got_w = frame.shape[:2]
+            if (got_w, got_h) != (width, height):
+                print(f"[!] ⚠️ CẢNH BÁO: Camera {cam_index} chỉ chạy {got_w}x{got_h} (yêu cầu {width}x{height}, backend {cap.getBackendName()}). "
+                      f"Vòng R và tọa độ gắp sẽ SAI so với file calib!")
+            else:
+                print(f"[+] Camera {cam_index}: {got_w}x{got_h} (backend {cap.getBackendName()})")
     return cap
 
 
@@ -1221,6 +1259,11 @@ def main():
     flash_msg = ""
     flash_time = 0.0
     auto_sort_enabled = False
+
+    cam_w, cam_h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    if (cam_w, cam_h) != (args.width, args.height):
+        flash_msg = f"CANH BAO: Camera chi chay {cam_w}x{cam_h}, calib can {args.width}x{args.height}!"
+        flash_time = time.time() + 12.0
 
     # Khởi tạo Trợ lý giọng nói AI (Push-To-Talk trên camera)
     voice_mgr = VoiceAssistantManager()
