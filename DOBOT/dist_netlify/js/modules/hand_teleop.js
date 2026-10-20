@@ -437,7 +437,7 @@
             isAutoSortActive = !isAutoSortActive;
             showToast(isAutoSortActive ? "🤖 CỬ CHỈ 🤟: ĐÃ BẬT TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)!" : "⏹️ CỬ CHỈ 🤟: ĐÃ TẮT TỰ ĐỘNG PHÂN LOẠI.");
             try {
-                await fetch('/api/vision/auto_sort', {
+                await fetch('/api/vision/hand_auto_sort', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ enable: isAutoSortActive })
@@ -450,7 +450,7 @@
         // Định kỳ kiểm tra đồng bộ cờ bận gắp thả & trạng thái Auto Sort từ hệ thống
         async function checkAutoTaskBusy() {
             try {
-                const res = await fetch('/api/vision/status');
+                const res = await fetch('/api/vision/hand_status');
                 const data = await res.json();
                 if (data) {
                     if (data.auto_sort_enabled !== undefined) {

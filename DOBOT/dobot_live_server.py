@@ -50,7 +50,8 @@ from backend.handlers.training_handlers import (
 from backend.handlers.vision_handlers import (
     VideoWsHandler, ApiVisionStatusHandler, ApiVisionPickHandler,
     ApiVisionPickColorHandler, ApiVisionAutoSortHandler, ApiVisionModelsHandler,
-    ApiDropTargetsHandler, ApiCalibInfoHandler, ApiVoiceConfigHandler
+    ApiDropTargetsHandler, ApiCalibInfoHandler, ApiVoiceConfigHandler,
+    ApiVisionHandStatusHandler, ApiVisionHandAutoSortHandler
 )
 from backend.handlers.blockly_ai_handler import (
     ApiBlocklyAiCredsHandler, ApiBlocklyAiGenerateHandler
@@ -111,6 +112,8 @@ def main():
         (r"/api/vision/pick", ApiVisionPickHandler),
         (r"/api/vision/pick_color", ApiVisionPickColorHandler),
         (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
+        (r"/api/vision/hand_status", ApiVisionHandStatusHandler),
+        (r"/api/vision/hand_auto_sort", ApiVisionHandAutoSortHandler),
         (r"/api/vision/models", ApiVisionModelsHandler),
         (r"/api/vision/drop_targets", ApiDropTargetsHandler),
         (r"/api/vision/voice_config", ApiVoiceConfigHandler),

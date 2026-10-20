@@ -608,7 +608,6 @@ class DobotExecutor:
             if self.is_rail_mode:
                 delta_pick = abs(calib_rail_l - self.rail_current_pos)
                 if delta_pick > 1.0:
-                    self.current_task_status = {"state": "busy", "step": "rail_pick", "msg": f"🚄 Đang chỉnh ray đón phôi {cube_name}...", "error": False}
                     print(f"[*] 🚄 Di chuyển ray về vị trí bàn gắp L = {calib_rail_l:.1f} mm...")
                     # Nâng tay lên an toàn trước khi di chuyển ray
                     self.send_cmd({"action": "move_xyz", "x": 200.0, "y": 0.0, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
@@ -616,7 +615,6 @@ class DobotExecutor:
                     rail_ok = self.move_rail_and_wait(calib_rail_l)
                     if not rail_ok:
                         print(f"[Rail] 🛑 Không thể di chuyển ray về bàn gắp L={calib_rail_l:.1f} mm! Hủy chu trình.")
-                        self.current_task_status = {"state": "error", "step": "rail_error", "msg": "🛑 Lỗi ray trượt không về được bàn gắp!", "error": True}
                         self.recover_to_safe_pose()
                         return
                 else:
@@ -625,57 +623,47 @@ class DobotExecutor:
             print(f"\n🚀 BẮT ĐẦU GẮP: {cube_name} tại Dobot Arm (X={pick_x:.1f}, Y={pick_y:.1f}) ➔ Thả vào {tray_name} (X={place_x:.1f}, Y={place_y:.1f})")
 
             # 2. Bay trên đỉnh phôi ở độ cao an toàn (Safe Arch)
-            self.current_task_status = {"state": "busy", "step": "approaching", "msg": f"🦾 Đang tiếp cận đỉnh phôi {cube_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             # 3. Hạ thẳng xuống gắp khối màu
-            self.current_task_status = {"state": "busy", "step": "lowering", "msg": f"⚡ Đang hạ xuống gắp phôi {cube_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": self.pick_z, "r": 0.0, "mode": 1})
             self.wait_pose_reached(pick_x, pick_y, self.pick_z, tol=6.0, timeout=7.0)
 
             # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI HẠ
             if self.has_alarm():
                 print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo sau khi hạ gắp! HỦY DI CHUYỂN RAY, tự thu gọn an toàn...")
-                self.current_task_status = {"state": "error", "step": "alarm", "msg": f"🛑 Đèn đỏ báo động khi hạ gắp phôi {cube_name}!", "error": True}
                 self.recover_to_safe_pose()
                 return
 
             # 4. Bật bơm hút
-            self.current_task_status = {"state": "busy", "step": "suction", "msg": f"💨 Bật giác hút phôi {cube_name}...", "error": False}
             self.send_cmd({"action": "suction", "value": True})
             time.sleep(0.3)
 
             # 5. Nhấc lên cao an toàn
-            self.current_task_status = {"state": "busy", "step": "lifting", "msg": f"⬆️ Đang nhấc phôi {cube_name} lên an toàn...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": pick_x, "y": pick_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(pick_x, pick_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
             # KIỂM TRA LỖI ĐÈN ĐỎ SAU KHI NHẤC
             if self.has_alarm():
                 print(f"[Safety] 🛑 Phát hiện đèn đỏ cảnh báo khi nhấc phôi! HỦY DI CHUYỂN RAY, tự thu gọn an toàn...")
-                self.current_task_status = {"state": "error", "step": "alarm", "msg": f"🛑 Đèn đỏ báo động khi nhấc phôi {cube_name}!", "error": True}
                 self.recover_to_safe_pose()
                 return
 
             # 6. NẾU CÓ RAY TRƯỢT: DI CHUYỂN RAY VỀ VỊ TRÍ KHAY THẢ (CHỈ CHẠY NẾU GẮP THÀNH CÔNG VÀ KHÔNG BỊ ĐÈN ĐỎ)
             if self.is_rail_mode:
                 tray_rail_l = float(target.get("rail_l", target.get("l", 0.0)))
-                self.current_task_status = {"state": "busy", "step": "rail_tray", "msg": f"🚚 Đang di chuyển ray sang khay {tray_name}...", "error": False}
                 rail_ok = self.move_rail_and_wait(tray_rail_l)
                 if not rail_ok:
                     print(f"[Rail] 🛑 Ray trượt chưa tới đích L={tray_rail_l:.1f} mm! Hủy thả để bảo vệ an toàn.")
-                    self.current_task_status = {"state": "error", "step": "rail_error", "msg": f"🛑 Ray trượt kẹt khi sang khay {tray_name}!", "error": True}
                     self.recover_to_safe_pose()
                     return
 
             # 7. Bay sang khay phân loại
-            self.current_task_status = {"state": "busy", "step": "moving_tray", "msg": f"🚚 Bay tới khay {tray_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(place_x, place_y, Z_SAFE_FLANGE, tol=6.0, timeout=6.0)
 
             # 8. Hạ vào khay
-            self.current_task_status = {"state": "busy", "step": "dropping", "msg": f"⬇️ Hạ vào khay {tray_name}...", "error": False}
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": place_z, "r": 0.0, "mode": 1})
             self.wait_pose_reached(place_x, place_y, place_z, tol=6.0, timeout=6.0)
 
@@ -687,11 +675,9 @@ class DobotExecutor:
             self.send_cmd({"action": "move_xyz", "x": place_x, "y": place_y, "z": Z_SAFE_FLANGE, "r": 0.0, "mode": 1})
             self.wait_pose_reached(place_x, place_y, Z_SAFE_FLANGE, tol=6.0, timeout=5.0)
 
-            self.current_task_status = {"state": "done", "step": "completed", "msg": f"✅ Đã gắp thả thành công khối {cube_name} vào {tray_name}!", "error": False}
             print(f"✓ ĐÃ HOÀN TẤT GẮP THẢ: {cube_name}!\n")
         except Exception as e:
             print(f"[VisionEngine] ❌ Lỗi chu trình gắp: {e}")
-            self.current_task_status = {"state": "error", "step": "exception", "msg": f"❌ Lỗi: {e}", "error": True}
             self.recover_to_safe_pose()
         finally:
             self.is_busy = False
@@ -1621,17 +1607,14 @@ def main():
                     if valid and not executor.is_busy:
                         target = valid[0]
                         print(f"[+] [Cử chỉ Tab 6] LỆNH GẮP: {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
-                        executor.current_task_status = {"state": "busy", "step": "accepted", "msg": f"🎯 Đã nhận lệnh gắp {target['name']}...", "error": False}
                         executor.pick_and_place_async(target["rx"], target["ry"], target["name"])
                         flash_msg = f"Dang gap {target['name']}..."
                         flash_time = time.time()
                     elif not matched:
-                        executor.current_task_status = {"state": "error", "step": "not_found", "msg": f"⚠️ Camera không thấy khối {target_color} trên bàn!", "error": True}
                         flash_msg = f"Khong thay khoi {target_color}!"
                         flash_time = time.time()
                         print(f"[!] [Cử chỉ Tab 6] Camera không thấy khối {target_color} trên bàn!")
                     elif not valid:
-                        executor.current_task_status = {"state": "error", "step": "out_of_bounds", "msg": f"⚠️ Khối {target_color} nằm ngoài tầm với an toàn!", "error": True}
                         flash_msg = f"Khoi {target_color} ngoai tam an toan!"
                         flash_time = time.time()
                         print(f"[!] [Cử chỉ Tab 6] Không tìm thấy phôi {target_color} trong tầm với an toàn!")
