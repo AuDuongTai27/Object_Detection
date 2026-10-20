@@ -57,45 +57,15 @@ class VideoWsHandler(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         self._running = False
-
 class ApiVisionStatusHandler(tornado.web.RequestHandler):
     def set_default_headers(self):
         self.set_header("Access-Control-Allow-Origin", "*")
 
     def get(self):
-        status = {}
         if HAS_WEB_STUDIO and vision_engine:
-            status = vision_engine.get_status()
+            self.write(vision_engine.get_status())
         else:
-            status = {"camera_online": False}
-
-        # BẮT BUỘC: Đặt status = "ok" để Tab 4 (blockly_studio.js) cập nhật dashboard
-        status["status"] = "ok"
-
-        # Đồng bộ dữ liệu phát hiện phôi và trạng thái từ dobot_auto_sort.py
-        shared_file = BASE_DIR / ".detected_cubes.json"
-        if shared_file.exists():
-            try:
-                with open(shared_file, "r", encoding="utf-8") as f:
-                    shared_data = json.load(f)
-                if time.time() - shared_data.get("timestamp", 0) < 4.0:
-                    status["camera_online"] = True
-                    # Luôn ưu tiên nạp phôi nếu dobot_auto_sort.py đang chạy
-                    shared_cubes = shared_data.get("cubes", [])
-                    if shared_cubes or not status.get("detected_cubes"):
-                        status["detected_cubes"] = shared_cubes
-                        status["detected_count"] = len(shared_cubes)
-                    if "auto_sort_enabled" in shared_data:
-                        status["auto_sort_enabled"] = shared_data["auto_sort_enabled"]
-                        status["auto_sort_active"] = shared_data["auto_sort_enabled"]
-                    if "is_busy" in shared_data:
-                        status["is_picking"] = status.get("is_picking", False) or shared_data["is_busy"]
-                    if "task_status" in shared_data and shared_data["task_status"]:
-                        status["task_status"] = shared_data["task_status"]
-            except Exception:
-                pass
-
-        self.write(status)
+            self.write({"camera_online": False})
 
 
 class ApiVisionPickHandler(tornado.web.RequestHandler):
@@ -104,6 +74,10 @@ class ApiVisionPickHandler(tornado.web.RequestHandler):
         self.set_header("Access-Control-Allow-Headers", "Content-Type")
 
     def post(self):
+        if not HAS_WEB_STUDIO or not vision_engine:
+            self.write({"success": False, "error": "Vision Engine chưa khởi động"})
+            return
+
         try:
             data = json.loads(self.request.body)
             pick_x = data.get("pick_x") or data.get("dobot_x")
@@ -117,65 +91,37 @@ class ApiVisionPickHandler(tornado.web.RequestHandler):
                 
                 # Tìm xem pixel này có nằm trong bbox của vật thể nào không
                 matched_cube = None
-                if HAS_WEB_STUDIO and vision_engine:
-                    with vision_engine.lock:
-                        for c in vision_engine.detected_cubes:
-                            bbox = c.get("bbox", [])
-                            if len(bbox) == 4:
-                                x1, y1, x2, y2 = bbox
-                                if x1 <= px <= x2 and y1 <= py <= y2:
-                                    matched_cube = c
-                                    break
+                with vision_engine.lock:
+                    for c in vision_engine.detected_cubes:
+                        bbox = c.get("bbox", [])
+                        if len(bbox) == 4:
+                            x1, y1, x2, y2 = bbox
+                            if x1 <= px <= x2 and y1 <= py <= y2:
+                                matched_cube = c
+                                break
 
                 if matched_cube and matched_cube.get("dobot_coord", {}).get("x") is not None:
                     pick_x = matched_cube["dobot_coord"]["x"]
                     pick_y = matched_cube["dobot_coord"]["y"]
                     cube_name = matched_cube.get("class_name", cube_name)
-                elif HAS_WEB_STUDIO and vision_engine:
+                else:
                     # Nếu không trúng bbox, thử chuyển pixel sang dobot bằng Homography trực tiếp
                     dx, dy = vision_engine.pixel_to_dobot(px, py)
                     if dx is not None and dy is not None:
                         pick_x = dx
                         pick_y = dy
                     else:
-                        self.write({"success": False, "status": "error", "message": "Không thể đổi tọa độ pixel sang tọa độ Dobot (chưa nạp Calib)"})
+                        self.write({"success": False, "message": "Không thể đổi tọa độ pixel sang tọa độ Dobot (chưa nạp Calib)"})
                         return
 
             if pick_x is None or pick_y is None:
-                self.write({"success": False, "status": "error", "message": "Thiếu tọa độ gắp Dobot"})
-                return
-
-            # Kiểm tra nếu dobot_auto_sort.py đang chạy thì gửi thẳng vào tiến trình
-            shared_file = BASE_DIR / ".detected_cubes.json"
-            if shared_file.exists():
-                try:
-                    with open(shared_file, "r", encoding="utf-8") as f:
-                        shared_data = json.load(f)
-                    if time.time() - shared_data.get("timestamp", 0) < 4.0:
-                        cmd_file = BASE_DIR / ".auto_sort_cmd.json"
-                        with open(cmd_file, "w", encoding="utf-8") as f_cmd:
-                            json.dump({"action": "pick_color", "color": cube_name}, f_cmd)
-                        self.write({
-                            "success": True,
-                            "status": "ok",
-                            "message": f"Đang gắp khối {cube_name}...",
-                            "pick_x": pick_x,
-                            "pick_y": pick_y
-                        })
-                        return
-                except Exception:
-                    pass
-
-            if not HAS_WEB_STUDIO or not vision_engine:
-                self.write({"success": False, "status": "error", "message": "Vision Engine chưa khởi động"})
+                self.write({"success": False, "message": "Thiếu tọa độ gắp Dobot"})
                 return
 
             res = vision_engine.execute_pick_and_place(float(pick_x), float(pick_y), str(cube_name))
-            if isinstance(res, dict) and "status" not in res:
-                res["status"] = "ok" if res.get("success") else "error"
             self.write(res)
         except Exception as e:
-            self.write({"success": False, "status": "error", "message": str(e)})
+            self.write({"success": False, "message": str(e)})
 
 
 class ApiVisionAutoSortHandler(tornado.web.RequestHandler):
@@ -184,27 +130,92 @@ class ApiVisionAutoSortHandler(tornado.web.RequestHandler):
         self.set_header("Access-Control-Allow-Headers", "Content-Type")
 
     def post(self):
+        if not HAS_WEB_STUDIO or not vision_engine:
+            self.write({"success": False, "error": "Vision Engine chưa khởi động"})
+            return
+
         try:
             data = json.loads(self.request.body) if self.request.body else {}
             enable = data.get("enable", None)
-
-            # Đồng bộ trực tiếp lệnh bật/tắt vào dobot_auto_sort.py
-            cmd_file = BASE_DIR / ".auto_sort_cmd.json"
-            try:
-                with open(cmd_file, "w", encoding="utf-8") as f_cmd:
-                    json.dump({"action": "toggle_auto", "enable": enable}, f_cmd)
-            except Exception:
-                pass
-
-            res = {"success": True, "status": "ok", "enable": enable, "auto_sort_enabled": enable}
-            if HAS_WEB_STUDIO and vision_engine:
-                engine_res = vision_engine.toggle_auto_sort(enable)
-                if isinstance(engine_res, dict):
-                    res.update(engine_res)
-            res["status"] = "ok"
+            res = vision_engine.toggle_auto_sort(enable)
             self.write(res)
         except Exception as e:
-            self.write({"success": False, "status": "error", "error": str(e), "message": str(e)})
+            self.write({"success": False, "error": str(e)})
+
+
+# ==============================================================================
+# KÊNH RIÊNG CHO TAB 6 (CỬ CHỈ TAY) ➔ dobot_auto_sort.py
+# Các API của Tab 4 (/pick, /auto_sort, /status) giữ nguyên, không đi qua kênh này.
+# ==============================================================================
+SHARED_STATE_FILE = BASE_DIR / ".detected_cubes.json"
+AUTO_SORT_CMD_FILE = BASE_DIR / ".auto_sort_cmd.json"
+SHARED_STATE_MAX_AGE = 4.0
+
+
+def read_auto_sort_state():
+    """Trả về trạng thái do dobot_auto_sort.py ghi ra, hoặc None nếu tool không chạy."""
+    try:
+        with open(SHARED_STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if time.time() - data.get("timestamp", 0) < SHARED_STATE_MAX_AGE:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def send_auto_sort_cmd(cmd):
+    """Gửi lệnh sang dobot_auto_sort.py (kèm timestamp để tool bỏ qua lệnh cũ)."""
+    cmd = dict(cmd, ts=time.time())
+    tmp = AUTO_SORT_CMD_FILE.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cmd, f)
+    os.replace(tmp, AUTO_SORT_CMD_FILE)
+
+
+TOOL_NOT_RUNNING_MSG = "Công cụ Auto Sort (Tab 4) chưa chạy! Hãy bấm 'Khởi chạy Auto Sort' trước."
+
+
+class ApiGestureStatusHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+
+    def get(self):
+        state = read_auto_sort_state()
+        if state is None:
+            self.write({"tool_alive": False, "auto_sort_enabled": False, "is_picking": False, "task_status": None})
+            return
+        self.write({
+            "tool_alive": True,
+            "auto_sort_enabled": bool(state.get("auto_sort_enabled", False)),
+            "is_picking": bool(state.get("is_busy", False)),
+            "task_status": state.get("task_status"),
+            "detected_count": len(state.get("cubes", []))
+        })
+
+
+class ApiGestureAutoSortHandler(tornado.web.RequestHandler):
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def post(self):
+        try:
+            data = json.loads(self.request.body) if self.request.body else {}
+            state = read_auto_sort_state()
+            if state is None:
+                self.write({"success": False, "error": TOOL_NOT_RUNNING_MSG})
+                return
+
+            enable = data.get("enable", None)
+            if enable is None:
+                enable = not bool(state.get("auto_sort_enabled", False))
+            enable = bool(enable)
+
+            send_auto_sort_cmd({"action": "toggle_auto", "enable": enable})
+            self.write({"success": True, "auto_sort_enabled": enable})
+        except Exception as e:
+            self.write({"success": False, "error": str(e)})
 
 
 class ApiVisionPickColorHandler(tornado.web.RequestHandler):
@@ -216,8 +227,7 @@ class ApiVisionPickColorHandler(tornado.web.RequestHandler):
         try:
             data = json.loads(self.request.body) if self.request.body else {}
             color = str(data.get("color", "")).strip().lower()
-            
-            # Bảng ánh xạ nhãn màu linh hoạt (Tiếng Việt & Tiếng Anh)
+
             color_map = {
                 "red": ("cube_red", "Đỏ"),
                 "cube_red": ("cube_red", "Đỏ"),
@@ -228,88 +238,30 @@ class ApiVisionPickColorHandler(tornado.web.RequestHandler):
                 "yellow": ("cube_yellow", "Vàng"),
                 "cube_yellow": ("cube_yellow", "Vàng"),
             }
-            
-            target_class, color_vn = color_map.get(color, (color, color))
+            if color not in color_map:
+                self.write({"success": False, "error": f"Màu không hợp lệ: '{color}'"})
+                return
+            target_class, color_vn = color_map[color]
 
-            def is_color_match(cls_name, target):
-                c = str(cls_name).lower().strip()
-                t = str(target).lower().strip()
-                if c == t: return True
-                if "red" in t or "do" in t: return "red" in c or "do" in c
-                if "green" in t or "luc" in t or "la" in t: return "green" in c or "luc" in c or "la" in c
-                if "blue" in t or "duong" in t: return "blue" in c or "duong" in c
-                if "yellow" in t or "vang" in t: return "yellow" in c or "vang" in c
-                return False
-
-            matched_cube = None
-            is_auto_sort_alive = False
-
-            # 1. Kiểm tra camera ngoài đang chạy qua dobot_auto_sort.py
-            shared_file = BASE_DIR / ".detected_cubes.json"
-            if shared_file.exists():
-                try:
-                    with open(shared_file, "r", encoding="utf-8") as f:
-                        shared_data = json.load(f)
-                    if time.time() - shared_data.get("timestamp", 0) < 4.0:
-                        is_auto_sort_alive = True
-                        for sc in shared_data.get("cubes", []):
-                            if is_color_match(sc.get("class_name"), target_class):
-                                matched_cube = sc
-                                break
-                except Exception:
-                    pass
-
-            # 2. Nếu dobot_auto_sort.py chưa thấy, kiểm tra vision_engine của live server
-            if not matched_cube and HAS_WEB_STUDIO and vision_engine:
-                with vision_engine.lock:
-                    candidates = [c for c in vision_engine.detected_cubes if is_color_match(c.get("class_name"), target_class)]
-                    if candidates:
-                        candidates.sort(key=lambda x: x.get("confidence", 0), reverse=True)
-                        matched_cube = candidates[0]
-
-            if not matched_cube:
-                self.write({
-                    "success": False, 
-                    "error": f"Camera AI chưa thấy khối {color_vn} trên bàn!"
-                })
+            state = read_auto_sort_state()
+            if state is None:
+                self.write({"success": False, "error": TOOL_NOT_RUNNING_MSG})
                 return
 
-            # Nếu dobot_auto_sort.py đang chạy, gửi lệnh trực tiếp vào kênh đồng bộ
-            if is_auto_sort_alive:
-                cmd_file = BASE_DIR / ".auto_sort_cmd.json"
-                try:
-                    with open(cmd_file, "w", encoding="utf-8") as f_cmd:
-                        json.dump({"action": "pick_color", "color": target_class}, f_cmd)
-                    self.write({
-                        "success": True,
-                        "status": "ok",
-                        "message": f"Đang gắp khối {color_vn}...",
-                        "color_name": color_vn,
-                        "pick_x": matched_cube.get("rx"),
-                        "pick_y": matched_cube.get("ry")
-                    })
-                    return
-                except Exception as e:
-                    pass
-
-            if not HAS_WEB_STUDIO or not vision_engine:
-                self.write({"success": False, "error": "Vision Engine chưa khởi động"})
+            if state.get("is_busy"):
+                self.write({"success": False, "error": "Robot đang bận gắp thả, thử lại sau!"})
                 return
 
-            coord = matched_cube.get("dobot_coord", {})
-            pick_x = coord.get("x") or matched_cube.get("rx")
-            pick_y = coord.get("y") or matched_cube.get("ry")
-
-            if pick_x is None or pick_y is None:
-                self.write({"success": False, "error": f"Không có tọa độ Dobot cho khối {color_vn}"})
+            if not any(c.get("class_name") == target_class for c in state.get("cubes", [])):
+                self.write({"success": False, "error": f"Camera AI chưa thấy khối {color_vn} trên bàn!"})
                 return
 
-            res = vision_engine.execute_pick_and_place(float(pick_x), float(pick_y), str(target_class))
-            if isinstance(res, dict):
-                res["color_name"] = color_vn
-                res["pick_x"] = pick_x
-                res["pick_y"] = pick_y
-            self.write(res)
+            send_auto_sort_cmd({"action": "pick_color", "color": target_class})
+            self.write({
+                "success": True,
+                "message": f"Đang gắp khối {color_vn}...",
+                "color_name": color_vn
+            })
         except Exception as e:
             self.write({"success": False, "error": str(e)})
 

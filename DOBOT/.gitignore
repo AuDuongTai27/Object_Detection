@@ -19,3 +19,5 @@ __pycache__/
 .cmd_pick.json
 .server_port.json
 .auto_sort_cmd.json
+.detected_cubes.json.tmp
+.auto_sort_cmd.tmp

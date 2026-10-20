@@ -434,14 +434,19 @@
             if (performance.now() < autoTaskCooldownUntil) return;
             autoTaskCooldownUntil = performance.now() + 3000;
 
-            isAutoSortActive = !isAutoSortActive;
-            showToast(isAutoSortActive ? "🤖 CỬ CHỈ 🤟: ĐÃ BẬT TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)!" : "⏹️ CỬ CHỈ 🤟: ĐÃ TẮT TỰ ĐỘNG PHÂN LOẠI.");
             try {
-                await fetch('/api/vision/auto_sort', {
+                const res = await fetch('/api/gesture/auto_sort', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enable: isAutoSortActive })
+                    body: JSON.stringify({ enable: !isAutoSortActive })
                 });
+                const data = await res.json();
+                if (data.success) {
+                    isAutoSortActive = Boolean(data.auto_sort_enabled);
+                    showToast(isAutoSortActive ? "🤖 CỬ CHỈ 🤟: ĐÃ BẬT TỰ ĐỘNG PHÂN LOẠI (AUTO SORT)!" : "⏹️ CỬ CHỈ 🤟: ĐÃ TẮT TỰ ĐỘNG PHÂN LOẠI.");
+                } else {
+                    showToast(`⚠️ ${data.error || 'Không thể bật/tắt Auto Sort'}`);
+                }
             } catch(err) {
                 showToast(`❌ Lỗi Auto Sort: ${err.message}`);
             }
@@ -450,7 +455,7 @@
         // Định kỳ kiểm tra đồng bộ cờ bận gắp thả & trạng thái Auto Sort từ hệ thống
         async function checkAutoTaskBusy() {
             try {
-                const res = await fetch('/api/vision/status');
+                const res = await fetch('/api/gesture/status');
                 const data = await res.json();
                 if (data) {
                     if (data.auto_sort_enabled !== undefined) {

@@ -7,6 +7,7 @@ Kiến trúc Module Hóa Chuẩn (Modular Clean Architecture)
 
 import os
 import sys
+import json
 import webbrowser
 from pathlib import Path
 
@@ -50,6 +51,7 @@ from backend.handlers.training_handlers import (
 from backend.handlers.vision_handlers import (
     VideoWsHandler, ApiVisionStatusHandler, ApiVisionPickHandler,
     ApiVisionPickColorHandler, ApiVisionAutoSortHandler, ApiVisionModelsHandler,
+    ApiGestureStatusHandler, ApiGestureAutoSortHandler,
     ApiDropTargetsHandler, ApiCalibInfoHandler, ApiVoiceConfigHandler
 )
 from backend.handlers.blockly_ai_handler import (
@@ -110,6 +112,8 @@ def main():
         (r"/api/vision/status", ApiVisionStatusHandler),
         (r"/api/vision/pick", ApiVisionPickHandler),
         (r"/api/vision/pick_color", ApiVisionPickColorHandler),
+        (r"/api/gesture/status", ApiGestureStatusHandler),
+        (r"/api/gesture/auto_sort", ApiGestureAutoSortHandler),
         (r"/api/vision/auto_sort", ApiVisionAutoSortHandler),
         (r"/api/vision/models", ApiVisionModelsHandler),
         (r"/api/vision/drop_targets", ApiDropTargetsHandler),

@@ -1393,6 +1393,10 @@ def main():
     print(" - Nhấn [Q/ESC] : Thoát chương trình (hoặc Hủy lệnh xác nhận an toàn)")
     print("=" * 65 + "\n")
 
+    # Xóa lệnh Tab 6 còn sót từ phiên trước để robot không tự chạy khi vừa mở tool
+    try: (BASE_DIR / ".auto_sort_cmd.json").unlink(missing_ok=True)
+    except Exception: pass
+
     while True:
         ret, raw_frame = cap.read()
         if not ret or raw_frame is None:
@@ -1457,7 +1461,8 @@ def main():
 
         # Ghi danh sách khối màu phát hiện ra file chia sẻ để Web Studio và Tab 6 dùng chung
         try:
-            with open(BASE_DIR / ".detected_cubes.json", "w", encoding="utf-8") as f_det:
+            shared_tmp = BASE_DIR / ".detected_cubes.json.tmp"
+            with open(shared_tmp, "w", encoding="utf-8") as f_det:
                 json.dump({
                     "timestamp": time.time(),
                     "count": len(detected_cubes),
@@ -1477,6 +1482,8 @@ def main():
                         for c in detected_cubes
                     ]
                 }, f_det)
+            # Ghi nguyên tử để Live Server không đọc phải file ghi dở
+            os.replace(shared_tmp, BASE_DIR / ".detected_cubes.json")
         except Exception:
             pass
 
@@ -1603,7 +1610,8 @@ def main():
                     ext_cmd = json.load(f_cmd)
                 try: cmd_file.unlink(missing_ok=True)
                 except Exception: pass
-                ext_act = ext_cmd.get("action")
+                # Bỏ qua lệnh cũ (quá 3 giây) để tránh thực thi lệnh không còn ý nghĩa
+                ext_act = ext_cmd.get("action") if time.time() - float(ext_cmd.get("ts", 0)) < 3.0 else None
                 if ext_act == "toggle_auto":
                     req_enable = ext_cmd.get("enable")
                     if req_enable is not None:
@@ -1616,9 +1624,13 @@ def main():
                     print(f"[*] [Cử chỉ Tab 6 🤟] Chế độ Tự Động Phân Loại (Auto Sort): {status_str}")
                 elif ext_act == "pick_color":
                     target_color = str(ext_cmd.get("color", "")).lower().strip()
-                    matched = [c for c in detected_cubes if target_color in c["name"].lower() or c["name"].lower() in target_color]
+                    matched = [c for c in detected_cubes if c["name"].lower() == target_color]
                     valid = [c for c in matched if is_safe_workspace(c["rx"], c["ry"]) or (executor.is_rail_mode and solve_rail_kinematics(c["rx"], c["ry"], executor.rail_current_pos) is not None)]
-                    if valid and not executor.is_busy:
+                    if executor.is_busy:
+                        flash_msg = "Robot dang ban, bo qua lenh!"
+                        flash_time = time.time()
+                        print(f"[!] [Cử chỉ Tab 6] Robot đang bận, bỏ qua lệnh gắp {target_color}.")
+                    elif valid:
                         target = valid[0]
                         print(f"[+] [Cử chỉ Tab 6] LỆNH GẮP: {target['name']} tại X={target['rx']:.1f}, Y={target['ry']:.1f}")
                         executor.current_task_status = {"state": "busy", "step": "accepted", "msg": f"🎯 Đã nhận lệnh gắp {target['name']}...", "error": False}
