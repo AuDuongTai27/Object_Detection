@@ -447,15 +447,21 @@
             }
         }
 
-        // Định kỳ kiểm tra giải phóng cờ bận khi chu trình gắp thả kết thúc
+        // Định kỳ kiểm tra đồng bộ cờ bận gắp thả & trạng thái Auto Sort từ hệ thống
         async function checkAutoTaskBusy() {
-            if (!isAutoTaskBusy) return;
             try {
                 const res = await fetch('/api/vision/status');
                 const data = await res.json();
-                if (data && data.is_picking === false && performance.now() > autoTaskCooldownUntil - 5000) {
-                    isAutoTaskBusy = false;
-                    showToast("✅ Đã hoàn tất gắp thả! Quyền điều khiển tay đã mở lại.");
+                if (data) {
+                    if (data.auto_sort_enabled !== undefined) {
+                        isAutoSortActive = Boolean(data.auto_sort_enabled);
+                    }
+                    const isPicking = Boolean(data.is_picking);
+                    if (isPicking) {
+                        isAutoTaskBusy = true;
+                    } else if (isAutoTaskBusy && performance.now() > autoTaskCooldownUntil) {
+                        isAutoTaskBusy = false;
+                    }
                 }
             } catch(e) {}
         }
@@ -842,64 +848,76 @@
                 if (now - lastSeenOk > 180) holdStartOk = 0;
             }
 
-            if (isPick1Detected) {
-                if (!holdStartPick1) holdStartPick1 = now;
-                lastSeenPick1 = now;
-                const elapsed = now - holdStartPick1;
-                activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
-                activeGestureText = `☝️ 1 NGÓN: GẮP ĐỎ (${activeGesturePct}%)`;
-                activeGestureColor = "#ef4444";
-                if (elapsed >= HOLD_DURATION_MS) {
-                    holdStartPick1 = 0;
-                    triggerPickColor('cube_red');
-                }
-            } else {
-                if (now - lastSeenPick1 > 180) holdStartPick1 = 0;
-            }
+            // NẾU ROBOT ĐANG BẬN GẮP HOẶC ĐANG CHẠY AUTO SORT:
+            // VÔ HIỆU HÓA CÁC CỬ CHỈ GẮP (1..4) VÀ CỬ CHỈ BẬT HÚT NẮM/MỞ TAY.
+            // CHỈ DUY TRÌ CÁC CỬ CHỈ ĐIỀU KHIỂN HỆ THỐNG: 👍 BẬT LỆNH, 👎 TẮT LỆNH, 👌 GỠ LỖI AN TOÀN, VÀ 🤟 ĐỂ TẮT AUTO SORT!
+            const isTaskLocked = isAutoTaskBusy || isAutoSortActive;
 
-            if (isPick2Detected) {
-                if (!holdStartPick2) holdStartPick2 = now;
-                lastSeenPick2 = now;
-                const elapsed = now - holdStartPick2;
-                activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
-                activeGestureText = `✌️ 2 NGÓN: GẮP XANH LÁ (${activeGesturePct}%)`;
-                activeGestureColor = "#22c55e";
-                if (elapsed >= HOLD_DURATION_MS) {
-                    holdStartPick2 = 0;
-                    triggerPickColor('cube_green');
-                }
+            if (isTaskLocked) {
+                holdStartPick1 = 0;
+                holdStartPick2 = 0;
+                holdStartPick3 = 0;
+                holdStartPick4 = 0;
             } else {
-                if (now - lastSeenPick2 > 180) holdStartPick2 = 0;
-            }
+                if (isPick1Detected) {
+                    if (!holdStartPick1) holdStartPick1 = now;
+                    lastSeenPick1 = now;
+                    const elapsed = now - holdStartPick1;
+                    activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
+                    activeGestureText = `☝️ 1 NGÓN: GẮP ĐỎ (${activeGesturePct}%)`;
+                    activeGestureColor = "#ef4444";
+                    if (elapsed >= HOLD_DURATION_MS) {
+                        holdStartPick1 = 0;
+                        triggerPickColor('cube_red');
+                    }
+                } else {
+                    if (now - lastSeenPick1 > 180) holdStartPick1 = 0;
+                }
 
-            if (isPick3Detected) {
-                if (!holdStartPick3) holdStartPick3 = now;
-                lastSeenPick3 = now;
-                const elapsed = now - holdStartPick3;
-                activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
-                activeGestureText = `3️⃣ 3 NGÓN: GẮP XANH DƯƠNG (${activeGesturePct}%)`;
-                activeGestureColor = "#3b82f6";
-                if (elapsed >= HOLD_DURATION_MS) {
-                    holdStartPick3 = 0;
-                    triggerPickColor('cube_blue');
+                if (isPick2Detected) {
+                    if (!holdStartPick2) holdStartPick2 = now;
+                    lastSeenPick2 = now;
+                    const elapsed = now - holdStartPick2;
+                    activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
+                    activeGestureText = `✌️ 2 NGÓN: GẮP XANH LÁ (${activeGesturePct}%)`;
+                    activeGestureColor = "#22c55e";
+                    if (elapsed >= HOLD_DURATION_MS) {
+                        holdStartPick2 = 0;
+                        triggerPickColor('cube_green');
+                    }
+                } else {
+                    if (now - lastSeenPick2 > 180) holdStartPick2 = 0;
                 }
-            } else {
-                if (now - lastSeenPick3 > 180) holdStartPick3 = 0;
-            }
 
-            if (isPick4Detected) {
-                if (!holdStartPick4) holdStartPick4 = now;
-                lastSeenPick4 = now;
-                const elapsed = now - holdStartPick4;
-                activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
-                activeGestureText = `4️⃣ 4 NGÓN: GẮP VÀNG (${activeGesturePct}%)`;
-                activeGestureColor = "#eab308";
-                if (elapsed >= HOLD_DURATION_MS) {
-                    holdStartPick4 = 0;
-                    triggerPickColor('cube_yellow');
+                if (isPick3Detected) {
+                    if (!holdStartPick3) holdStartPick3 = now;
+                    lastSeenPick3 = now;
+                    const elapsed = now - holdStartPick3;
+                    activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
+                    activeGestureText = `3️⃣ 3 NGÓN: GẮP XANH DƯƠNG (${activeGesturePct}%)`;
+                    activeGestureColor = "#3b82f6";
+                    if (elapsed >= HOLD_DURATION_MS) {
+                        holdStartPick3 = 0;
+                        triggerPickColor('cube_blue');
+                    }
+                } else {
+                    if (now - lastSeenPick3 > 180) holdStartPick3 = 0;
                 }
-            } else {
-                if (now - lastSeenPick4 > 180) holdStartPick4 = 0;
+
+                if (isPick4Detected) {
+                    if (!holdStartPick4) holdStartPick4 = now;
+                    lastSeenPick4 = now;
+                    const elapsed = now - holdStartPick4;
+                    activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
+                    activeGestureText = `4️⃣ 4 NGÓN: GẮP VÀNG (${activeGesturePct}%)`;
+                    activeGestureColor = "#eab308";
+                    if (elapsed >= HOLD_DURATION_MS) {
+                        holdStartPick4 = 0;
+                        triggerPickColor('cube_yellow');
+                    }
+                } else {
+                    if (now - lastSeenPick4 > 180) holdStartPick4 = 0;
+                }
             }
 
             if (isRockDetected) {
@@ -907,7 +925,7 @@
                 lastSeenRock = now;
                 const elapsed = now - holdStartRock;
                 activeGesturePct = Math.min(100, Math.round((elapsed / HOLD_DURATION_MS) * 100));
-                activeGestureText = `🤟 ROCK: AUTO SORT (${activeGesturePct}%)`;
+                activeGestureText = isAutoSortActive ? `🤟 ROCK: DỪNG AUTO SORT (${activeGesturePct}%)` : `🤟 ROCK: BẬT AUTO SORT (${activeGesturePct}%)`;
                 activeGestureColor = "#a855f7";
                 if (elapsed >= HOLD_DURATION_MS) {
                     holdStartRock = 0;
@@ -929,7 +947,7 @@
             // MỞ TAY (NHẢ): Khi có ít nhất 3 ngón duỗi và không phải nắm tay
             const isHandOpenDetected = extendedFingersCount >= 3 && !isAllLongFingersFold;
 
-            if (!isAnySpecialHold) {
+            if (!isAnySpecialHold && !isTaskLocked) {
                 if (isFistDetected) {
                     handFistDebounceCounter++;
                     handOpenDebounceCounter = 0;
@@ -940,7 +958,7 @@
             }
 
             let isSuctionActive = handCurrentSuction;
-            if (!isAnySpecialHold && !isGestureRecovering && !isAutoTaskBusy) {
+            if (!isAnySpecialHold && !isGestureRecovering && !isTaskLocked) {
                 if (handFistDebounceCounter >= 2) {
                     isSuctionActive = true;
                 } else if (handOpenDebounceCounter >= 2) {
@@ -952,8 +970,11 @@
             if (isGestureRecovering) {
                 activeGestureText = "🛡️ ĐANG GỠ LỖI & VỀ AN TOÀN...";
                 activeGestureColor = "#34d399";
-            } else if (isAutoTaskBusy) {
-                activeGestureText = "🤖 ROBOT ĐANG GẮP VẬT THỂ TỰ ĐỘNG...";
+            } else if (isAutoSortActive && !holdStartRock && !holdStartDislike && !holdStartOk) {
+                activeGestureText = "🤖 ĐANG CHẠY AUTO SORT (🤟 ĐỂ DỪNG)...";
+                activeGestureColor = "#a855f7";
+            } else if (isAutoTaskBusy && !holdStartDislike && !holdStartOk) {
+                activeGestureText = "🦾 ROBOT ĐANG GẮP VẬT THỂ TỰ ĐỘNG...";
                 activeGestureColor = "#f59e0b";
             } else if (!isAnySpecialHold) {
                 if (isSuctionActive) {
@@ -1110,7 +1131,7 @@
             const targetHz = parseInt(document.getElementById('slider-hand-hz')?.value) || 20;
             const sendIntervalMs = 1000 / targetHz;
 
-            if (isTeleopMasterActive && !isAnySpecialHold && !isGestureRecovering && !isAutoTaskBusy && (now - lastHandSendTime >= sendIntervalMs)) {
+            if (isTeleopMasterActive && !isAnySpecialHold && !isGestureRecovering && !isAutoTaskBusy && !isAutoSortActive && (now - lastHandSendTime >= sendIntervalMs)) {
                 lastHandSendTime = now;
 
                 const baseDeadbandMm = parseFloat(document.getElementById('slider-hand-deadband')?.value) || 1.5;

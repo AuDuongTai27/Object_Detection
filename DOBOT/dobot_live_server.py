@@ -122,6 +122,11 @@ def main():
     ])
     
     app.listen(port, address="0.0.0.0")
+    try:
+        with open(BASE_DIR / ".server_port.json", "w", encoding="utf-8") as f_p:
+            json.dump({"port": port}, f_p)
+    except Exception:
+        pass
     print("=" * 60)
     print(f"  DOBOT MAGICIAN 3D LIVE DIGITAL TWIN SERVER")
     print(f"  Giao diện Web: http://localhost:{port}")
