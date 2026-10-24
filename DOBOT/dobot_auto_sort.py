@@ -964,6 +964,12 @@ class VoiceAssistantManager:
             self.active_mic_name = best[1]["name"]
             self.active_mic_rate = int(best[1].get("default_samplerate", 16000))
             print(f"[VoiceAI] 🎙️ Tự động phát hiện Micro tốt nhất: [{self.active_mic_index}] {self.active_mic_name} ({self.active_mic_rate}Hz)")
+        except ImportError:
+            print("[VoiceAI] ⚠️ Chưa cài đặt thư viện 'sounddevice'. Tính năng Giọng nói sẽ tạm tắt.")
+            print("[VoiceAI] 💡 Để bật giọng nói, vui lòng chạy: pip install sounddevice soundfile edge-tts")
+            self.active_mic_index = None
+            self.active_mic_name = "Thieu sounddevice (pip install sounddevice)"
+            self.active_mic_rate = 16000
         except Exception as e:
             print(f"[VoiceAI] ⚠️ Lỗi quét Microphone: {e}")
             self.active_mic_index = None
@@ -1000,6 +1006,11 @@ class VoiceAssistantManager:
             )
             self._stream.start()
             print(f"[VoiceAI] 🎙️ Bắt đầu thu âm từ: [{self.active_mic_index}] {self.active_mic_name} ({rec_rate}Hz)...")
+        except ImportError:
+            print("[VoiceAI] ❌ Chưa cài thư viện 'sounddevice'! Chạy: pip install sounddevice soundfile edge-tts")
+            self.is_recording = False
+            self.status_msg = "Chua cai sounddevice!"
+            self.last_status_time = time.time()
         except Exception as e:
             print(f"[VoiceAI] ❌ Không mở được Micro [{self.active_mic_index}]: {e}")
             self.is_recording = False

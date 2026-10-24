@@ -22,3 +22,9 @@ websocket-client>=1.6
 tqdm>=4.65.0
 matplotlib>=3.7.0
 PyYAML>=6.0
+
+# Trợ lý Giọng nói AI (Voice Assistant STT & TTS)
+sounddevice>=0.4.6
+soundfile>=0.12.1
+edge-tts>=6.1.9
+pyttsx3>=2.90
